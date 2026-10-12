@@ -1,1 +1,67 @@
-# 261012_DnD_DMTool
+# DnD DM Tool
+
+Desktop app for a 5e Dungeon Master: turn 2D battlemaps into 3D scenes, run encounters, and show players a
+fog-of-war view on a second screen or in any browser on the local network.
+
+- **Map editor**: calibrate the grid to the battlemap image, sculpt terrain, draw walls with doors and windows, rooms
+  with roofs, regions, lights and imported Blender models (`.glb`/`.gltf`). The image is projected from above onto
+  every surface, so the top view still looks like the original map.
+- **Encounters**: initiative, HP, conditions, attack and dice rolls with a log, tokens on the map, area templates,
+  doors, measuring.
+- **Libraries**: creatures (334 SRD 5.1 monsters shipped, stat block import from text), area markers, maps,
+  campaigns.
+- **Player view**: second window or LAN browser; players only see what their characters can see (line of sight,
+  light, darkvision, truesight).
+
+Background and design: [`PLAN.md`](PLAN.md). Code layout and module contracts:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Requirements
+
+- Windows 10/11 with WebView2
+- Node 24+, pnpm 10
+- Rust (MSVC toolchain), Visual Studio Build Tools with the C++ workload and a Windows 10/11 SDK
+
+## Develop
+
+```sh
+pnpm install
+pnpm app:dev        # desktop app with hot reload
+pnpm dev            # UI only in a browser (IndexedDB storage, no LAN server)
+pnpm typecheck && pnpm lint && pnpm test
+pnpm format
+```
+
+GUI smoke tests can drive the real WebView2 over its DevTools port:
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222 pnpm app:dev`.
+
+## Build
+
+```sh
+pnpm package        # release build; installer copied to artifacts/
+```
+
+## Where things live
+
+| What                       | Where                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------- |
+| Source                     | `src/`, `src-tauri/`, `tools/`                                                              |
+| Shipped content (SRD only) | `content/`                                                                                  |
+| Build output               | `dist/`, `src-tauri/target/`, `artifacts/` (all gitignored)                                 |
+| Your data                  | `%APPDATA%/de.dnddmtool.desktop/` by default; change it in Settings (e.g. a Dropbox folder) |
+
+## Import from the old WPF tool
+
+```sh
+# creatures, maps (images, tile heights, walls) and markers from the legacy data folder
+pnpm tsx tools/import-legacy.ts "<path>/240722_DnD_DMTool_Data" [--data-root <path>]
+# raw stat block text files (one creature per file)
+pnpm tsx tools/import-statblocks.ts <folder> [--data-root <path>] [--source <name>]
+```
+
+Imports write into your data folder, never into the repo. Monster Manual text is copyrighted and stays out of git.
+
+## License of shipped content
+
+`content/` contains material from the System Reference Document 5.1 under CC-BY-4.0; see
+[`content/LICENSE-SRD.md`](content/LICENSE-SRD.md).
