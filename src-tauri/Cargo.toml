@@ -1,0 +1,32 @@
+[package]
+name = "dnd-dm-tool"
+version = "0.1.0"
+description = "DnD DM Tool"
+edition = "2021"
+rust-version = "1.80"
+
+[lib]
+name = "dnd_dm_tool_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["net", "sync", "fs", "macros", "rt"] }
+tokio-util = { version = "0.7", features = ["io"] }
+getrandom = "0.3"
+if-addrs = "0.15.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
+
+[dev-dependencies]
+futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
+tokio-tungstenite = "0.29.0"
