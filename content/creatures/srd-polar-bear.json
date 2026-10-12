@@ -1,0 +1,105 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-polar-bear",
+  "name": "Polar Bear",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "beast",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 12,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 42,
+    "formula": "5d10+15"
+  },
+  "speeds": {
+    "walk": 40,
+    "swim": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 20,
+    "dex": 10,
+    "con": 16,
+    "int": 2,
+    "wis": 13,
+    "cha": 7
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 3
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 13,
+  "languages": [],
+  "challenge": 2,
+  "xp": 450,
+  "traits": [
+    {
+      "name": "Keen Smell",
+      "description": "The bear has advantage on Wisdom (Perception) checks that rely on smell."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The bear makes two attacks: one with its bite and one with its claws.",
+      "attack": null
+    },
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 9 (1d8 + 5) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d8+5",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Claws",
+      "description": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 12 (2d6 + 5) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d6+5",
+            "type": "slashing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

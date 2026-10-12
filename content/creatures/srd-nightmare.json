@@ -1,0 +1,100 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-nightmare",
+  "name": "Nightmare",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "fiend",
+  "subtype": "",
+  "alignmentText": "neutral evil",
+  "alignmentWeights": {
+    "neutral-evil": 1
+  },
+  "armorClass": 13,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 68,
+    "formula": "8d10+24"
+  },
+  "speeds": {
+    "walk": 60,
+    "fly": 90
+  },
+  "hover": false,
+  "abilities": {
+    "str": 18,
+    "dex": 15,
+    "con": 16,
+    "int": 10,
+    "wis": 13,
+    "cha": 15
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [
+    "fire"
+  ],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 11,
+  "languages": [
+    "understands Abyssal",
+    "Common",
+    "and Infernal but can't speak"
+  ],
+  "challenge": 3,
+  "xp": 700,
+  "traits": [
+    {
+      "name": "Confer Fire Resistance",
+      "description": "The nightmare can grant resistance to fire damage to anyone riding it."
+    },
+    {
+      "name": "Illumination",
+      "description": "The nightmare sheds bright light in a 10-foot radius and dim light for an additional 10 feet."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Hooves",
+      "description": "Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 13 (2d8 + 4) bludgeoning damage plus 7 (2d6) fire damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 6,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d8+4",
+            "type": "bludgeoning"
+          },
+          {
+            "formula": "2d6",
+            "type": "fire"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ethereal Stride",
+      "description": "The nightmare and up to three willing creatures within 5 feet of it magically enter the Ethereal Plane from the Material Plane, or vice versa.",
+      "attack": null
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

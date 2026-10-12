@@ -1,0 +1,124 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-gnoll",
+  "name": "Gnoll",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "humanoid",
+  "subtype": "gnoll",
+  "alignmentText": "chaotic evil",
+  "alignmentWeights": {
+    "chaotic-evil": 1
+  },
+  "armorClass": 15,
+  "armorNote": "hide armor, shield",
+  "hitPoints": {
+    "average": 22,
+    "formula": "5d8"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 14,
+    "dex": 12,
+    "con": 11,
+    "int": 6,
+    "wis": 10,
+    "cha": 7
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 10,
+  "languages": [
+    "Gnoll"
+  ],
+  "challenge": 0.5,
+  "xp": 100,
+  "traits": [
+    {
+      "name": "Rampage",
+      "description": "When the gnoll reduces a creature to 0 hit points with a melee attack on its turn, the gnoll can take a bonus action to move up to half its speed and make a bite attack."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 4 (1d4 + 2) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one creature",
+        "damage": [
+          {
+            "formula": "1d4+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Spear",
+      "description": "Melee or Ranged Weapon Attack: +4 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 5 (1d6 + 2) piercing damage, or 6 (1d8 + 2) piercing damage if used with two hands to make a melee attack.",
+      "attack": {
+        "kind": "melee-or-ranged",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": {
+          "normal": 20,
+          "long": 60
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Longbow",
+      "description": "Ranged Weapon Attack: +3 to hit, range 150/600 ft., one target. Hit: 5 (1d8 + 1) piercing damage.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 3,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 150,
+          "long": 600
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d8+1",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

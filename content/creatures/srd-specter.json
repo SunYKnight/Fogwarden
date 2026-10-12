@@ -1,0 +1,109 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-specter",
+  "name": "Specter",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "undead",
+  "subtype": "",
+  "alignmentText": "chaotic evil",
+  "alignmentWeights": {
+    "chaotic-evil": 1
+  },
+  "armorClass": 12,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 22,
+    "formula": "5d8"
+  },
+  "speeds": {
+    "walk": 0,
+    "fly": 50
+  },
+  "hover": true,
+  "abilities": {
+    "str": 1,
+    "dex": 14,
+    "con": 11,
+    "int": 10,
+    "wis": 10,
+    "cha": 11
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "acid",
+    "cold",
+    "fire",
+    "lightning",
+    "thunder",
+    "bludgeoning, piercing, and slashing from nonmagical weapons"
+  ],
+  "damageImmunities": [
+    "necrotic",
+    "poison"
+  ],
+  "conditionImmunities": [
+    "charmed",
+    "exhaustion",
+    "grappled",
+    "paralyzed",
+    "petrified",
+    "poisoned",
+    "prone",
+    "restrained",
+    "unconscious"
+  ],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 10,
+  "languages": [
+    "understands all languages it knew in life but can't speak"
+  ],
+  "challenge": 1,
+  "xp": 200,
+  "traits": [
+    {
+      "name": "Incorporeal Movement",
+      "description": "The specter can move through other creatures and objects as if they were difficult terrain. It takes 5 (1d10) force damage if it ends its turn inside an object."
+    },
+    {
+      "name": "Sunlight Sensitivity",
+      "description": "While in sunlight, the specter has disadvantage on attack rolls, as well as on Wisdom (Perception) checks that rely on sight."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Life Drain",
+      "description": "Melee Spell Attack: +4 to hit, reach 5 ft., one creature. Hit: 10 (3d6) necrotic damage. The target must succeed on a DC 10 Constitution saving throw or its hit point maximum is reduced by an amount equal to the damage taken. This reduction lasts until the creature finishes a long rest. The target dies if this effect reduces its hit point maximum to 0.",
+      "attack": {
+        "kind": "melee-spell",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one creature",
+        "damage": [
+          {
+            "formula": "3d6",
+            "type": "necrotic"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

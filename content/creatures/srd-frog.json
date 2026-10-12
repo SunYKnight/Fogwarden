@@ -1,0 +1,72 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-frog",
+  "name": "Frog",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "tiny",
+  "type": "beast",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 11,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 1,
+    "formula": "1d4-1"
+  },
+  "speeds": {
+    "walk": 20,
+    "swim": 20
+  },
+  "hover": false,
+  "abilities": {
+    "str": 1,
+    "dex": 13,
+    "con": 8,
+    "int": 1,
+    "wis": 8,
+    "cha": 3
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 1,
+    "stealth": 3
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 30
+  },
+  "passivePerception": 11,
+  "languages": [],
+  "challenge": 0,
+  "xp": 0,
+  "traits": [
+    {
+      "name": "Amphibious",
+      "description": "The frog can breathe air and water"
+    },
+    {
+      "name": "Standing Leap",
+      "description": "The frog's long jump is up to 10 ft. and its high jump is up to 5 ft., with or without a running start."
+    }
+  ],
+  "actions": [],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": "A frog has no effective attacks. It feeds on small insects and typically dwells near water, in trees, or underground. The frog’s statistics can also be used to represent a toad."
+}

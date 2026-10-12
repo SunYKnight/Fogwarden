@@ -1,0 +1,75 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-pony",
+  "name": "Pony",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "beast",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 10,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 11,
+    "formula": "2d8+2"
+  },
+  "speeds": {
+    "walk": 40
+  },
+  "hover": false,
+  "abilities": {
+    "str": 15,
+    "dex": 10,
+    "con": 13,
+    "int": 2,
+    "wis": 11,
+    "cha": 7
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 10,
+  "languages": [],
+  "challenge": 0.125,
+  "xp": 25,
+  "traits": [],
+  "actions": [
+    {
+      "name": "Hooves",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (2d4 + 2) bludgeoning damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d4+2",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

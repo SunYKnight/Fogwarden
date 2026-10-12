@@ -1,0 +1,118 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-weretiger-human",
+  "name": "Weretiger, Human Form",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "humanoid",
+  "subtype": "human",
+  "alignmentText": "neutral",
+  "alignmentWeights": {
+    "neutral": 1
+  },
+  "armorClass": 12,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 120,
+    "formula": "16d8+48"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 17,
+    "dex": 15,
+    "con": 16,
+    "int": 10,
+    "wis": 13,
+    "cha": 11
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 5,
+    "stealth": 4
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [
+    "bludgeoning, piercing, and slashing from nonmagical weapons that aren't silvered"
+  ],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 15,
+  "languages": [
+    "Common"
+  ],
+  "challenge": 4,
+  "xp": 1100,
+  "traits": [
+    {
+      "name": "Shapechanger",
+      "description": "The weretiger can use its action to polymorph into a tiger-humanoid hybrid or into a tiger, or back into its true form, which is humanoid. Its statistics, other than its size, are the same in each form. Any equipment it is wearing or carrying isn't transformed. It reverts to its true form if it dies."
+    },
+    {
+      "name": "Keen Hearing and Smell",
+      "description": "The weretiger has advantage on Wisdom (Perception) checks that rely on hearing or smell."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "In humanoid form, the weretiger makes two scimitar attacks or two longbow attacks. In hybrid form, it can attack like a humanoid or make two claw attacks.",
+      "attack": null
+    },
+    {
+      "name": "Scimitar",
+      "description": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6 + 3) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 5,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6+3",
+            "type": "slashing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Longbow",
+      "description": "Ranged Weapon Attack: +4 to hit, range 150/600 ft., one target. Hit: 6 (1d8 + 2) piercing damage.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 4,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 150,
+          "long": 600
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d8+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

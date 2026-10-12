@@ -1,0 +1,112 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-werewolf-hybrid",
+  "name": "Werewolf, Hybrid Form",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "humanoid",
+  "subtype": "human",
+  "alignmentText": "chaotic evil",
+  "alignmentWeights": {
+    "chaotic-evil": 1
+  },
+  "armorClass": 12,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 58,
+    "formula": "9d8+18"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 15,
+    "dex": 13,
+    "con": 14,
+    "int": 10,
+    "wis": 11,
+    "cha": 10
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 4
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [
+    "bludgeoning, piercing, and slashing from nonmagical weapons that aren't silvered"
+  ],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 14,
+  "languages": [
+    "Common"
+  ],
+  "challenge": 3,
+  "xp": 700,
+  "traits": [
+    {
+      "name": "Shapechanger",
+      "description": "The werewolf can use its action to polymorph into a wolf-humanoid hybrid or into a wolf, or back into its true form, which is humanoid. Its statistics, other than its AC, are the same in each form. Any equipment it is wearing or carrying isn't transformed. It reverts to its true form if it dies."
+    },
+    {
+      "name": "Keen Hearing and Smell",
+      "description": "The werewolf has advantage on Wisdom (Perception) checks that rely on hearing or smell."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The werewolf makes two attacks: two with its spear (humanoid form) or one with its bite and one with its claws (hybrid form).",
+      "attack": null
+    },
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 6 (1d8 + 2) piercing damage. If the target is a humanoid, it must succeed on a DC 12 Constitution saving throw or be cursed with werewolf lycanthropy.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d8+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Claws",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 7 (2d4 + 2) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one creature",
+        "damage": [
+          {
+            "formula": "2d4+2",
+            "type": "slashing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

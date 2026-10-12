@@ -1,0 +1,83 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-crocodile",
+  "name": "Crocodile",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "beast",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 12,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 19,
+    "formula": "3d10+3"
+  },
+  "speeds": {
+    "walk": 20,
+    "swim": 20
+  },
+  "hover": false,
+  "abilities": {
+    "str": 15,
+    "dex": 10,
+    "con": 13,
+    "int": 2,
+    "wis": 10,
+    "cha": 5
+  },
+  "savingThrows": {},
+  "skills": {
+    "stealth": 2
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 10,
+  "languages": [],
+  "challenge": 0.5,
+  "xp": 100,
+  "traits": [
+    {
+      "name": "Hold Breath",
+      "description": "The crocodile can hold its breath for 15 minutes."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 7 (1d10 + 2) piercing damage, and the target is grappled (escape DC 12). Until this grapple ends, the target is restrained, and the crocodile can't bite another target",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one creature",
+        "damage": [
+          {
+            "formula": "1d10+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

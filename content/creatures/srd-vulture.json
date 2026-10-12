@@ -1,0 +1,87 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-vulture",
+  "name": "Vulture",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "beast",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 10,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 5,
+    "formula": "1d8+1"
+  },
+  "speeds": {
+    "walk": 10,
+    "fly": 50
+  },
+  "hover": false,
+  "abilities": {
+    "str": 7,
+    "dex": 10,
+    "con": 13,
+    "int": 2,
+    "wis": 12,
+    "cha": 4
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 3
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 13,
+  "languages": [],
+  "challenge": 0,
+  "xp": 10,
+  "traits": [
+    {
+      "name": "Keen Sight and Smell",
+      "description": "The vulture has advantage on Wisdom (Perception) checks that rely on sight or smell."
+    },
+    {
+      "name": "Pack Tactics",
+      "description": "The vulture has advantage on an attack roll against a creature if at least one of the vulture's allies is within 5 ft. of the creature and the ally isn't incapacitated."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Beak",
+      "description": "Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 2 (1d4) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 2,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d4",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

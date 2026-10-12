@@ -1,0 +1,111 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-frost-giant",
+  "name": "Frost Giant",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "huge",
+  "type": "giant",
+  "subtype": "",
+  "alignmentText": "neutral evil",
+  "alignmentWeights": {
+    "neutral-evil": 1
+  },
+  "armorClass": 15,
+  "armorNote": "patchwork armor",
+  "hitPoints": {
+    "average": 138,
+    "formula": "12d12+60"
+  },
+  "speeds": {
+    "walk": 40
+  },
+  "hover": false,
+  "abilities": {
+    "str": 23,
+    "dex": 9,
+    "con": 21,
+    "int": 9,
+    "wis": 10,
+    "cha": 12
+  },
+  "savingThrows": {
+    "con": 8,
+    "wis": 3,
+    "cha": 4
+  },
+  "skills": {
+    "athletics": 9,
+    "perception": 3
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [
+    "cold"
+  ],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 13,
+  "languages": [
+    "Giant"
+  ],
+  "challenge": 8,
+  "xp": 3900,
+  "traits": [],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The giant makes two greataxe attacks.",
+      "attack": null
+    },
+    {
+      "name": "Greataxe",
+      "description": "Melee Weapon Attack: +9 to hit, reach 10 ft., one target. Hit: 25 (3d12 + 6) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 9,
+        "reachFt": 10,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "3d12+6",
+            "type": "slashing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Rock",
+      "description": "Ranged Weapon Attack: +9 to hit, range 60/240 ft., one target. Hit: 28 (4d10 + 6) bludgeoning damage.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 9,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 60,
+          "long": 240
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "4d10+6",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

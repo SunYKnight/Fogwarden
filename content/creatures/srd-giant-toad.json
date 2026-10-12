@@ -1,0 +1,96 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-giant-toad",
+  "name": "Giant Toad",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "beast",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 11,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 39,
+    "formula": "6d10+6"
+  },
+  "speeds": {
+    "walk": 20,
+    "swim": 40
+  },
+  "hover": false,
+  "abilities": {
+    "str": 15,
+    "dex": 13,
+    "con": 13,
+    "int": 2,
+    "wis": 10,
+    "cha": 3
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 30
+  },
+  "passivePerception": 10,
+  "languages": [],
+  "challenge": 1,
+  "xp": 200,
+  "traits": [
+    {
+      "name": "Amphibious",
+      "description": "The toad can breathe air and water"
+    },
+    {
+      "name": "Standing Leap",
+      "description": "The toad's long jump is up to 20 ft. and its high jump is up to 10 ft., with or without a running start."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (1d10 + 2) piercing damage plus 5 (1d10) poison damage, and the target is grappled (escape DC 13). Until this grapple ends, the target is restrained, and the toad can't bite another target.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d10+2",
+            "type": "piercing"
+          },
+          {
+            "formula": "1d10",
+            "type": "poison"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Swallow",
+      "description": "The toad makes one bite attack against a Medium or smaller target it is grappling. If the attack hits, the target is swallowed, and the grapple ends. The swallowed target is blinded and restrained, it has total cover against attacks and other effects outside the toad, and it takes 10 (3d6) acid damage at the start of each of the toad's turns. The toad can have only one target swallowed at a time. If the toad dies, a swallowed creature is no longer restrained by it and can escape from the corpse using 5 feet of movement, exiting prone.",
+      "attack": null
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

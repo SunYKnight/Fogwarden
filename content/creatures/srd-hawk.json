@@ -1,0 +1,83 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-hawk",
+  "name": "Hawk",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "tiny",
+  "type": "beast",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 13,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 1,
+    "formula": "1d4-1"
+  },
+  "speeds": {
+    "walk": 10,
+    "fly": 60
+  },
+  "hover": false,
+  "abilities": {
+    "str": 5,
+    "dex": 16,
+    "con": 8,
+    "int": 2,
+    "wis": 14,
+    "cha": 6
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 4
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 14,
+  "languages": [],
+  "challenge": 0,
+  "xp": 10,
+  "traits": [
+    {
+      "name": "Keen Sight",
+      "description": "The hawk has advantage on Wisdom (Perception) checks that rely on sight."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Talons",
+      "description": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 1 slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 5,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1",
+            "type": "slashing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

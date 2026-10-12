@@ -1,0 +1,108 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-gray-ooze",
+  "name": "Gray Ooze",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "ooze",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 8,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 22,
+    "formula": "3d8+9"
+  },
+  "speeds": {
+    "walk": 10,
+    "climb": 10
+  },
+  "hover": false,
+  "abilities": {
+    "str": 12,
+    "dex": 6,
+    "con": 16,
+    "int": 1,
+    "wis": 6,
+    "cha": 2
+  },
+  "savingThrows": {},
+  "skills": {
+    "stealth": 2
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "acid",
+    "cold",
+    "fire"
+  ],
+  "damageImmunities": [],
+  "conditionImmunities": [
+    "blinded",
+    "charmed",
+    "deafened",
+    "exhaustion",
+    "frightened",
+    "prone"
+  ],
+  "senses": {
+    "blindsight": 60
+  },
+  "passivePerception": 8,
+  "languages": [],
+  "challenge": 0.5,
+  "xp": 100,
+  "traits": [
+    {
+      "name": "Amorphous",
+      "description": "The ooze can move through a space as narrow as 1 inch wide without squeezing."
+    },
+    {
+      "name": "Corrode Metal",
+      "description": "Any nonmagical weapon made of metal that hits the ooze corrodes. After dealing damage, the weapon takes a permanent and cumulative -1 penalty to damage rolls. If its penalty drops to -5, the weapon is destroyed. Nonmagical ammunition made of metal that hits the ooze is destroyed after dealing damage. The ooze can eat through 2-inch-thick, nonmagical metal in 1 round."
+    },
+    {
+      "name": "False Appearance",
+      "description": "While the ooze remains motionless, it is indistinguishable from an oily pool or wet rock."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Pseudopod",
+      "description": "Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6 + 1) bludgeoning damage plus 7 (2d6) acid damage, and if the target is wearing nonmagical metal armor, its armor is partly corroded and takes a permanent and cumulative -1 penalty to the AC it offers. The armor is destroyed if the penalty reduces its AC to 10.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 3,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6+1",
+            "type": "bludgeoning"
+          },
+          {
+            "formula": "2d6",
+            "type": "acid"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

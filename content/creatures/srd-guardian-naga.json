@@ -1,0 +1,115 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-guardian-naga",
+  "name": "Guardian Naga",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "monstrosity",
+  "subtype": "",
+  "alignmentText": "lawful good",
+  "alignmentWeights": {
+    "lawful-good": 1
+  },
+  "armorClass": 18,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 127,
+    "formula": "15d10+45"
+  },
+  "speeds": {
+    "walk": 40
+  },
+  "hover": false,
+  "abilities": {
+    "str": 19,
+    "dex": 18,
+    "con": 16,
+    "int": 16,
+    "wis": 19,
+    "cha": 18
+  },
+  "savingThrows": {
+    "dex": 8,
+    "con": 7,
+    "int": 7,
+    "wis": 8,
+    "cha": 8
+  },
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [
+    "poison"
+  ],
+  "conditionImmunities": [
+    "charmed",
+    "poisoned"
+  ],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 14,
+  "languages": [
+    "Celestial",
+    "Common"
+  ],
+  "challenge": 10,
+  "xp": 5900,
+  "traits": [
+    {
+      "name": "Rejuvenation",
+      "description": "If it dies, the naga returns to life in 1d6 days and regains all its hit points. Only a wish spell can prevent this trait from functioning."
+    },
+    {
+      "name": "Spellcasting",
+      "description": "The naga is an 11th-level spellcaster. Its spellcasting ability is Wisdom (spell save DC 16, +8 to hit with spell attacks), and it needs only verbal components to cast its spells. It has the following cleric spells prepared:\nCantrips (at will): mending, sacred flame, thaumaturgy\n1st level (4 slots): command, cure wounds, shield of faith\n2nd level (3 slots): calm emotions, hold person\n3rd level (3 slots): bestow curse, clairvoyance\n4th level (3 slots): banishment, freedom of movement\n5th level (2 slots): flame strike, geas\n6th level (1 slot): true seeing"
+    }
+  ],
+  "actions": [
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +8 to hit, reach 10 ft., one creature. Hit: 8 (1d8 + 4) piercing damage, and the target must make a DC 15 Constitution saving throw, taking 45 (10d8) poison damage on a failed save, or half as much damage on a successful one.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 8,
+        "reachFt": 10,
+        "rangeFt": null,
+        "targets": "one creature",
+        "damage": [
+          {
+            "formula": "1d8+4",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Spit Poison",
+      "description": "Ranged Weapon Attack: +8 to hit, range 15/30 ft., one creature. Hit: The target must make a DC 15 Constitution saving throw, taking 45 (10d8) poison damage on a failed save, or half as much damage on a successful one.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 8,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 15,
+          "long": 30
+        },
+        "targets": "one creature",
+        "damage": []
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

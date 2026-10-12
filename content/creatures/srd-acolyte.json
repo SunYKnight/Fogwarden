@@ -1,0 +1,93 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-acolyte",
+  "name": "Acolyte",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "humanoid",
+  "subtype": "any race",
+  "alignmentText": "any alignment",
+  "alignmentWeights": {
+    "lawful-good": 0.1111111111111111,
+    "neutral-good": 0.1111111111111111,
+    "chaotic-good": 0.1111111111111111,
+    "lawful-neutral": 0.1111111111111111,
+    "neutral": 0.1111111111111111,
+    "chaotic-neutral": 0.1111111111111111,
+    "lawful-evil": 0.1111111111111111,
+    "neutral-evil": 0.1111111111111111,
+    "chaotic-evil": 0.1111111111111111
+  },
+  "armorClass": 10,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 9,
+    "formula": "2d8"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 10,
+    "dex": 10,
+    "con": 10,
+    "int": 10,
+    "wis": 14,
+    "cha": 11
+  },
+  "savingThrows": {},
+  "skills": {
+    "medicine": 4,
+    "religion": 2
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 12,
+  "languages": [
+    "any one language (usually Common)"
+  ],
+  "challenge": 0.25,
+  "xp": 50,
+  "traits": [
+    {
+      "name": "Spellcasting",
+      "description": "The acolyte is a 1st-level spellcaster. Its spellcasting ability is Wisdom (spell save DC 12, +4 to hit with spell attacks). The acolyte has following cleric spells prepared:\nCantrips (at will): light, sacred flame, thaumaturgy\n1st level (3 slots): bless, cure wounds, sanctuary"
+    }
+  ],
+  "actions": [
+    {
+      "name": "Club",
+      "description": "Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 2 (1d4) bludgeoning damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 2,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d4",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": "Acolytes are junior members of a clergy, usually answerable to a priest. They perform a variety of functions in a temple and are granted minor spellcasting power by their deities."
+}

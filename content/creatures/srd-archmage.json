@@ -1,0 +1,106 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-archmage",
+  "name": "Archmage",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "humanoid",
+  "subtype": "any race",
+  "alignmentText": "any alignment",
+  "alignmentWeights": {
+    "lawful-good": 0.1111111111111111,
+    "neutral-good": 0.1111111111111111,
+    "chaotic-good": 0.1111111111111111,
+    "lawful-neutral": 0.1111111111111111,
+    "neutral": 0.1111111111111111,
+    "chaotic-neutral": 0.1111111111111111,
+    "lawful-evil": 0.1111111111111111,
+    "neutral-evil": 0.1111111111111111,
+    "chaotic-evil": 0.1111111111111111
+  },
+  "armorClass": 12,
+  "armorNote": "15 with mage armor",
+  "hitPoints": {
+    "average": 99,
+    "formula": "18d8+18"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 10,
+    "dex": 14,
+    "con": 12,
+    "int": 20,
+    "wis": 15,
+    "cha": 16
+  },
+  "savingThrows": {
+    "int": 9,
+    "wis": 6
+  },
+  "skills": {
+    "arcana": 13,
+    "history": 13
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "damage from spells",
+    "bludgeoning, piercing, and slashing from nonmagical attacks (from stoneskin)"
+  ],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 12,
+  "languages": [
+    "any six languages"
+  ],
+  "challenge": 12,
+  "xp": 8400,
+  "traits": [
+    {
+      "name": "Magic Resistance",
+      "description": "The archmage has advantage on saving throws against spells and other magical effects."
+    },
+    {
+      "name": "Spellcasting",
+      "description": "The archmage is an 18th-level spellcaster. Its spellcasting ability is Intelligence (spell save DC 17, +9 to hit with spell attacks). The archmage can cast disguise self and invisibility at will and has the following wizard spells prepared:\nCantrips (at will): fire bolt, light, mage hand, prestidigitation, shocking grasp\n1st level (4 slots): detect magic, identify, mage armor*, magic missile\n2nd level (3 slots): detect thoughts, mirror image, misty step\n3rd level (3 slots): counterspell, fly, lightning bolt\n4th level (3 slots): banishment, fire shield, stoneskin*\n5th level (3 slots): cone of cold, scrying, wall of force\n6th level (1 slot): globe of invulnerability\n7th level (1 slot): teleport\n8th level (1 slot): mind blank*\n9th level (1 slot): time stop * The archmage casts these spells on itself before combat."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Dagger",
+      "description": "Melee or Ranged Weapon Attack: +6 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 4 (1d4 + 2) piercing damage.",
+      "attack": {
+        "kind": "melee-or-ranged",
+        "toHit": 6,
+        "reachFt": 5,
+        "rangeFt": {
+          "normal": 20,
+          "long": 60
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d4+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": "Archmages are powerful (and usually quite old) spellcasters dedicated to the study of the arcane arts. Benevolent ones counsel kings and queens, while evil ones rule as tyrants and pursue lichdom. Those who are neither good nor evil sequester themselves in remote towers to practice their magic without interruption. \n\nAn archmage typically has one or more apprentice mages, and an archmage’s abode has numerous magical wards and guardians to discourage interlopers."
+}

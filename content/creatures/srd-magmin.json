@@ -1,0 +1,92 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-magmin",
+  "name": "Magmin",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "small",
+  "type": "elemental",
+  "subtype": "",
+  "alignmentText": "chaotic neutral",
+  "alignmentWeights": {
+    "chaotic-neutral": 1
+  },
+  "armorClass": 14,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 9,
+    "formula": "2d6+2"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 7,
+    "dex": 15,
+    "con": 12,
+    "int": 8,
+    "wis": 11,
+    "cha": 10
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "bludgeoning, piercing, and slashing from nonmagical weapons"
+  ],
+  "damageImmunities": [
+    "fire"
+  ],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 10,
+  "languages": [
+    "Ignan"
+  ],
+  "challenge": 0.5,
+  "xp": 100,
+  "traits": [
+    {
+      "name": "Death Burst",
+      "description": "When the magmin dies, it explodes in a burst of fire and magma. Each creature within 10 ft. of it must make a DC 11 Dexterity saving throw, taking 7 (2d6) fire damage on a failed save, or half as much damage on a successful one. Flammable objects that aren't being worn or carried in that area are ignited."
+    },
+    {
+      "name": "Ignited Illumination",
+      "description": "As a bonus action, the magmin can set itself ablaze or extinguish its flames. While ablaze, the magmin sheds bright light in a 10-foot radius and dim light for an additional 10 ft."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Touch",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (2d6) fire damage. If the target is a creature or a flammable object, it ignites. Until a target takes an action to douse the fire, the target takes 3 (1d6) fire damage at the end of each of its turns.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d6",
+            "type": "fire"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

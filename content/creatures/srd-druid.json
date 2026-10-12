@@ -1,0 +1,94 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-druid",
+  "name": "Druid",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "humanoid",
+  "subtype": "any race",
+  "alignmentText": "any alignment",
+  "alignmentWeights": {
+    "lawful-good": 0.1111111111111111,
+    "neutral-good": 0.1111111111111111,
+    "chaotic-good": 0.1111111111111111,
+    "lawful-neutral": 0.1111111111111111,
+    "neutral": 0.1111111111111111,
+    "chaotic-neutral": 0.1111111111111111,
+    "lawful-evil": 0.1111111111111111,
+    "neutral-evil": 0.1111111111111111,
+    "chaotic-evil": 0.1111111111111111
+  },
+  "armorClass": 11,
+  "armorNote": "16 with barkskin",
+  "hitPoints": {
+    "average": 27,
+    "formula": "5d8+5"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 10,
+    "dex": 12,
+    "con": 13,
+    "int": 12,
+    "wis": 15,
+    "cha": 11
+  },
+  "savingThrows": {},
+  "skills": {
+    "medicine": 4,
+    "nature": 3,
+    "perception": 4
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 14,
+  "languages": [
+    "Druidic plus any two languages"
+  ],
+  "challenge": 2,
+  "xp": 450,
+  "traits": [
+    {
+      "name": "Spellcasting",
+      "description": "The druid is a 4th-level spellcaster. Its spellcasting ability is Wisdom (spell save DC 12, +4 to hit with spell attacks). It has the following druid spells prepared:\nCantrips (at will): druidcraft, produce flame, shillelagh\n1st level (4 slots): entangle, longstrider, speak with animals, thunderwave\n2nd level (3 slots): animal messenger, barkskin"
+    }
+  ],
+  "actions": [
+    {
+      "name": "Quarterstaff",
+      "description": "Melee Weapon Attack: +2 to hit (+4 to hit with shillelagh), reach 5 ft., one target. Hit: 3 (1d6) bludgeoning damage, 4 (1d8) bludgeoning damage if wielded with two hands, or 6 (1d8 + 2) bludgeoning damage with shillelagh.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 2,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": "Druids dwell in forests and other secluded wilderness locations, where they protect the natural world from monsters and the encroachment of civilization. Some are tribal shamans who heal the sick, pray to animal spirits, and provide spiritual guidance."
+}

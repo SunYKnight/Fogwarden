@@ -1,0 +1,98 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-swarm-of-poisonous-snakes",
+  "name": "Swarm of Poisonous Snakes",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [
+    "swarm"
+  ],
+  "size": "medium",
+  "type": "beast",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 14,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 36,
+    "formula": "8d8"
+  },
+  "speeds": {
+    "walk": 30,
+    "swim": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 8,
+    "dex": 18,
+    "con": 11,
+    "int": 1,
+    "wis": 10,
+    "cha": 3
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "bludgeoning",
+    "piercing",
+    "slashing"
+  ],
+  "damageImmunities": [],
+  "conditionImmunities": [
+    "charmed",
+    "frightened",
+    "grappled",
+    "paralyzed",
+    "petrified",
+    "prone",
+    "restrained",
+    "stunned"
+  ],
+  "senses": {
+    "blindsight": 10
+  },
+  "passivePerception": 10,
+  "languages": [],
+  "challenge": 2,
+  "xp": 450,
+  "traits": [
+    {
+      "name": "Swarm",
+      "description": "The swarm can occupy another creature's space and vice versa, and the swarm can move through any opening large enough for a Tiny snake. The swarm can't regain hit points or gain temporary hit points."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Bites",
+      "description": "Melee Weapon Attack: +6 to hit, reach 0 ft., one creature in the swarm's space. Hit: 7 (2d6) piercing damage, or 3 (1d6) piercing damage if the swarm has half of its hit points or fewer. The target must make a DC 10 Constitution saving throw, taking 14 (4d6) poison damage on a failed save, or half as much damage on a successful one.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 6,
+        "reachFt": 0,
+        "rangeFt": null,
+        "targets": "one creature in the swarm's space",
+        "damage": [
+          {
+            "formula": "2d6",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

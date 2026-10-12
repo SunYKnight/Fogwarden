@@ -1,0 +1,113 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-ettin",
+  "name": "Ettin",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "giant",
+  "subtype": "",
+  "alignmentText": "chaotic evil",
+  "alignmentWeights": {
+    "chaotic-evil": 1
+  },
+  "armorClass": 12,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 85,
+    "formula": "10d10+30"
+  },
+  "speeds": {
+    "walk": 40
+  },
+  "hover": false,
+  "abilities": {
+    "str": 21,
+    "dex": 8,
+    "con": 17,
+    "int": 6,
+    "wis": 10,
+    "cha": 8
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 4
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 14,
+  "languages": [
+    "Giant",
+    "Orc"
+  ],
+  "challenge": 4,
+  "xp": 1100,
+  "traits": [
+    {
+      "name": "Two Heads",
+      "description": "The ettin has advantage on Wisdom (Perception) checks and on saving throws against being blinded, charmed, deafened, frightened, stunned, and knocked unconscious."
+    },
+    {
+      "name": "Wakeful",
+      "description": "When one of the ettin's heads is asleep, its other head is awake."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The ettin makes two attacks: one with its battleaxe and one with its morningstar.",
+      "attack": null
+    },
+    {
+      "name": "Battleaxe",
+      "description": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 14 (2d8 + 5) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d8+5",
+            "type": "slashing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Morningstar",
+      "description": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 14 (2d8 + 5) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d8+5",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

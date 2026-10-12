@@ -1,0 +1,128 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-cloaker",
+  "name": "Cloaker",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "aberration",
+  "subtype": "",
+  "alignmentText": "chaotic neutral",
+  "alignmentWeights": {
+    "chaotic-neutral": 1
+  },
+  "armorClass": 14,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 78,
+    "formula": "12d10+12"
+  },
+  "speeds": {
+    "walk": 10,
+    "fly": 40
+  },
+  "hover": false,
+  "abilities": {
+    "str": 17,
+    "dex": 15,
+    "con": 12,
+    "int": 13,
+    "wis": 12,
+    "cha": 14
+  },
+  "savingThrows": {},
+  "skills": {
+    "stealth": 5
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 11,
+  "languages": [
+    "Deep Speech",
+    "Undercommon"
+  ],
+  "challenge": 8,
+  "xp": 3900,
+  "traits": [
+    {
+      "name": "Damage Transfer",
+      "description": "While attached to a creature, the cloaker takes only half the damage dealt to it (rounded down). and that creature takes the other half."
+    },
+    {
+      "name": "False Appearance",
+      "description": "While the cloaker remains motionless without its underside exposed, it is indistinguishable from a dark leather cloak."
+    },
+    {
+      "name": "Light Sensitivity",
+      "description": "While in bright light, the cloaker has disadvantage on attack rolls and Wisdom (Perception) checks that rely on sight."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The cloaker makes two attacks: one with its bite and one with its tail.",
+      "attack": null
+    },
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +6 to hit, reach 5 ft., one creature. Hit: 10 (2d6 + 3) piercing damage, and if the target is Large or smaller, the cloaker attaches to it. If the cloaker has advantage against the target, the cloaker attaches to the target's head, and the target is blinded and unable to breathe while the cloaker is attached. While attached, the cloaker can make this attack only against the target and has advantage on the attack roll. The cloaker can detach itself by spending 5 feet of its movement. A creature, including the target, can take its action to detach the cloaker by succeeding on a DC 16 Strength check.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 6,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one creature",
+        "damage": [
+          {
+            "formula": "2d6+3",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Tail",
+      "description": "Melee Weapon Attack: +6 to hit, reach 10 ft., one creature. Hit: 7 (1d8 + 3) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 6,
+        "reachFt": 10,
+        "rangeFt": null,
+        "targets": "one creature",
+        "damage": [
+          {
+            "formula": "1d8+3",
+            "type": "slashing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Moan",
+      "description": "Each creature within 60 feet of the cloaker that can hear its moan and that isn't an aberration must succeed on a DC 13 Wisdom saving throw or become frightened until the end of the cloaker's next turn. If a creature's saving throw is successful, the creature is immune to the cloaker's moan for the next 24 hours.",
+      "attack": null
+    },
+    {
+      "name": "Phantasms (Recharges after a Short or Long Rest)",
+      "description": "The cloaker magically creates three illusory duplicates of itself if it isn't in bright light. The duplicates move with it and mimic its actions, shifting position so as to make it impossible to track which cloaker is the real one. If the cloaker is ever in an area of bright light, the duplicates disappear. Whenever any creature targets the cloaker with an attack or a harmful spell while a duplicate remains, that creature rolls randomly to determine whether it targets the cloaker or one of the duplicates. A creature is unaffected by this magical effect if it can't see or if it relies on senses other than sight. A duplicate has the cloaker's AC and uses its saving throws. If an attack hits a duplicate, or if a duplicate fails a saving throw against an effect that deals damage, the duplicate disappears.",
+      "attack": null
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

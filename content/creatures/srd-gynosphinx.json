@@ -1,0 +1,127 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-gynosphinx",
+  "name": "Gynosphinx",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "monstrosity",
+  "subtype": "",
+  "alignmentText": "lawful neutral",
+  "alignmentWeights": {
+    "lawful-neutral": 1
+  },
+  "armorClass": 17,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 136,
+    "formula": "16d10+48"
+  },
+  "speeds": {
+    "walk": 40,
+    "fly": 60
+  },
+  "hover": false,
+  "abilities": {
+    "str": 18,
+    "dex": 15,
+    "con": 16,
+    "int": 18,
+    "wis": 18,
+    "cha": 18
+  },
+  "savingThrows": {},
+  "skills": {
+    "arcana": 12,
+    "history": 12,
+    "perception": 8,
+    "religion": 8
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "bludgeoning, piercing, and slashing from nonmagical weapons"
+  ],
+  "damageImmunities": [
+    "psychic"
+  ],
+  "conditionImmunities": [
+    "charmed",
+    "frightened"
+  ],
+  "senses": {
+    "truesight": 120
+  },
+  "passivePerception": 18,
+  "languages": [
+    "Common",
+    "Sphinx"
+  ],
+  "challenge": 11,
+  "xp": 7200,
+  "traits": [
+    {
+      "name": "Inscrutable",
+      "description": "The sphinx is immune to any effect that would sense its emotions or read its thoughts, as well as any divination spell that it refuses. Wisdom (Insight) checks made to ascertain the sphinx's intentions or sincerity have disadvantage."
+    },
+    {
+      "name": "Magic Weapons",
+      "description": "The sphinx's weapon attacks are magical."
+    },
+    {
+      "name": "Spellcasting",
+      "description": "The sphinx is a 9th-level spellcaster. Its spellcasting ability is Intelligence (spell save DC 16, +8 to hit with spell attacks). It requires no material components to cast its spells. The sphinx has the following wizard spells prepared:\nCantrips (at will): mage hand, minor illusion, prestidigitation\n1st level (4 slots): detect magic, identify, shield\n2nd level (3 slots): darkness, locate object, suggestion\n3rd level (3 slots): dispel magic, remove curse, tongues\n4th level (3 slots): banishment, greater invisibility\n5th level (1 slot): legend lore"
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The sphinx makes two claw attacks.",
+      "attack": null
+    },
+    {
+      "name": "Claw",
+      "description": "Melee Weapon Attack: +9 to hit, reach 5 ft., one target. Hit: 13 (2d8 + 4) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 9,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d8+4",
+            "type": "slashing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "The gynosphinx can take 3 legendary actions, choosing from the options below. Only one legendary action option can be used at a time and only at the end of another creature's turn. The gynosphinx regains spent legendary actions at the start of its turn.",
+  "legendaryActions": [
+    {
+      "name": "Claw Attack",
+      "description": "The sphinx makes one claw attack.",
+      "cost": 1
+    },
+    {
+      "name": "Teleport",
+      "description": "The sphinx magically teleports, along with any equipment it is wearing or carrying, up to 120 feet to an unoccupied space it can see.",
+      "cost": 2
+    },
+    {
+      "name": "Cast a Spell",
+      "description": "The sphinx casts a spell from its list of prepared spells, using a spell slot as normal.",
+      "cost": 3
+    }
+  ],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

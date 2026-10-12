@@ -1,0 +1,126 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-chimera",
+  "name": "Chimera",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "monstrosity",
+  "subtype": "",
+  "alignmentText": "chaotic evil",
+  "alignmentWeights": {
+    "chaotic-evil": 1
+  },
+  "armorClass": 14,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 114,
+    "formula": "12d10+48"
+  },
+  "speeds": {
+    "walk": 30,
+    "fly": 60
+  },
+  "hover": false,
+  "abilities": {
+    "str": 19,
+    "dex": 11,
+    "con": 19,
+    "int": 3,
+    "wis": 14,
+    "cha": 10
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 8
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 18,
+  "languages": [
+    "understands Draconic but can't speak"
+  ],
+  "challenge": 6,
+  "xp": 2300,
+  "traits": [],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The chimera makes three attacks: one with its bite, one with its horns, and one with its claws. When its fire breath is available, it can use the breath in place of its bite or horns.",
+      "attack": null
+    },
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 11 (2d6 + 4) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d6+4",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Horns",
+      "description": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 10 (1d12 + 4) bludgeoning damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d12+4",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Claws",
+      "description": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 11 (2d6 + 4) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d6+4",
+            "type": "slashing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Fire Breath (Recharge 5-6)",
+      "description": "The dragon head exhales fire in a 15-foot cone. Each creature in that area must make a DC 15 Dexterity saving throw, taking 31 (7d8) fire damage on a failed save, or half as much damage on a successful one.",
+      "attack": null
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

@@ -1,0 +1,120 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-scout",
+  "name": "Scout",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "humanoid",
+  "subtype": "any race",
+  "alignmentText": "any alignment",
+  "alignmentWeights": {
+    "lawful-good": 0.1111111111111111,
+    "neutral-good": 0.1111111111111111,
+    "chaotic-good": 0.1111111111111111,
+    "lawful-neutral": 0.1111111111111111,
+    "neutral": 0.1111111111111111,
+    "chaotic-neutral": 0.1111111111111111,
+    "lawful-evil": 0.1111111111111111,
+    "neutral-evil": 0.1111111111111111,
+    "chaotic-evil": 0.1111111111111111
+  },
+  "armorClass": 13,
+  "armorNote": "leather armor",
+  "hitPoints": {
+    "average": 16,
+    "formula": "3d8+3"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 11,
+    "dex": 14,
+    "con": 12,
+    "int": 11,
+    "wis": 13,
+    "cha": 11
+  },
+  "savingThrows": {},
+  "skills": {
+    "nature": 4,
+    "perception": 5,
+    "stealth": 6,
+    "survival": 5
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 15,
+  "languages": [
+    "any one language (usually Common)"
+  ],
+  "challenge": 0.5,
+  "xp": 100,
+  "traits": [
+    {
+      "name": "Keen Hearing and Sight",
+      "description": "The scout has advantage on Wisdom (Perception) checks that rely on hearing or sight."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The scout makes two melee attacks or two ranged attacks.",
+      "attack": null
+    },
+    {
+      "name": "Shortsword",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Longbow",
+      "description": "Ranged Weapon Attack: +4 to hit, range 150/600 ft., one target. Hit: 6 (1d8 + 2) piercing damage.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 4,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 150,
+          "long": 600
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d8+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": "Scouts are skilled hunters and trackers who offer their services for a fee. Most hunt wild game, but a few work as bounty hunters, serve as guides, or provide military reconnaissance."
+}

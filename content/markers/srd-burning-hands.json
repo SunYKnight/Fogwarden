@@ -1,0 +1,15 @@
+{
+  "schema": "marker",
+  "version": 1,
+  "id": "srd-burning-hands",
+  "name": "Burning Hands",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "shape": "cone",
+  "sizeFt": 15,
+  "widthFt": 5,
+  "heightFt": 15,
+  "color": "#ff9b2f",
+  "opacity": 0.35,
+  "notes": "Burning Hands (SRD 5.1, CC-BY-4.0)"
+}

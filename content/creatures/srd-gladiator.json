@@ -1,0 +1,131 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-gladiator",
+  "name": "Gladiator",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "humanoid",
+  "subtype": "any race",
+  "alignmentText": "any alignment",
+  "alignmentWeights": {
+    "lawful-good": 0.1111111111111111,
+    "neutral-good": 0.1111111111111111,
+    "chaotic-good": 0.1111111111111111,
+    "lawful-neutral": 0.1111111111111111,
+    "neutral": 0.1111111111111111,
+    "chaotic-neutral": 0.1111111111111111,
+    "lawful-evil": 0.1111111111111111,
+    "neutral-evil": 0.1111111111111111,
+    "chaotic-evil": 0.1111111111111111
+  },
+  "armorClass": 16,
+  "armorNote": "studded leather armor, shield",
+  "hitPoints": {
+    "average": 112,
+    "formula": "15d8+45"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 18,
+    "dex": 15,
+    "con": 16,
+    "int": 10,
+    "wis": 12,
+    "cha": 15
+  },
+  "savingThrows": {
+    "str": 7,
+    "dex": 5,
+    "con": 6
+  },
+  "skills": {
+    "athletics": 10,
+    "intimidation": 5
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 11,
+  "languages": [
+    "any one language (usually Common)"
+  ],
+  "challenge": 5,
+  "xp": 1800,
+  "traits": [
+    {
+      "name": "Brave",
+      "description": "The gladiator has advantage on saving throws against being frightened."
+    },
+    {
+      "name": "Brute",
+      "description": "A melee weapon deals one extra die of its damage when the gladiator hits with it (included in the attack)."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The gladiator makes three melee attacks or two ranged attacks.",
+      "attack": null
+    },
+    {
+      "name": "Spear",
+      "description": "Melee or Ranged Weapon Attack: +7 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 11 (2d6 + 4) piercing damage, or 13 (2d8 + 4) piercing damage if used with two hands to make a melee attack.",
+      "attack": {
+        "kind": "melee-or-ranged",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": {
+          "normal": 20,
+          "long": 60
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d6+4",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Shield Bash",
+      "description": "Melee Weapon Attack: +7 to hit, reach 5 ft., one creature. Hit: 9 (2d4 + 4) bludgeoning damage. If the target is a Medium or smaller creature, it must succeed on a DC 15 Strength saving throw or be knocked prone.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one creature",
+        "damage": [
+          {
+            "formula": "2d4+4",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [
+    {
+      "name": "Parry",
+      "description": "The gladiator adds 3 to its AC against one melee attack that would hit it. To do so, the gladiator must see the attacker and be wielding a melee weapon."
+    }
+  ],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": "Gladiators battle for the entertainment of raucous crowds. Some gladiators are brutal pit fighters who treat each match as a life-or-death struggle, while others are professional duelists who command huge fees but rarely fight to the death."
+}

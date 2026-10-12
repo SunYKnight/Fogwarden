@@ -1,0 +1,75 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-camel",
+  "name": "Camel",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "beast",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 9,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 15,
+    "formula": "2d10+4"
+  },
+  "speeds": {
+    "walk": 50
+  },
+  "hover": false,
+  "abilities": {
+    "str": 16,
+    "dex": 8,
+    "con": 14,
+    "int": 2,
+    "wis": 8,
+    "cha": 5
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 9,
+  "languages": [],
+  "challenge": 0.125,
+  "xp": 25,
+  "traits": [],
+  "actions": [
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 2 (1d4) bludgeoning damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 5,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d4",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

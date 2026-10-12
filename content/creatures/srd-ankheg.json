@@ -1,0 +1,88 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-ankheg",
+  "name": "Ankheg",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "monstrosity",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 14,
+  "armorNote": "natural armor, 11 while prone",
+  "hitPoints": {
+    "average": 39,
+    "formula": "6d10+6"
+  },
+  "speeds": {
+    "walk": 30,
+    "burrow": 10
+  },
+  "hover": false,
+  "abilities": {
+    "str": 17,
+    "dex": 11,
+    "con": 13,
+    "int": 1,
+    "wis": 13,
+    "cha": 6
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60,
+    "tremorsense": 60
+  },
+  "passivePerception": 11,
+  "languages": [],
+  "challenge": 2,
+  "xp": 450,
+  "traits": [],
+  "actions": [
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 10 (2d6 + 3) slashing damage plus 3 (1d6) acid damage. If the target is a Large or smaller creature, it is grappled (escape DC 13). Until this grapple ends, the ankheg can bite only the grappled creature and has advantage on attack rolls to do so.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 5,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d6+3",
+            "type": "slashing"
+          },
+          {
+            "formula": "1d6",
+            "type": "acid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Acid Spray (Recharge 6)",
+      "description": "The ankheg spits acid in a line that is 30 ft. long and 5 ft. wide, provided that it has no creature grappled. Each creature in that line must make a DC 13 Dexterity saving throw, taking 10 (3d6) acid damage on a failed save, or half as much damage on a successful one.",
+      "attack": null
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

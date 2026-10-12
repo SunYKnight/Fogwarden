@@ -1,0 +1,125 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-manticore",
+  "name": "Manticore",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "monstrosity",
+  "subtype": "",
+  "alignmentText": "lawful evil",
+  "alignmentWeights": {
+    "lawful-evil": 1
+  },
+  "armorClass": 14,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 68,
+    "formula": "8d10+24"
+  },
+  "speeds": {
+    "walk": 30,
+    "fly": 50
+  },
+  "hover": false,
+  "abilities": {
+    "str": 17,
+    "dex": 16,
+    "con": 17,
+    "int": 7,
+    "wis": 12,
+    "cha": 8
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 11,
+  "languages": [],
+  "challenge": 3,
+  "xp": 700,
+  "traits": [
+    {
+      "name": "Tail Spike Regrowth",
+      "description": "The manticore has twenty-four tail spikes. Used spikes regrow when the manticore finishes a long rest."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The manticore makes three attacks: one with its bite and two with its claws or three with its tail spikes.",
+      "attack": null
+    },
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 7 (1d8 + 3) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 5,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d8+3",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Claw",
+      "description": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6 + 3) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 5,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6+3",
+            "type": "slashing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Tail Spike",
+      "description": "Ranged Weapon Attack: +5 to hit, range 100/200 ft., one target. Hit: 7 (1d8 + 3) piercing damage.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 5,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 100,
+          "long": 200
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d8+3",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

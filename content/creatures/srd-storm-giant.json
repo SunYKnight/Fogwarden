@@ -1,0 +1,133 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-storm-giant",
+  "name": "Storm Giant",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "huge",
+  "type": "giant",
+  "subtype": "",
+  "alignmentText": "chaotic good",
+  "alignmentWeights": {
+    "chaotic-good": 1
+  },
+  "armorClass": 16,
+  "armorNote": "scale mail",
+  "hitPoints": {
+    "average": 230,
+    "formula": "20d12+100"
+  },
+  "speeds": {
+    "walk": 50,
+    "swim": 50
+  },
+  "hover": false,
+  "abilities": {
+    "str": 29,
+    "dex": 14,
+    "con": 20,
+    "int": 16,
+    "wis": 18,
+    "cha": 18
+  },
+  "savingThrows": {
+    "str": 14,
+    "con": 10,
+    "wis": 9,
+    "cha": 9
+  },
+  "skills": {
+    "arcana": 8,
+    "athletics": 14,
+    "history": 8,
+    "perception": 9
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "cold"
+  ],
+  "damageImmunities": [
+    "lightning",
+    "thunder"
+  ],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 19,
+  "languages": [
+    "Common",
+    "Giant"
+  ],
+  "challenge": 13,
+  "xp": 10000,
+  "traits": [
+    {
+      "name": "Amphibious",
+      "description": "The giant can breathe air and water."
+    },
+    {
+      "name": "Innate Spellcasting",
+      "description": "The giant's innate spellcasting ability is Charisma (spell save DC 17). It can innately cast the following spells, requiring no material components:\nAt will: detect magic, feather fall, levitate, light\n3/day each: control weather, water breathing"
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The giant makes two greatsword attacks.",
+      "attack": null
+    },
+    {
+      "name": "Greatsword",
+      "description": "Melee Weapon Attack: +14 to hit, reach 10 ft., one target. Hit: 30 (6d6 + 9) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 14,
+        "reachFt": 10,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "6d6+9",
+            "type": "slashing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Rock",
+      "description": "Ranged Weapon Attack: +14 to hit, range 60/240 ft., one target. Hit: 35 (4d12 + 9) bludgeoning damage.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 14,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 60,
+          "long": 240
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "4d12+9",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Lightning Strike (Recharge 5-6)",
+      "description": "The giant hurls a magical lightning bolt at a point it can see within 500 feet of it. Each creature within 10 feet of that point must make a DC 17 Dexterity saving throw, taking 54 (12d8) lightning damage on a failed save, or half as much damage on a successful one.",
+      "attack": null
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

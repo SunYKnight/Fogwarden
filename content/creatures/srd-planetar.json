@@ -1,0 +1,125 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-planetar",
+  "name": "Planetar",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "celestial",
+  "subtype": "",
+  "alignmentText": "lawful good",
+  "alignmentWeights": {
+    "lawful-good": 1
+  },
+  "armorClass": 19,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 200,
+    "formula": "16d10+112"
+  },
+  "speeds": {
+    "walk": 40,
+    "fly": 120
+  },
+  "hover": false,
+  "abilities": {
+    "str": 24,
+    "dex": 20,
+    "con": 24,
+    "int": 19,
+    "wis": 22,
+    "cha": 25
+  },
+  "savingThrows": {
+    "con": 12,
+    "wis": 11,
+    "cha": 12
+  },
+  "skills": {
+    "perception": 11
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "radiant",
+    "bludgeoning, piercing, and slashing from nonmagical weapons"
+  ],
+  "damageImmunities": [],
+  "conditionImmunities": [
+    "charmed",
+    "exhaustion",
+    "frightened"
+  ],
+  "senses": {
+    "truesight": 120
+  },
+  "passivePerception": 21,
+  "languages": [
+    "all",
+    "telepathy 120 ft."
+  ],
+  "challenge": 16,
+  "xp": 15000,
+  "traits": [
+    {
+      "name": "Angelic Weapons",
+      "description": "The planetar's weapon attacks are magical. When the planetar hits with any weapon, the weapon deals an extra 5d8 radiant damage (included in the attack)."
+    },
+    {
+      "name": "Divine Awareness",
+      "description": "The planetar knows if it hears a lie."
+    },
+    {
+      "name": "Innate Spellcasting",
+      "description": "The planetar's spellcasting ability is Charisma (spell save DC 20). The planetar can innately cast the following spells, requiring no material components:\nAt will: detect evil and good, invisibility (self only)\n3/day each: blade barrier, dispel evil and good, flame strike, raise dead\n1/day each: commune, control weather, insect plague"
+    },
+    {
+      "name": "Magic Resistance",
+      "description": "The planetar has advantage on saving throws against spells and other magical effects."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The planetar makes two melee attacks.",
+      "attack": null
+    },
+    {
+      "name": "Greatsword",
+      "description": "Melee Weapon Attack: +12 to hit, reach 5 ft., one target. Hit: 21 (4d6 + 7) slashing damage plus 22 (5d8) radiant damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 12,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "4d6+7",
+            "type": "slashing"
+          },
+          {
+            "formula": "5d8",
+            "type": "radiant"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Healing Touch (4/Day)",
+      "description": "The planetar touches another creature. The target magically regains 30 (6d8 + 3) hit points and is freed from any curse, disease, poison, blindness, or deafness.",
+      "attack": null
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

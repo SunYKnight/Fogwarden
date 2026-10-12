@@ -1,0 +1,85 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-crab",
+  "name": "Crab",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "tiny",
+  "type": "beast",
+  "subtype": "",
+  "alignmentText": "unaligned",
+  "alignmentWeights": {
+    "unaligned": 1
+  },
+  "armorClass": 11,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 2,
+    "formula": "1d4"
+  },
+  "speeds": {
+    "walk": 20,
+    "swim": 20
+  },
+  "hover": false,
+  "abilities": {
+    "str": 2,
+    "dex": 11,
+    "con": 10,
+    "int": 1,
+    "wis": 8,
+    "cha": 2
+  },
+  "savingThrows": {},
+  "skills": {
+    "stealth": 2
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "blindsight": 30
+  },
+  "passivePerception": 9,
+  "languages": [],
+  "challenge": 0,
+  "xp": 10,
+  "traits": [
+    {
+      "name": "Amphibious",
+      "description": "The crab can breathe air and water."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Claw",
+      "description": "Melee Weapon Attack: +0 to hit, reach 5 ft., one target. Hit: 1 bludgeoning damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 0,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

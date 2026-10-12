@@ -1,0 +1,120 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-cloud-giant",
+  "name": "Cloud Giant",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "huge",
+  "type": "giant",
+  "subtype": "",
+  "alignmentText": "neutral good (50%) or neutral evil (50%)",
+  "alignmentWeights": {
+    "neutral-good": 0.5,
+    "neutral-evil": 0.5
+  },
+  "armorClass": 14,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 200,
+    "formula": "16d12+96"
+  },
+  "speeds": {
+    "walk": 40
+  },
+  "hover": false,
+  "abilities": {
+    "str": 27,
+    "dex": 10,
+    "con": 22,
+    "int": 12,
+    "wis": 16,
+    "cha": 16
+  },
+  "savingThrows": {
+    "con": 10,
+    "wis": 7,
+    "cha": 7
+  },
+  "skills": {
+    "insight": 7,
+    "perception": 7
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 17,
+  "languages": [
+    "Common",
+    "Giant"
+  ],
+  "challenge": 9,
+  "xp": 5000,
+  "traits": [
+    {
+      "name": "Keen Smell",
+      "description": "The giant has advantage on Wisdom (Perception) checks that rely on smell."
+    },
+    {
+      "name": "Innate Spellcasting",
+      "description": "The giant's innate spellcasting ability is Charisma. It can innately cast the following spells, requiring no material components:\nAt will: detect magic, fog cloud, light\n3/day each: feather fall, fly, misty step, telekinesis\n1/day each: control weather, gaseous form"
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The giant makes two morningstar attacks.",
+      "attack": null
+    },
+    {
+      "name": "Morningstar",
+      "description": "Melee Weapon Attack: +12 to hit, reach 10 ft., one target. Hit: 21 (3d8 + 8) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 12,
+        "reachFt": 10,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "3d8+8",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Rock",
+      "description": "Ranged Weapon Attack: +12 to hit, range 60/240 ft., one target. Hit: 30 (4d10 + 8) bludgeoning damage.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 12,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 60,
+          "long": 240
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "4d10+8",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

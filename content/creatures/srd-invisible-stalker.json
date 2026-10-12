@@ -1,0 +1,111 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-invisible-stalker",
+  "name": "Invisible Stalker",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "elemental",
+  "subtype": "",
+  "alignmentText": "neutral",
+  "alignmentWeights": {
+    "neutral": 1
+  },
+  "armorClass": 14,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 104,
+    "formula": "16d8+32"
+  },
+  "speeds": {
+    "walk": 50,
+    "fly": 50
+  },
+  "hover": true,
+  "abilities": {
+    "str": 16,
+    "dex": 19,
+    "con": 14,
+    "int": 10,
+    "wis": 15,
+    "cha": 11
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 8,
+    "stealth": 10
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "bludgeoning, piercing, and slashing from nonmagical weapons"
+  ],
+  "damageImmunities": [
+    "poison"
+  ],
+  "conditionImmunities": [
+    "exhaustion",
+    "grappled",
+    "paralyzed",
+    "petrified",
+    "poisoned",
+    "prone",
+    "restrained",
+    "unconscious"
+  ],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 18,
+  "languages": [
+    "Auran",
+    "understands Common but doesn't speak it"
+  ],
+  "challenge": 6,
+  "xp": 2300,
+  "traits": [
+    {
+      "name": "Invisibility",
+      "description": "The stalker is invisible."
+    },
+    {
+      "name": "Faultless Tracker",
+      "description": "The stalker is given a quarry by its summoner. The stalker knows the direction and distance to its quarry as long as the two of them are on the same plane of existence. The stalker also knows the location of its summoner."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The stalker makes two slam attacks.",
+      "attack": null
+    },
+    {
+      "name": "Slam",
+      "description": "Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 10 (2d6 + 3) bludgeoning damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 6,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d6+3",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

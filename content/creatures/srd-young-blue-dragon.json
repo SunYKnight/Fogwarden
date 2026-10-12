@@ -1,0 +1,124 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-young-blue-dragon",
+  "name": "Young Blue Dragon",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "dragon",
+  "subtype": "",
+  "alignmentText": "lawful evil",
+  "alignmentWeights": {
+    "lawful-evil": 1
+  },
+  "armorClass": 18,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 152,
+    "formula": "16d10+64"
+  },
+  "speeds": {
+    "walk": 40,
+    "burrow": 20,
+    "fly": 80
+  },
+  "hover": false,
+  "abilities": {
+    "str": 21,
+    "dex": 10,
+    "con": 19,
+    "int": 14,
+    "wis": 13,
+    "cha": 17
+  },
+  "savingThrows": {
+    "dex": 4,
+    "con": 8,
+    "wis": 5,
+    "cha": 7
+  },
+  "skills": {
+    "perception": 9,
+    "stealth": 4
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [
+    "lightning"
+  ],
+  "conditionImmunities": [],
+  "senses": {
+    "blindsight": 30,
+    "darkvision": 120
+  },
+  "passivePerception": 19,
+  "languages": [
+    "Common",
+    "Draconic"
+  ],
+  "challenge": 9,
+  "xp": 5000,
+  "traits": [],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The dragon makes three attacks: one with its bite and two with its claws.",
+      "attack": null
+    },
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +9 to hit, reach 10 ft., one target. Hit: 16 (2d10 + 5) piercing damage plus 5 (1d10) lightning damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 9,
+        "reachFt": 10,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d10+5",
+            "type": "piercing"
+          },
+          {
+            "formula": "1d10",
+            "type": "lightning"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Claw",
+      "description": "Melee Weapon Attack: +9 to hit, reach 5 ft., one target. Hit: 12 (2d6 + 5) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 9,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d6+5",
+            "type": "slashing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Lightning Breath (Recharge 5-6)",
+      "description": "The dragon exhales lightning in a 60-foot line that is 5 feet wide. Each creature in that line must make a DC 16 Dexterity saving throw, taking 55 (10d10) lightning damage on a failed save, or half as much damage on a successful one.",
+      "attack": null
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

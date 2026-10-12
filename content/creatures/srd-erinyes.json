@@ -1,0 +1,137 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-erinyes",
+  "name": "Erinyes",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "fiend",
+  "subtype": "devil",
+  "alignmentText": "lawful evil",
+  "alignmentWeights": {
+    "lawful-evil": 1
+  },
+  "armorClass": 18,
+  "armorNote": "plate armor",
+  "hitPoints": {
+    "average": 153,
+    "formula": "18d8+72"
+  },
+  "speeds": {
+    "walk": 30,
+    "fly": 60
+  },
+  "hover": false,
+  "abilities": {
+    "str": 18,
+    "dex": 16,
+    "con": 18,
+    "int": 14,
+    "wis": 14,
+    "cha": 18
+  },
+  "savingThrows": {
+    "dex": 7,
+    "con": 8,
+    "wis": 6,
+    "cha": 8
+  },
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "cold",
+    "bludgeoning, piercing, and slashing from nonmagical weapons that aren't silvered"
+  ],
+  "damageImmunities": [
+    "fire",
+    "poison"
+  ],
+  "conditionImmunities": [
+    "poisoned"
+  ],
+  "senses": {
+    "truesight": 120
+  },
+  "passivePerception": 12,
+  "languages": [
+    "Infernal",
+    "telepathy 120 ft."
+  ],
+  "challenge": 12,
+  "xp": 8400,
+  "traits": [
+    {
+      "name": "Hellish Weapons",
+      "description": "The erinyes's weapon attacks are magical and deal an extra 13 (3d8) poison damage on a hit (included in the attacks)."
+    },
+    {
+      "name": "Magic Resistance",
+      "description": "The erinyes has advantage on saving throws against spells and other magical effects."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The erinyes makes three attacks",
+      "attack": null
+    },
+    {
+      "name": "Longsword",
+      "description": "Melee Weapon Attack: +8 to hit, reach 5 ft., one target. Hit: 8 (1d8 + 4) slashing damage, or 9 (1d10 + 4) slashing damage if used with two hands, plus 13 (3d8) poison damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 8,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d8+4",
+            "type": "slashing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Longbow",
+      "description": "Ranged Weapon Attack: +7 to hit, range 150/600 ft., one target. Hit: 7 (1d8 + 3) piercing damage plus 13 (3d8) poison damage, and the target must succeed on a DC 14 Constitution saving throw or be poisoned. The poison lasts until it is removed by the lesser restoration spell or similar magic.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 7,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 150,
+          "long": 600
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d8+3",
+            "type": "piercing"
+          },
+          {
+            "formula": "3d8",
+            "type": "poison"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [
+    {
+      "name": "Parry",
+      "description": "The erinyes adds 4 to its AC against one melee attack that would hit it. To do so, the erinyes must see the attacker and be wielding a melee weapon."
+    }
+  ],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

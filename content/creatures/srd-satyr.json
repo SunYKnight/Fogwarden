@@ -1,0 +1,125 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-satyr",
+  "name": "Satyr",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "fey",
+  "subtype": "",
+  "alignmentText": "chaotic neutral",
+  "alignmentWeights": {
+    "chaotic-neutral": 1
+  },
+  "armorClass": 14,
+  "armorNote": "leather armor",
+  "hitPoints": {
+    "average": 31,
+    "formula": "7d8"
+  },
+  "speeds": {
+    "walk": 40
+  },
+  "hover": false,
+  "abilities": {
+    "str": 12,
+    "dex": 16,
+    "con": 11,
+    "int": 12,
+    "wis": 10,
+    "cha": 14
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 2,
+    "performance": 6,
+    "stealth": 5
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 12,
+  "languages": [
+    "Common",
+    "Elvish",
+    "Sylvan"
+  ],
+  "challenge": 0.5,
+  "xp": 100,
+  "traits": [
+    {
+      "name": "Magic Resistance",
+      "description": "The satyr has advantage on saving throws against spells and other magical effects."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Ram",
+      "description": "Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 6 (2d4 + 1) bludgeoning damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 3,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d4+1",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Shortsword",
+      "description": "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6 + 3) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 5,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6+3",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Shortbow",
+      "description": "Ranged Weapon Attack: +5 to hit, range 80/320 ft., one target. Hit: 6 (1d6 + 3) piercing damage.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 5,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 80,
+          "long": 320
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6+3",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

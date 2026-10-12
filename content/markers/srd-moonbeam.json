@@ -1,0 +1,15 @@
+{
+  "schema": "marker",
+  "version": 1,
+  "id": "srd-moonbeam",
+  "name": "Moonbeam",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "shape": "cylinder",
+  "sizeFt": 5,
+  "widthFt": 5,
+  "heightFt": 40,
+  "color": "#e6ecff",
+  "opacity": 0.35,
+  "notes": "Moonbeam (SRD 5.1, CC-BY-4.0)"
+}

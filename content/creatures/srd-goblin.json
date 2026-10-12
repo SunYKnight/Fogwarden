@@ -1,0 +1,107 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-goblin",
+  "name": "Goblin",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "small",
+  "type": "humanoid",
+  "subtype": "goblinoid",
+  "alignmentText": "neutral evil",
+  "alignmentWeights": {
+    "neutral-evil": 1
+  },
+  "armorClass": 15,
+  "armorNote": "leather armor, shield",
+  "hitPoints": {
+    "average": 7,
+    "formula": "2d6"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 8,
+    "dex": 14,
+    "con": 10,
+    "int": 10,
+    "wis": 8,
+    "cha": 8
+  },
+  "savingThrows": {},
+  "skills": {
+    "stealth": 6
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 9,
+  "languages": [
+    "Common",
+    "Goblin"
+  ],
+  "challenge": 0.25,
+  "xp": 50,
+  "traits": [
+    {
+      "name": "Nimble Escape",
+      "description": "The goblin can take the Disengage or Hide action as a bonus action on each of its turns."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Scimitar",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6+2",
+            "type": "slashing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Shortbow",
+      "description": "Ranged Weapon Attack: +4 to hit, range 80/320 ft., one target. Hit: 5 (1d6 + 2) piercing damage.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 4,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 80,
+          "long": 320
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

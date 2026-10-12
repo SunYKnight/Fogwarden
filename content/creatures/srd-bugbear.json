@@ -1,0 +1,112 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-bugbear",
+  "name": "Bugbear",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "humanoid",
+  "subtype": "goblinoid",
+  "alignmentText": "chaotic evil",
+  "alignmentWeights": {
+    "chaotic-evil": 1
+  },
+  "armorClass": 16,
+  "armorNote": "shield, hide armor",
+  "hitPoints": {
+    "average": 27,
+    "formula": "5d8+5"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 15,
+    "dex": 14,
+    "con": 13,
+    "int": 8,
+    "wis": 11,
+    "cha": 9
+  },
+  "savingThrows": {},
+  "skills": {
+    "stealth": 6,
+    "survival": 2
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 10,
+  "languages": [
+    "Common",
+    "Goblin"
+  ],
+  "challenge": 1,
+  "xp": 200,
+  "traits": [
+    {
+      "name": "Brute",
+      "description": "A melee weapon deals one extra die of its damage when the bugbear hits with it (included in the attack)."
+    },
+    {
+      "name": "Surprise Attack",
+      "description": "If the bugbear surprises a creature and hits it with an attack during the first round of combat, the target takes an extra 7 (2d6) damage from the attack."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Morningstar",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 11 (2d8 + 2) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d8+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Javelin",
+      "description": "Melee or Ranged Weapon Attack: +4 to hit, reach 5 ft. or range 30/120 ft., one target. Hit: 9 (2d6 + 2) piercing damage in melee or 5 (1d6 + 2) piercing damage at range.",
+      "attack": {
+        "kind": "melee-or-ranged",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": {
+          "normal": 30,
+          "long": 120
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d6+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

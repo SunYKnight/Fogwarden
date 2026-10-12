@@ -1,0 +1,91 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-blink-dog",
+  "name": "Blink Dog",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "medium",
+  "type": "fey",
+  "subtype": "",
+  "alignmentText": "lawful good",
+  "alignmentWeights": {
+    "lawful-good": 1
+  },
+  "armorClass": 13,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 22,
+    "formula": "4d8+4"
+  },
+  "speeds": {
+    "walk": 40
+  },
+  "hover": false,
+  "abilities": {
+    "str": 12,
+    "dex": 17,
+    "con": 12,
+    "int": 10,
+    "wis": 13,
+    "cha": 11
+  },
+  "savingThrows": {},
+  "skills": {
+    "perception": 3,
+    "stealth": 5
+  },
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {},
+  "passivePerception": 10,
+  "languages": [
+    "Blink Dog",
+    "understands Sylvan but can't speak it"
+  ],
+  "challenge": 0.25,
+  "xp": 50,
+  "traits": [
+    {
+      "name": "Keen Hearing and Smell",
+      "description": "The dog has advantage on Wisdom (Perception) checks that rely on hearing or smell."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6 + 1) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 3,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d6+1",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Teleport (Recharge 4-6)",
+      "description": "The dog magically teleports, along with any equipment it is wearing or carrying, up to 40 ft. to an unoccupied space it can see. Before or after teleporting, the dog can make one bite attack.",
+      "attack": null
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": "A blink dog takes its name from its ability to blink in and out of existence, a talent it uses to aid its attacks and to avoid harm."
+}

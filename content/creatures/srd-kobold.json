@@ -1,0 +1,109 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-kobold",
+  "name": "Kobold",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "small",
+  "type": "humanoid",
+  "subtype": "kobold",
+  "alignmentText": "lawful evil",
+  "alignmentWeights": {
+    "lawful-evil": 1
+  },
+  "armorClass": 12,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 5,
+    "formula": "2d6-2"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 7,
+    "dex": 15,
+    "con": 9,
+    "int": 8,
+    "wis": 7,
+    "cha": 8
+  },
+  "savingThrows": {},
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [],
+  "damageImmunities": [],
+  "conditionImmunities": [],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 8,
+  "languages": [
+    "Common",
+    "Draconic"
+  ],
+  "challenge": 0.125,
+  "xp": 25,
+  "traits": [
+    {
+      "name": "Sunlight Sensitivity",
+      "description": "While in sunlight, the kobold has disadvantage on attack rolls, as well as on Wisdom (Perception) checks that rely on sight."
+    },
+    {
+      "name": "Pack Tactics",
+      "description": "The kobold has advantage on an attack roll against a creature if at least one of the kobold's allies is within 5 ft. of the creature and the ally isn't incapacitated."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Dagger",
+      "description": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 4 (1d4 + 2) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 4,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d4+2",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Sling",
+      "description": "Ranged Weapon Attack: +4 to hit, range 30/120 ft., one target. Hit: 4 (1d4 + 2) bludgeoning damage.",
+      "attack": {
+        "kind": "ranged-weapon",
+        "toHit": 4,
+        "reachFt": null,
+        "rangeFt": {
+          "normal": 30,
+          "long": 120
+        },
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "1d4+2",
+            "type": "bludgeoning"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

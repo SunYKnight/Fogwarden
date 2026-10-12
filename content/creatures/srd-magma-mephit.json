@@ -1,0 +1,112 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-magma-mephit",
+  "name": "Magma Mephit",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "small",
+  "type": "elemental",
+  "subtype": "",
+  "alignmentText": "neutral evil",
+  "alignmentWeights": {
+    "neutral-evil": 1
+  },
+  "armorClass": 11,
+  "armorNote": "",
+  "hitPoints": {
+    "average": 22,
+    "formula": "5d6+5"
+  },
+  "speeds": {
+    "walk": 30,
+    "fly": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 8,
+    "dex": 12,
+    "con": 12,
+    "int": 7,
+    "wis": 10,
+    "cha": 10
+  },
+  "savingThrows": {},
+  "skills": {
+    "stealth": 3
+  },
+  "damageVulnerabilities": [
+    "cold"
+  ],
+  "damageResistances": [],
+  "damageImmunities": [
+    "fire",
+    "poison"
+  ],
+  "conditionImmunities": [
+    "poisoned"
+  ],
+  "senses": {
+    "darkvision": 60
+  },
+  "passivePerception": 10,
+  "languages": [
+    "Ignan",
+    "Terran"
+  ],
+  "challenge": 0.5,
+  "xp": 100,
+  "traits": [
+    {
+      "name": "Death Burst",
+      "description": "When the mephit dies, it explodes in a burst of lava. Each creature within 5 ft. of it must make a DC 11 Dexterity saving throw, taking 7 (2d6) fire damage on a failed save, or half as much damage on a successful one."
+    },
+    {
+      "name": "False Appearance",
+      "description": "While the mephit remains motionless, it is indistinguishable from an ordinary mound of magma."
+    },
+    {
+      "name": "Innate Spellcasting",
+      "description": "The mephit can innately cast heat metal (spell save DC 10), requiring no material components. Its innate spellcasting ability is Charisma."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Claws",
+      "description": "Melee Weapon Attack: +3 to hit, reach 5 ft., one creature. Hit: 3 (1d4 + 1) slashing damage plus 2 (1d4) fire damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 3,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one creature",
+        "damage": [
+          {
+            "formula": "1d4+1",
+            "type": "slashing"
+          },
+          {
+            "formula": "1d4",
+            "type": "fire"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Fire Breath (Recharge 6)",
+      "description": "The mephit exhales a 15-foot cone of fire. Each creature in that area must make a DC 11 Dexterity saving throw, taking 7 (2d6) fire damage on a failed save, or half as much damage on a successful one.",
+      "attack": null
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}

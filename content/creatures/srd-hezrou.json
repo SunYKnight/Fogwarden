@@ -1,0 +1,124 @@
+{
+  "schema": "creature",
+  "version": 1,
+  "id": "srd-hezrou",
+  "name": "Hezrou",
+  "createdAt": "2023-01-27T00:00:00.000Z",
+  "updatedAt": "2023-01-27T00:00:00.000Z",
+  "kind": "monster",
+  "source": "SRD 5.1",
+  "license": "CC-BY-4.0",
+  "tags": [],
+  "size": "large",
+  "type": "fiend",
+  "subtype": "demon",
+  "alignmentText": "chaotic evil",
+  "alignmentWeights": {
+    "chaotic-evil": 1
+  },
+  "armorClass": 16,
+  "armorNote": "natural armor",
+  "hitPoints": {
+    "average": 136,
+    "formula": "13d10+65"
+  },
+  "speeds": {
+    "walk": 30
+  },
+  "hover": false,
+  "abilities": {
+    "str": 19,
+    "dex": 17,
+    "con": 20,
+    "int": 5,
+    "wis": 12,
+    "cha": 13
+  },
+  "savingThrows": {
+    "str": 7,
+    "con": 8,
+    "wis": 4
+  },
+  "skills": {},
+  "damageVulnerabilities": [],
+  "damageResistances": [
+    "cold",
+    "fire",
+    "lightning",
+    "bludgeoning, piercing, and slashing from nonmagical weapons"
+  ],
+  "damageImmunities": [
+    "poison"
+  ],
+  "conditionImmunities": [
+    "poisoned"
+  ],
+  "senses": {
+    "darkvision": 120
+  },
+  "passivePerception": 11,
+  "languages": [
+    "Abyssal",
+    "telepathy 120 ft."
+  ],
+  "challenge": 8,
+  "xp": 3900,
+  "traits": [
+    {
+      "name": "Magic Resistance",
+      "description": "The hezrou has advantage on saving throws against spells and other magical effects."
+    },
+    {
+      "name": "Stench",
+      "description": "Any creature that starts its turn within 10 feet of the hezrou must succeed on a DC 14 Constitution saving throw or be poisoned until the start of its next turn. On a successful saving throw, the creature is immune to the hezrou's stench for 24 hours."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Multiattack",
+      "description": "The hezrou makes three attacks: one with its bite and two with its claws.",
+      "attack": null
+    },
+    {
+      "name": "Bite",
+      "description": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 15 (2d10 + 4) piercing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d10+4",
+            "type": "piercing"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Claws",
+      "description": "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 11 (2d6 + 4) slashing damage.",
+      "attack": {
+        "kind": "melee-weapon",
+        "toHit": 7,
+        "reachFt": 5,
+        "rangeFt": null,
+        "targets": "one target",
+        "damage": [
+          {
+            "formula": "2d6+4",
+            "type": "slashing"
+          }
+        ]
+      }
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryDescription": "",
+  "legendaryActions": [],
+  "image": null,
+  "token": null,
+  "notes": ""
+}
