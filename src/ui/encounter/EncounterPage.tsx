@@ -1,27 +1,21 @@
-import { useCallback, useEffect } from 'react';
-import type { BattleMap, DocRef } from '@/core/model';
-import type { HeightField } from '@/core/terrain/heightfield';
+import { useEffect, useState } from 'react';
+import type { BattleMap, DocRef, Encounter } from '@/core/model';
 import { libraryDocPath, type Repository } from '@/data/repository';
-import { fogBrushPointer } from '@/render/fog/fogBrush';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
-import { SCENE_LAYERS } from '@/render/layers';
-import type { MapPointerEvent } from '@/render/mapRenderContext';
-import { MapView } from '@/render/MapView';
 import { useAppStore } from '@/state/appStore';
 import { flushEncounter } from '@/state/autosave';
+import { currentCombatant } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLibraryStore } from '@/state/libraryStore';
-import { useDmCameraStore } from '@/sync/cameraStore';
-import { AddCombatants } from './AddCombatants';
-import { CombatantPanel } from './CombatantPanel';
-import { DiceRoller } from './DiceRoller';
-import { EncounterOverlay } from './EncounterOverlay';
-import { ENCOUNTER_PANELS } from './encounterPanels';
-import { handleEncounterPointer } from './encounterPointer';
-import { cancelInteraction, useEncounterUi } from './encounterUiStore';
-import { InitiativeTracker } from './InitiativeTracker';
-import { LogPanel } from './LogPanel';
-import { MarkerPanel } from './MarkerPanel';
+import { Button, PageHeader, useShortcuts } from '../kit';
+import { AddCombatantsDialog } from './AddCombatants';
+import { removeFromMap, stepTurn } from './combatantCommands';
+import { cancelInteraction, chooseTool, useEncounterUi } from './encounterUiStore';
+import { HpPromptDialog } from './HpPromptDialog';
+import { InitiativeStrip } from './InitiativeStrip';
+import { Inspector } from './Inspector';
+import { PlayViewport } from './PlayViewport';
+import { TurnBar } from './TurnBar';
 
 /** A shipped map edited after the encounter was created lives on as a user copy with the same id. */
 async function loadEncounterMap(repository: Repository, ref: DocRef): Promise<BattleMap> {
@@ -30,163 +24,115 @@ async function loadEncounterMap(repository: Repository, ref: DocRef): Promise<Ba
   return repository.load('map', edited ? { area: 'data', id: ref.id } : ref);
 }
 
-function isTyping(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+function historyStep(direction: 'undo' | 'redo'): void {
+  const store = useEncounterStore.getState();
+  const label = direction === 'undo' ? store.undo() : store.redo();
+  if (label) useAppStore.getState().notify(`${direction === 'undo' ? 'Undone' : 'Redone'}: ${label}`, 'info');
+}
+
+/** Esc: cancel what is in progress, then stop the fog brush, then deselect, then back to Select. */
+function escape(): void {
+  const cancelled = cancelInteraction();
+  const fog = useFogViewStore.getState();
+  const { selectedCombatantId, select } = useEncounterStore.getState();
+  if (!cancelled && fog.brush !== 'off') {
+    fog.setBrush('off');
+  } else if (!cancelled && selectedCombatantId) {
+    select(null);
+  } else if (!cancelled) {
+    chooseTool('select');
+    useEncounterUi.setState({ fogMenuOpen: false });
+  }
+}
+
+function removeSelectedFromMap(): void {
+  const { encounter, selectedCombatantId } = useEncounterStore.getState();
+  const selected = encounter?.combatants.find((c) => c.id === selectedCombatantId);
+  if (selected?.position) removeFromMap(selected.id);
+}
+
+function usePlayShortcuts(): void {
+  const dialogOpen = useEncounterUi((s) => s.addDialogOpen || s.hpPrompt !== null);
+  useShortcuts(
+    'Play',
+    [
+      { keys: 'Space', label: 'Next turn (starts combat)', run: () => stepTurn('next') },
+      { keys: 'Shift+Space', label: 'Previous turn', run: () => stepTurn('previous') },
+      { keys: 'Ctrl+Z', label: 'Undo', run: () => historyStep('undo') },
+      { keys: 'Ctrl+Y', label: 'Redo', run: () => historyStep('redo') },
+      { keys: 'Ctrl+Shift+Z', label: 'Redo', run: () => historyStep('redo') },
+      { keys: 'Escape', label: 'Cancel, stop brush, deselect, back to Select', run: escape },
+      { keys: 'S', label: 'Select tool', run: () => chooseTool('select') },
+      { keys: 'M', label: 'Measure tool', run: () => chooseTool('measure') },
+      {
+        keys: 'F',
+        label: 'Fog menu',
+        run: () => useEncounterUi.setState((s) => ({ fogMenuOpen: !s.fogMenuOpen })),
+      },
+      { keys: 'Delete', label: 'Remove selected token from the map', run: removeSelectedFromMap },
+      { keys: 'Backspace', label: 'Remove selected token from the map', run: removeSelectedFromMap },
+    ],
+    !dialogOpen,
   );
 }
 
-function useEscapeCancels() {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isTyping(e.target)) cancelInteraction();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-}
-
-function ViewportHint() {
-  const placement = useEncounterUi((s) => s.placement);
-  const placingId = useEncounterUi((s) => s.placingId);
-  const tool = useEncounterUi((s) => s.tool);
-  const placingName = useEncounterStore((s) => s.encounter?.combatants.find((c) => c.id === placingId)?.name);
-  const hints: [boolean, string][] = [
-    [placement !== null && placement.origin === null, `Click the origin of ${placement?.template.name} · Esc cancels`],
-    [placement !== null, 'Move the pointer to aim, click to confirm · Esc cancels'],
-    [placingName !== undefined, `Click a square to place ${placingName} · Esc cancels`],
-    [tool === 'measure', 'Drag on the map to measure'],
-  ];
-  const fallback = 'Click a token to select, drag to move · Click a door to open or close it, Shift+click to lock';
-  return <div className="viewport-hint">{hints.find(([active]) => active)?.[1] ?? fallback}</div>;
-}
-
-function Toolbar({ hasMap }: { hasMap: boolean }) {
-  const encounter = useEncounterStore((s) => s.encounter);
+function PlayHeader({ encounter, campaignName }: { encounter: Encounter; campaignName: string }) {
   const dirty = useEncounterStore((s) => s.revision !== s.savedRevision);
-  const tool = useEncounterUi((s) => s.tool);
-  const camera = useEncounterUi((s) => s.camera);
-  const setUi = useEncounterUi.setState;
+  const canUndo = useEncounterStore((s) => s.canUndo);
+  const canRedo = useEncounterStore((s) => s.canRedo);
+  const current = currentCombatant(encounter);
+  const turn = current ? `Round ${encounter.round} · ${current.name}` : 'Combat not started';
   return (
-    <div className="topbar toolbar">
-      <strong>{encounter?.name}</strong>
-      <span className="muted">{dirty ? 'saving…' : 'saved'}</span>
-      <div className="spacer" />
-      {hasMap && (
-        <>
-          <button
-            className={tool === 'select' ? 'active' : ''}
-            onClick={() => setUi({ tool: 'select', measure: null })}
-          >
-            Select
-          </button>
-          <button className={tool === 'measure' ? 'active' : ''} onClick={() => setUi({ tool: 'measure', drag: null })}>
-            Measure
-          </button>
-          <button className={camera === 'top' ? 'active' : ''} onClick={() => setUi({ camera: 'top' })}>
-            Top
-          </button>
-          <button className={camera === 'perspective' ? 'active' : ''} onClick={() => setUi({ camera: 'perspective' })}>
-            3D
-          </button>
-        </>
-      )}
-    </div>
+    <PageHeader
+      crumbs={[
+        { label: 'Campaigns', route: { page: 'campaigns', campaignId: null } },
+        { label: campaignName, route: { page: 'campaigns', campaignId: encounter.campaignId } },
+        { label: encounter.name },
+      ]}
+      status={`${turn} · ${dirty ? 'Saving…' : 'Saved'}`}
+    >
+      <Button
+        icon="undo"
+        label="Undo"
+        iconOnly
+        shortcut="Ctrl+Z"
+        disabled={!canUndo}
+        onClick={() => historyStep('undo')}
+      />
+      <Button
+        icon="redo"
+        label="Redo"
+        iconOnly
+        shortcut="Ctrl+Y"
+        disabled={!canRedo}
+        onClick={() => historyStep('redo')}
+      />
+    </PageHeader>
   );
 }
 
-/** Unplaced combatants; clicking one arms placement with the next map click. */
-function Tray() {
-  const combatants = useEncounterStore((s) => s.encounter?.combatants);
-  const placingId = useEncounterUi((s) => s.placingId);
-  const unplaced = combatants?.filter((c) => c.position === null) ?? [];
-  return (
-    unplaced.length > 0 && (
-      <div className="tray">
-        <span className="muted small">Not on the map:</span>
-        {unplaced.map((c) => (
-          <button
-            key={c.id}
-            className={c.id === placingId ? 'active' : ''}
-            onClick={() => useEncounterUi.setState({ placingId: c.id, placement: null, tool: 'select' })}
-          >
-            {c.name}
-          </button>
-        ))}
-      </div>
-    )
-  );
-}
-
-function Viewport({ map, terrain }: { map: BattleMap; terrain: HeightField }) {
-  const reportError = useAppStore((s) => s.reportError);
-  const camera = useEncounterUi((s) => s.camera);
-  const showFog = useFogViewStore((s) => s.showFogToDm);
-
-  const onPointer = useCallback(
-    (event: MapPointerEvent) => {
-      try {
-        if (!fogBrushPointer(event)) handleEncounterPointer(event);
-      } catch (error) {
-        reportError(error);
-      }
-    },
-    [reportError],
-  );
-
-  return (
-    <div className="viewport">
-      <MapView
-        map={map}
-        terrain={terrain}
-        terrainVersion={0}
-        mode="dm"
-        fogMode={showFog ? 'dm' : 'off'}
-        camera={camera}
-        ambient={map.ambientLight}
-        onCameraChange={useDmCameraStore.getState().setCamera}
-        onPointer={onPointer}
-      >
-        {SCENE_LAYERS.map(({ id, Component }) => (
-          <Component key={id} />
-        ))}
-        <EncounterOverlay />
-      </MapView>
-      <ViewportHint />
-      <Tray />
-    </div>
-  );
-}
-
-function EncounterLayout() {
+function PlayLayout({ campaignName }: { campaignName: string }) {
   const encounter = useEncounterStore((s) => s.encounter);
   const map = useEncounterStore((s) => s.map);
   const terrain = useEncounterStore((s) => s.terrain);
+  const addDialogOpen = useEncounterUi((s) => s.addDialogOpen);
+  usePlayShortcuts();
   return (
     encounter && (
-      <div className="editor encounter">
-        <Toolbar hasMap={map !== null} />
-        <div className="side left">
-          <InitiativeTracker encounter={encounter} />
-          <AddCombatants />
+      <div className="page-frame">
+        <PlayHeader encounter={encounter} campaignName={campaignName} />
+        <div className="play-body">
+          <InitiativeStrip encounter={encounter} />
+          {map && terrain ? (
+            <PlayViewport map={map} terrain={terrain} />
+          ) : (
+            <div className="play-viewport waiting">No map for this encounter: initiative tracker only.</div>
+          )}
+          <Inspector encounter={encounter} hasMap={map !== null} />
+          <TurnBar encounter={encounter} />
         </div>
-        {map && terrain ? (
-          <Viewport map={map} terrain={terrain} />
-        ) : (
-          <div className="waiting">No map for this encounter — initiative tracker only.</div>
-        )}
-        <div className="side">
-          <CombatantPanel />
-          <DiceRoller />
-          {map && <MarkerPanel encounter={encounter} />}
-          <LogPanel encounter={encounter} />
-          {ENCOUNTER_PANELS.map(({ id, label, Component }) => (
-            <div key={id} className="panel">
-              <h2>{label}</h2>
-              <Component />
-            </div>
-          ))}
-        </div>
+        {addDialogOpen && <AddCombatantsDialog />}
+        <HpPromptDialog />
       </div>
     )
   );
@@ -195,19 +141,22 @@ function EncounterLayout() {
 // Mount counter: a late cleanup must not close a newer mount's encounter.
 let encounterSession = 0;
 
-/** Plays one encounter: tracker, combatant details, dice, log and the battle map in DM mode. */
+/** Plays one encounter: initiative strip, battle map in DM mode, turn bar and inspector tabs. */
 export function EncounterPage({ campaignId, encounterId }: { campaignId: string; encounterId: string }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const loadedId = useEncounterStore((s) => s.encounter?.id);
-  useEscapeCancels();
+  const [campaignName, setCampaignName] = useState('Campaign');
 
   useEffect(() => {
     const session = ++encounterSession;
     // Stat blocks, spawning and marker templates read the library listings.
     useLibraryStore.getState().refreshAll().catch(reportError);
     const open = async () => {
-      const encounter = await repository.loadEncounter(campaignId, encounterId);
+      const [encounter, { campaigns }] = await Promise.all([
+        repository.loadEncounter(campaignId, encounterId),
+        repository.listCampaigns(),
+      ]);
       // A missing map is reported; the encounter still runs as a tracker.
       const map = encounter.map
         ? await loadEncounterMap(repository, encounter.map).catch((error: unknown) => {
@@ -215,11 +164,15 @@ export function EncounterPage({ campaignId, encounterId }: { campaignId: string;
             return null;
           })
         : null;
-      if (session === encounterSession) useEncounterStore.getState().open(encounter, map);
+      if (session === encounterSession) {
+        setCampaignName(campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign');
+        useEncounterStore.getState().open(encounter, map);
+      }
     };
     open().catch(reportError);
     return () => {
       cancelInteraction();
+      useEncounterUi.setState({ addDialogOpen: false, hpPrompt: null });
       flushEncounter()
         .catch(reportError)
         .finally(() => {
@@ -228,5 +181,9 @@ export function EncounterPage({ campaignId, encounterId }: { campaignId: string;
     };
   }, [campaignId, encounterId, repository, reportError]);
 
-  return loadedId === encounterId ? <EncounterLayout /> : <div className="waiting">Loading encounter…</div>;
+  return loadedId === encounterId ? (
+    <PlayLayout campaignName={campaignName} />
+  ) : (
+    <div className="waiting">Loading encounter…</div>
+  );
 }

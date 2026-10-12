@@ -55,12 +55,13 @@ function WallToolOverlay() {
 export const wallTool: EditorTool = {
   id: 'wall',
   label: 'Wall',
-  icon: '▥',
-  group: 'structure',
+  icon: 'wall',
+  step: 'walls',
   shortcut: 'w',
   hint:
     'Click wall points (snaps to vertices, corners, edge midpoints; Shift = free). ' +
     'Double-click, Enter or the first point finishes; Esc cancels',
+  cursor: 'crosshair',
   onPointer: (event) => draftPointer(event, WALL_DRAFT),
   Panel: WallToolPanel,
   Overlay: WallToolOverlay,

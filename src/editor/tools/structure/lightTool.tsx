@@ -88,10 +88,11 @@ function LightToolOverlay() {
 export const lightTool: EditorTool = {
   id: 'light',
   label: 'Light',
-  icon: '✶',
-  group: 'scene',
+  icon: 'light',
+  step: 'objects',
   shortcut: 'l',
-  hint: 'Click to place a light; pick a preset or set radii in the side panel',
+  hint: 'Click to place a light; pick a preset or set the radii in the tool bar',
+  cursor: 'crosshair',
   onPointer: (event) => {
     if (event.point && event.type === 'move') {
       useLightTool.setState({ cursor: event.point });

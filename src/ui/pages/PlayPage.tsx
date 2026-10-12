@@ -1,6 +1,7 @@
 import { useAppStore } from '@/state/appStore';
 import { EncounterPage } from '../encounter/EncounterPage';
 import { Button, EmptyState } from '../kit';
+import { openNewEncounter } from '../library/compendiumUi';
 
 /** The running encounter; without one, points to where encounters are started. */
 export function PlayPage() {
@@ -14,12 +15,14 @@ export function PlayPage() {
         icon="swords"
         title="No encounter running"
         action={
-          <Button
-            icon="swords"
-            label="Choose an encounter"
-            variant="primary"
-            onClick={() => navigate({ page: 'campaigns', campaignId: null })}
-          />
+          <div className="row">
+            <Button icon="plus" label="New encounter" variant="primary" onClick={() => openNewEncounter(null)} />
+            <Button
+              icon="swords"
+              label="Go to campaigns"
+              onClick={() => navigate({ page: 'campaigns', campaignId: null })}
+            />
+          </div>
         }
       >
         Start or resume an encounter from a campaign; it then stays here while you look things up elsewhere.

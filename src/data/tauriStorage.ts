@@ -49,3 +49,13 @@ export class TauriStorage implements Storage {
     return convertFileSrc(absolute);
   }
 }
+
+/** Copies the data root into the existing empty folder `absolutePath` and switches to it (desktop only). */
+export function copyDataRootTo(absolutePath: string): Promise<StorageRoots> {
+  return invoke<StorageRoots>('storage_copy_data_root', { path: absolutePath });
+}
+
+/** Shows the data root in the OS file manager (desktop only). */
+export function openDataRootFolder(): Promise<void> {
+  return invoke<void>('storage_open_data_root');
+}

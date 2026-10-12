@@ -52,10 +52,11 @@ function RampOverlay() {
 export const rampTool: EditorTool = {
   id: 'ramp',
   label: 'Ramp',
-  icon: '⟋',
-  group: 'terrain',
-  shortcut: '5',
+  icon: 'ramp',
+  step: 'ground',
+  shortcut: 'a',
   hint: 'Drag from one end to the other: straight slope between the heights there, one radius to each side',
+  cursor: 'none',
   onPointer: (event) => {
     const tools = useTerrainToolStore.getState();
     if (event.point) {

@@ -1,5 +1,4 @@
 import { Line } from '@react-three/drei';
-import { useEffect } from 'react';
 import { create } from 'zustand';
 import type { Vec2 } from '@/core/model';
 import { snapPoint, type SnapKind, type SnapResult } from '@/core/geometry/snapping';
@@ -8,6 +7,7 @@ import { useMapRender, type MapPointerEvent } from '@/render/mapRenderContext';
 import { drapedPath, terrainPoint } from '@/render/structures/drape';
 import { noRaycast } from '@/render/structures/hooks';
 import { useAppStore } from '@/state/appStore';
+import { Button, useShortcuts } from '@/ui/kit';
 import { editorMap } from './documentEdits';
 
 const DOUBLE_CLICK_MS = 400;
@@ -105,69 +105,61 @@ export function draftPointer(event: MapPointerEvent, actions: DraftActions): voi
   }
 }
 
-function handleDraftKey(e: KeyboardEvent, actions: DraftActions): void {
-  const drawing = useDraft.getState().points.length > 0;
-  switch (e.key) {
-    case 'Enter':
-      if (drawing) finishDraft(actions);
-      break;
-    case 'Escape':
-      resetDraft();
-      break;
-    case 'Backspace':
-      if (drawing) {
-        e.preventDefault();
-        removeLastDraftPoint();
-      }
-      break;
+/** Status bar text for what the drawing cursor snapped to. */
+export const SNAP_LABELS: Record<SnapKind, string> = {
+  vertex: 'Snap: wall vertex',
+  corner: 'Snap: grid corner',
+  midpoint: 'Snap: edge midpoint',
+  none: 'Snap: none (Shift = free)',
+};
+
+function finishReported(actions: DraftActions): void {
+  try {
+    finishDraft(actions);
+  } catch (error) {
+    useAppStore.getState().reportError(error);
   }
 }
 
-/** Enter finishes, Escape cancels, Backspace removes the last point while the tool panel is shown. */
+/**
+ * Enter finishes, Escape cancels, Backspace removes the last point while a drawing is in progress;
+ * otherwise the keys keep their editor meaning (deselect, delete the selection).
+ */
 export function useDraftKeys(actions: DraftActions): void {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      // Enter in a side panel field commits the field, not the drawing.
-      const typing = e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
-      try {
-        if (!typing) handleDraftKey(e, actions);
-      } catch (error) {
-        useAppStore.getState().reportError(error);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [actions]);
+  const drawing = useDraft((s) => s.points.length > 0);
+  useShortcuts(
+    'Map editor: drawing',
+    [
+      { keys: 'Enter', label: 'Finish the drawing', run: () => finishReported(actions) },
+      { keys: 'Backspace', label: 'Remove the last point', run: removeLastDraftPoint },
+      { keys: 'Escape', label: 'Cancel the drawing', run: resetDraft },
+    ],
+    drawing,
+  );
 }
 
 /** Mouse-free alternatives to double-click and the keyboard shortcuts. */
 export function DraftControls({ actions }: { actions: DraftActions }) {
   const count = useDraft((s) => s.points.length);
-  const reportError = useAppStore((s) => s.reportError);
   return (
-    <div className="col">
-      <span className="muted">{count} point(s) placed</span>
-      <div className="row">
-        <button
-          className="primary"
-          disabled={count === 0}
-          onClick={() => {
-            try {
-              finishDraft(actions);
-            } catch (error) {
-              reportError(error);
-            }
-          }}
-        >
-          Finish (Enter)
-        </button>
-        <button disabled={count === 0} onClick={removeLastDraftPoint}>
-          Undo point
-        </button>
-        <button disabled={count === 0} onClick={resetDraft}>
-          Cancel (Esc)
-        </button>
-      </div>
+    <div className="row">
+      <span className="muted">{count} point(s)</span>
+      <Button
+        icon="check"
+        label="Finish"
+        shortcut="Enter"
+        variant="primary"
+        disabled={count === 0}
+        onClick={() => finishReported(actions)}
+      />
+      <Button
+        icon="undo"
+        label="Undo point"
+        shortcut="Backspace"
+        disabled={count === 0}
+        onClick={removeLastDraftPoint}
+      />
+      <Button icon="close" label="Cancel" shortcut="Esc" disabled={count === 0} onClick={resetDraft} />
     </div>
   );
 }

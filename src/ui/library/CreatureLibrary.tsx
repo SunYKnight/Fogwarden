@@ -1,16 +1,15 @@
-import { useMemo, useState } from 'react';
-import { CREATURE_TYPES, createCreature, newId, nowIso, type Creature, type DocRef } from '@/core/model';
+import { useMemo, useState, type MouseEvent } from 'react';
+import { CREATURE_TYPES, newId, nowIso, type Creature } from '@/core/model';
 import { formatCr } from '@/core/rules/abilities';
-import { parseStatBlock, StatBlockError } from '@/core/import/statblock';
 import type { LibraryEntry } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
-import { CreatureEditor } from '../creature/CreatureEditor';
 import { StatBlock } from '../creature/StatBlock';
-import { TextField } from '../components/fields';
-import { confirmDialog } from '../kit';
+import { Button, confirmDialog, EmptyState, Icon, openContextMenu, type MenuItem } from '../kit';
+import { openCreatureImport } from './compendiumUi';
 
 type SortKey = 'name' | 'cr' | 'type';
+type Entry = LibraryEntry<'creature'>;
 
 const SORTERS: Record<SortKey, (a: Creature, b: Creature) => number> = {
   name: (a, b) => a.name.localeCompare(b.name),
@@ -24,89 +23,33 @@ interface Filter {
   text: string;
   type: string;
   source: string;
-  tag: string;
   minCr: number;
   maxCr: number;
+  mineOnly: boolean;
 }
 
-const NO_FILTER: Filter = { text: '', type: '', source: '', tag: '', minCr: 0, maxCr: 30 };
+const NO_FILTER: Filter = { text: '', type: '', source: '', minCr: 0, maxCr: 30, mineOnly: false };
 
-function matches(c: Creature, f: Filter): boolean {
-  const tag = f.tag.toLowerCase();
+// Free text also searches tags so the old tag filter needs no own field.
+function matches(entry: Entry, f: Filter): boolean {
+  const c = entry.doc;
+  const text = f.text.toLowerCase();
   return (
-    c.name.toLowerCase().includes(f.text.toLowerCase()) &&
+    (c.name.toLowerCase().includes(text) || c.tags.some((t) => t.toLowerCase().includes(text))) &&
     (f.type === '' || c.type === f.type) &&
     (f.source === '' || c.source === f.source) &&
-    (tag === '' || c.tags.some((t) => t.toLowerCase().includes(tag))) &&
+    (!f.mineOnly || entry.ref.area === 'data') &&
     c.challenge >= f.minCr &&
     c.challenge <= f.maxCr
   );
 }
 
-function originLabel(entry: LibraryEntry<'creature'>): string {
-  return entry.ref.area === 'content' ? 'shipped' : entry.overridesContent ? 'edited copy' : 'user';
-}
-
-function ImportDialog({ onClose, onImported }: { onClose: () => void; onImported: (c: Creature) => void }) {
-  const repository = useAppStore((s) => s.repository);
-  const reportError = useAppStore((s) => s.reportError);
-  const refresh = useLibraryStore((s) => s.refresh);
-  const [text, setText] = useState('');
-  const [source, setSource] = useState('Custom');
-  const [license, setLicense] = useState('');
-  const [parsed, setParsed] = useState<Creature | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  // A stat block that doesn't parse is a user input problem shown in place.
-  const parse = () => {
-    try {
-      setParsed(parseStatBlock(text, { source, license }));
-      setProblem(null);
-    } catch (error) {
-      setParsed(null);
-      setProblem(error instanceof StatBlockError ? error.message : null);
-      if (!(error instanceof StatBlockError)) reportError(error);
-    }
-  };
-
-  const save = async (creature: Creature) => {
-    const stored = await repository.save('creature', creature);
-    await refresh('creature');
-    onImported(stored);
-  };
-
+function OriginBadge({ entry }: { entry: Entry }) {
+  const shipped = entry.ref.area === 'content';
   return (
-    <div className="modal-backdrop">
-      <div className="modal import-dialog">
-        <div className="topbar">
-          <strong>Import creature from stat block text</strong>
-          <div className="spacer" />
-          <button onClick={onClose}>Close</button>
-        </div>
-        <div className="import-body">
-          <div className="col">
-            <textarea
-              rows={24}
-              value={text}
-              placeholder="Paste a stat block (name, size/type line, Armor Class, Hit Points, …)"
-              onChange={(e) => setText(e.target.value)}
-            />
-            <TextField label="Source" value={source} onChange={setSource} />
-            <TextField label="License" value={license} onChange={setLicense} />
-            <div className="row">
-              <button disabled={text.trim() === ''} onClick={parse}>
-                Parse
-              </button>
-              <button className="primary" disabled={!parsed} onClick={() => parsed && save(parsed).catch(reportError)}>
-                Save and edit
-              </button>
-            </div>
-            {problem && <div className="error-text">{problem}</div>}
-          </div>
-          <div className="creature-preview">{parsed && <StatBlock creature={parsed} />}</div>
-        </div>
-      </div>
-    </div>
+    <span className={`badge ${entry.ref.area}`} title={shipped ? 'Shipped; editing creates your copy' : undefined}>
+      {shipped && <Icon name="lock" size={12} />} {shipped ? 'shipped' : entry.overridesContent ? 'your copy' : 'yours'}
+    </span>
   );
 }
 
@@ -120,9 +63,15 @@ function FilterBar({
   sources: string[];
 }) {
   return (
-    <div className="row wrap">
-      <input placeholder="Name" value={filter.text} onChange={(e) => setFilter({ ...filter, text: e.target.value })} />
-      <select value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })}>
+    <div className="row wrap compendium-filters">
+      <input
+        type="search"
+        aria-label="Search name or tag"
+        placeholder="Search name or tag"
+        value={filter.text}
+        onChange={(e) => setFilter({ ...filter, text: e.target.value })}
+      />
+      <select aria-label="Type" value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })}>
         <option value="">All types</option>
         {CREATURE_TYPES.map((t) => (
           <option key={t} value={t}>
@@ -132,7 +81,12 @@ function FilterBar({
       </select>
       <span className="muted">CR</span>
       {(['minCr', 'maxCr'] as const).map((key) => (
-        <select key={key} value={filter[key]} onChange={(e) => setFilter({ ...filter, [key]: Number(e.target.value) })}>
+        <select
+          key={key}
+          aria-label={key === 'minCr' ? 'Minimum CR' : 'Maximum CR'}
+          value={filter[key]}
+          onChange={(e) => setFilter({ ...filter, [key]: Number(e.target.value) })}
+        >
           {CR_OPTIONS.map((cr) => (
             <option key={cr} value={cr}>
               {formatCr(cr)}
@@ -140,7 +94,11 @@ function FilterBar({
           ))}
         </select>
       ))}
-      <select value={filter.source} onChange={(e) => setFilter({ ...filter, source: e.target.value })}>
+      <select
+        aria-label="Source"
+        value={filter.source}
+        onChange={(e) => setFilter({ ...filter, source: e.target.value })}
+      >
         <option value="">All sources</option>
         {sources.map((s) => (
           <option key={s} value={s}>
@@ -148,8 +106,15 @@ function FilterBar({
           </option>
         ))}
       </select>
-      <input placeholder="Tag" value={filter.tag} onChange={(e) => setFilter({ ...filter, tag: e.target.value })} />
-      <button onClick={() => setFilter(NO_FILTER)}>Reset</button>
+      <label className="row">
+        <input
+          type="checkbox"
+          checked={filter.mineOnly}
+          onChange={(e) => setFilter({ ...filter, mineOnly: e.target.checked })}
+        />
+        Mine only
+      </label>
+      <Button label="Reset" variant="ghost" onClick={() => setFilter(NO_FILTER)} />
     </div>
   );
 }
@@ -157,20 +122,21 @@ function FilterBar({
 export function CreatureLibrary() {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
+  const navigate = useAppStore((s) => s.navigate);
   const listing = useLibraryStore((s) => s.listings.creature);
   const refresh = useLibraryStore((s) => s.refresh);
   const [filter, setFilter] = useState(NO_FILTER);
   const [sort, setSort] = useState<SortKey>('name');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Creature | null>(null);
-  const [importing, setImporting] = useState(false);
 
   const sources = useMemo(() => [...new Set(listing.entries.map((e) => e.doc.source))].sort(), [listing]);
   const entries = useMemo(
-    () => listing.entries.filter((e) => matches(e.doc, filter)).sort((a, b) => SORTERS[sort](a.doc, b.doc)),
+    () => listing.entries.filter((e) => matches(e, filter)).sort((a, b) => SORTERS[sort](a.doc, b.doc)),
     [listing, filter, sort],
   );
-  const selected = listing.entries.find((e) => e.ref.id === selectedId)?.doc ?? null;
+  const selected = listing.entries.find((e) => e.ref.id === selectedId) ?? null;
+
+  const edit = (entry: Entry) => navigate({ page: 'creature-editor', ref: entry.ref });
 
   const duplicate = async (creature: Creature) => {
     const at = nowIso();
@@ -178,19 +144,21 @@ export function CreatureLibrary() {
     const stored = await repository.save('creature', copy);
     await refresh('creature');
     setSelectedId(stored.id);
+    useAppStore.getState().notify(`Created "${stored.name}"`);
   };
 
-  const remove = async (ref: DocRef, creature: Creature, overridesContent: boolean) => {
+  const remove = async ({ ref, doc, overridesContent }: Entry) => {
     const ok = await confirmDialog(
       overridesContent
         ? {
-            title: 'Restore shipped creature',
-            message: `Your edits of "${creature.name}" are discarded and the shipped version comes back.`,
-            confirmLabel: 'Restore',
+            title: 'Revert to shipped creature',
+            message: `Your copy of "${doc.name}" is deleted and the shipped version comes back.`,
+            confirmLabel: 'Revert',
+            danger: true,
           }
         : {
             title: 'Delete creature',
-            message: `"${creature.name}" is removed from your compendium.`,
+            message: `"${doc.name}" is removed from your compendium.`,
             confirmLabel: 'Delete creature',
             danger: true,
           },
@@ -201,80 +169,106 @@ export function CreatureLibrary() {
     }
   };
 
+  const menuItems = (entry: Entry): MenuItem[] => [
+    { label: 'Edit', icon: 'edit', run: () => edit(entry) },
+    { label: 'Duplicate', icon: 'copy', run: () => duplicate(entry.doc).catch(reportError) },
+    {
+      label: entry.overridesContent ? 'Revert to shipped' : 'Delete',
+      icon: entry.overridesContent ? 'undo' : 'trash',
+      danger: true,
+      disabled: entry.ref.area === 'content',
+      run: () => remove(entry).catch(reportError),
+    },
+  ];
+
+  const showMenu = (e: MouseEvent, entry: Entry) => {
+    e.preventDefault();
+    setSelectedId(entry.ref.id);
+    openContextMenu(e.clientX, e.clientY, menuItems(entry));
+  };
+
   return (
-    <div className="library-split">
-      <div className="col">
-        <div className="row">
-          <button className="primary" onClick={() => setEditing(createCreature('New creature'))}>
-            New
-          </button>
-          <button onClick={() => setImporting(true)}>Import from text…</button>
-          <div className="spacer" />
-          <span className="muted">Sort</span>
-          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-            <option value="name">Name</option>
-            <option value="cr">Challenge</option>
-            <option value="type">Type</option>
-          </select>
-        </div>
+    <div className="compendium-split">
+      <div className="compendium-list">
         <FilterBar filter={filter} setFilter={setFilter} sources={sources} />
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>CR</th>
-              <th>Type</th>
-              <th>Source</th>
-              <th />
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => {
-              const { ref, doc, overridesContent } = entry;
-              return (
-                <tr
-                  key={`${ref.area}:${ref.id}`}
-                  className={ref.id === selectedId ? 'selected' : ''}
-                  onClick={() => setSelectedId(ref.id)}
-                >
-                  <td>{doc.name}</td>
-                  <td>{formatCr(doc.challenge)}</td>
-                  <td>
-                    {doc.size} {doc.type}
-                  </td>
-                  <td>{doc.source}</td>
-                  <td>
-                    <span className={`badge ${ref.area}`}>{originLabel(entry)}</span>
-                  </td>
-                  <td className="row" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => setEditing(doc)}>Edit</button>
-                    <button onClick={() => duplicate(doc).catch(reportError)}>Duplicate</button>
-                    {ref.area === 'data' && (
-                      <button className="danger" onClick={() => remove(ref, doc, overridesContent).catch(reportError)}>
-                        {overridesContent ? 'Revert' : 'Delete'}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {entries.length === 0 && <p className="muted">No creatures match.</p>}
+        <div className="row">
+          <span className="muted">
+            {entries.length} of {listing.entries.length}
+          </span>
+          <div className="spacer" />
+          <label className="row">
+            <span className="muted">Sort</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+              <option value="name">Name</option>
+              <option value="cr">Challenge</option>
+              <option value="type">Type</option>
+            </select>
+          </label>
+        </div>
+        <div className="list" role="listbox" aria-label="Creatures">
+          {entries.map((entry) => (
+            <div
+              key={`${entry.ref.area}:${entry.ref.id}`}
+              role="option"
+              tabIndex={0}
+              aria-selected={entry.ref.id === selectedId}
+              className={entry.ref.id === selectedId ? 'list-item selected' : 'list-item'}
+              onClick={() => setSelectedId(entry.ref.id)}
+              onDoubleClick={() => edit(entry)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') edit(entry);
+              }}
+              onContextMenu={(e) => showMenu(e, entry)}
+            >
+              <span className="row-name">{entry.doc.name}</span>
+              <span className="row-cr">CR {formatCr(entry.doc.challenge)}</span>
+              <span className="muted row-type">{entry.doc.type}</span>
+              <OriginBadge entry={entry} />
+            </div>
+          ))}
+        </div>
+        {entries.length === 0 && (
+          <EmptyState
+            icon="search"
+            title={listing.entries.length === 0 ? 'No creatures yet.' : 'No creatures match the filters.'}
+            action={
+              listing.entries.length === 0 ? (
+                <Button
+                  icon="upload"
+                  label="Import from text"
+                  variant="primary"
+                  onClick={() => openCreatureImport('')}
+                />
+              ) : (
+                <Button label="Reset filters" onClick={() => setFilter(NO_FILTER)} />
+              )
+            }
+          />
+        )}
       </div>
-      <div className="creature-preview">{selected && <StatBlock creature={selected} />}</div>
-      {editing && <CreatureEditor creature={editing} onClose={() => setEditing(null)} />}
-      {importing && (
-        <ImportDialog
-          onClose={() => setImporting(false)}
-          onImported={(c) => {
-            setImporting(false);
-            setSelectedId(c.id);
-            setEditing(c);
-          }}
-        />
-      )}
+      <div className="creature-preview">
+        {selected ? (
+          <>
+            <div className="row">
+              <OriginBadge entry={selected} />
+              <div className="spacer" />
+              <Button icon="edit" label="Edit" variant="primary" onClick={() => edit(selected)} />
+              <Button icon="copy" label="Duplicate" onClick={() => duplicate(selected.doc).catch(reportError)} />
+              {selected.ref.area === 'data' && (
+                <Button
+                  icon={selected.overridesContent ? 'undo' : 'trash'}
+                  label={selected.overridesContent ? 'Revert' : 'Delete'}
+                  variant="danger"
+                  onClick={() => remove(selected).catch(reportError)}
+                />
+              )}
+            </div>
+            <StatBlock creature={selected.doc} />
+          </>
+        ) : (
+          <EmptyState icon="book" title="Select a creature to see its stat block." />
+        )}
+      </div>
     </div>
   );
 }

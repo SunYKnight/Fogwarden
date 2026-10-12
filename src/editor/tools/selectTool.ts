@@ -15,20 +15,33 @@ const SELECTABLE: Partial<Record<HitTag['kind'], SelectableKind>> = {
   prop: 'prop',
 };
 
+/** What a click on `hit` selects; roofs select their room. */
+function selectable(hit: HitTag | null): { kind: SelectableKind; id: string } | null {
+  const kind = hit ? SELECTABLE[hit.kind] : undefined;
+  return hit && kind ? { kind, id: hit.id } : null;
+}
+
 export const selectTool: EditorTool = {
   id: 'select',
   label: 'Select',
-  icon: '⬚',
-  group: 'select',
+  icon: 'cursor',
   shortcut: 'v',
-  hint: 'Click an object to edit it in the side panel; drag a vertex of the selected wall, room or region to move it',
+  hint:
+    'Click an object to edit it in the inspector; drag a vertex of the selected wall, room or region to move it; ' +
+    'Del deletes the selection',
+  cursor: 'default',
   onPointer: (event) => {
-    if (!vertexDragPointer(event) && event.type === 'down' && event.button === 0) {
-      const kind = event.hit ? SELECTABLE[event.hit.kind] : undefined;
-      const selection: Selection = event.hit && kind ? { kind, id: event.hit.id, vertex: null } : null;
-      useEditorStore.getState().select(selection);
+    const dragged = vertexDragPointer(event);
+    const target = selectable(event.hit);
+    if (event.type === 'move') {
+      useEditorStore.getState().setHover(dragged ? null : target);
+    } else if (!dragged && event.type === 'down' && event.button === 0) {
+      useEditorStore.getState().select(target && { ...target, vertex: null });
     }
   },
   Overlay: SelectionOverlay,
-  deactivate: cancelVertexDrag,
+  deactivate: () => {
+    cancelVertexDrag();
+    useEditorStore.getState().setHover(null);
+  },
 };

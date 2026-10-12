@@ -78,11 +78,12 @@ function OpeningToolOverlay() {
 
 export const openingTool: EditorTool = {
   id: 'opening',
-  label: 'Opening',
-  icon: '⊓',
-  group: 'structure',
-  shortcut: 'o',
+  label: 'Door / window',
+  icon: 'door',
+  step: 'walls',
+  shortcut: 'd',
   hint: 'Click on a wall to place a door, window, portcullis or arrow slit there',
+  cursor: 'crosshair',
   onPointer: (event) => {
     if (event.type === 'move') {
       useOpeningPreview.setState({ hit: wallHitAt(event) });

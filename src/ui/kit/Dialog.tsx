@@ -15,7 +15,11 @@ interface DialogProps {
 export function Dialog({ title, onClose, children, footer, width = 520 }: DialogProps) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const first = box.current?.querySelector<HTMLElement>('input, select, textarea, button.btn-primary, button');
+    // Fields first: the header's Close button comes first in document order.
+    const root = box.current;
+    const first =
+      root?.querySelector<HTMLElement>('.dialog-body input, .dialog-body select, .dialog-body textarea') ??
+      root?.querySelector<HTMLElement>('button.btn-primary, .dialog-foot button');
     first?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {

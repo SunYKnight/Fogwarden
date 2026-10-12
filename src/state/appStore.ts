@@ -9,12 +9,14 @@ import { TauriStorage } from '@/data/tauriStorage';
 export type CompendiumTab = 'creatures' | 'markers';
 
 export type Route =
+  | { page: 'home' }
   | { page: 'maps' }
   | { page: 'map-editor'; map: DocRef }
   | { page: 'compendium'; tab: CompendiumTab }
   | { page: 'campaigns'; campaignId: string | null }
   | { page: 'play' }
-  | { page: 'settings' };
+  | { page: 'settings' }
+  | { page: 'creature-editor'; ref: DocRef | null };
 
 export type NoticeKind = 'error' | 'success' | 'info';
 
@@ -30,7 +32,10 @@ interface AppState {
   settings: Settings | null;
   route: Route;
   notices: Notice[];
+  /** Asked before leaving the page, e.g. to keep unsaved edits; resolves true to leave. */
+  leaveGuard: (() => Promise<boolean>) | null;
   navigate(route: Route): void;
+  setLeaveGuard(guard: (() => Promise<boolean>) | null): void;
   /** Makes the encounter the one on the Play screen and shows it. */
   openEncounter(locator: EncounterLocator): Promise<void>;
   /** Clears the Play screen when its encounter was deleted (by campaign or by encounter id). */
@@ -50,9 +55,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   repository: new Repository(isTauri() ? new TauriStorage() : new BrowserStorage()),
   roots: null,
   settings: null,
-  route: { page: 'maps' },
+  route: { page: 'home' },
   notices: [],
-  navigate: (route) => set({ route }),
+  leaveGuard: null,
+  navigate: (route) => {
+    const guard = get().leaveGuard;
+    if (guard) {
+      guard().then((ok) => ok && set({ route, leaveGuard: null }), get().reportError);
+    } else {
+      set({ route });
+    }
+  },
+  setLeaveGuard: (leaveGuard) => set({ leaveGuard }),
   openEncounter: async (locator) => {
     const settings = get().settings;
     if (!settings) {

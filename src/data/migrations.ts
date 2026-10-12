@@ -1,6 +1,7 @@
 import {
   CAMPAIGN_SCHEMA_VERSION,
   CREATURE_SCHEMA_VERSION,
+  defaultOnboarding,
   ENCOUNTER_SCHEMA_VERSION,
   MAP_SCHEMA_VERSION,
   MARKER_SCHEMA_VERSION,
@@ -30,8 +31,12 @@ const MIGRATIONS: Record<SchemaName, Migration[]> = {
   marker: [],
   campaign: [],
   encounter: [],
-  // v2: the never-used lastCampaignId became lastEncounter.
-  settings: [({ lastCampaignId: _unused, ...rest }) => ({ ...rest, lastEncounter: null })],
+  settings: [
+    // v2: the never-used lastCampaignId became lastEncounter.
+    ({ lastCampaignId: _unused, ...rest }) => ({ ...rest, lastEncounter: null }),
+    // v3: first steps progress for the Home page.
+    (doc) => ({ ...doc, onboarding: defaultOnboarding() }),
+  ],
 };
 
 export class MigrationError extends Error {

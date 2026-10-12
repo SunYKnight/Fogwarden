@@ -1,7 +1,8 @@
 import type { LibraryKind } from '@/data/repository';
 import { useAppStore, type CompendiumTab } from '@/state/appStore';
 import { LoadProblems } from '../components/LoadProblems';
-import { PageHeader, Tabs, type TabSpec } from '../kit';
+import { Button, PageHeader, Tabs, type TabSpec } from '../kit';
+import { openCreatureImport } from '../library/compendiumUi';
 import { CreatureLibrary } from '../library/CreatureLibrary';
 import { MarkerLibrary } from '../library/MarkerLibrary';
 
@@ -18,6 +19,17 @@ export function CompendiumPage({ tab }: { tab: CompendiumTab }) {
     <div className="page-frame">
       <PageHeader crumbs={[{ label: 'Compendium' }]}>
         <Tabs tabs={TABS} value={tab} onChange={(t) => navigate({ page: 'compendium', tab: t })} label="Compendium" />
+        {tab === 'creatures' && (
+          <>
+            <Button icon="upload" label="Import from text" onClick={() => openCreatureImport('')} />
+            <Button
+              icon="plus"
+              label="New creature"
+              variant="primary"
+              onClick={() => navigate({ page: 'creature-editor', ref: null })}
+            />
+          </>
+        )}
       </PageHeader>
       <div className="page-body">
         <LoadProblems kinds={KINDS[tab]} />

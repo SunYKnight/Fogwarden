@@ -74,6 +74,8 @@ export const ICON_PATHS = {
   image: ['M3 4h18v16H3z', circle(8.5, 9.5, 1.5), 'M21 16l-5-5-9 9'],
   qr: ['M4 4h6v6H4z', 'M14 4h6v6h-6z', 'M4 14h6v6H4z', 'M14 14h2v2h-2zM18 18h2v2h-2zM18 14h2M14 18v2'],
   external: ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v6H4V6h6'],
+  eraser: ['M8 20h12', 'M4 15l9-9 6 6-8 8H9z', 'M9 10l6 6'],
+  minus: ['M5 12h14'],
 } satisfies Record<string, string[]>;
 
 export type IconName = keyof typeof ICON_PATHS;

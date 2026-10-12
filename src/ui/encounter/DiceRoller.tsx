@@ -37,11 +37,11 @@ export function DiceRoller() {
   };
 
   return (
-    <div className="panel">
-      <h2>Dice</h2>
+    <div className="col">
       <div className="row">
         <input
           className="grow"
+          aria-label="Dice expression"
           value={expression}
           onChange={(e) => setExpression(e.target.value)}
           onKeyDown={(e) => {

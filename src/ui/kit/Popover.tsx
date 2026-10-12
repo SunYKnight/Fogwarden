@@ -90,6 +90,19 @@ export function openContextMenu(x: number, y: number, items: MenuItem[]): void {
 export function ContextMenuHost() {
   const menu = useContextMenuStore((s) => s.menu);
   const box = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: 0, top: 0 });
+
+  // Menus opened near the window edge flip inside instead of overflowing.
+  useLayoutEffect(() => {
+    const size = box.current?.getBoundingClientRect();
+    if (menu && size) {
+      setPos({
+        left: Math.max(4, Math.min(menu.x, window.innerWidth - size.width - 4)),
+        top: Math.max(4, Math.min(menu.y, window.innerHeight - size.height - 4)),
+      });
+    }
+  }, [menu]);
+
   useEffect(() => {
     const close = (e: Event) => {
       if (!(e instanceof MouseEvent && box.current?.contains(e.target as Node))) {
@@ -113,7 +126,7 @@ export function ContextMenuHost() {
 
   return menu
     ? createPortal(
-        <div ref={box} className="context-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
+        <div ref={box} className="context-menu" role="menu" style={pos}>
           {menu.items.map((item) => (
             <button
               key={item.label}

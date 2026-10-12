@@ -62,11 +62,13 @@ function toPlayer(combatant: Combatant): PlayerCombatant {
 /**
  * Encounter as players may see it: hidden combatants never, other non-player combatants only while they
  * stand in a currently visible fog cell; markers the DM shares; door states without closed secret doors.
+ * `showTurnOrder` is the DM's choice to show the turn order of these combatants.
  */
 export function filterEncounterForPlayers(
   encounter: Encounter,
   map: BattleMap | null,
   fog: FogCells | null,
+  showTurnOrder = false,
 ): PlayerEncounter {
   const combatants = encounter.combatants
     .filter((c) => !c.hiddenFromPlayers && (c.side === 'player' || visibleTo(c, fog)))
@@ -81,6 +83,7 @@ export function filterEncounterForPlayers(
     round: encounter.round,
     activeCombatantId: active && combatants.some((c) => c.id === active.id) ? active.id : null,
     combatants,
+    showTurnOrder,
     markers: encounter.markers.filter((m) => m.visibleToPlayers),
     openingStates,
   };

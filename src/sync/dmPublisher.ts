@@ -3,6 +3,7 @@ import type { BattleMap } from '@/core/model';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useDmCameraStore } from './cameraStore';
+import { usePlayerViewStore } from './playerViewStore';
 import { filterEncounterForPlayers, filterMapForPlayers, playerMapInputs } from './playerFilter';
 import type { PlayerFog, SyncPayload, SyncTransport } from './protocol';
 
@@ -44,7 +45,9 @@ export function startDmPublisher(transports: SyncTransport[]): () => void {
 
   const publishEncounter = (force: boolean) => {
     const { map, encounter } = useEncounterStore.getState();
-    const player = encounter ? filterEncounterForPlayers(encounter, map, useFogViewStore.getState().fog) : null;
+    const fog = useFogViewStore.getState().fog;
+    const showTurnOrder = usePlayerViewStore.getState().showTurnOrder;
+    const player = encounter ? filterEncounterForPlayers(encounter, map, fog, showTurnOrder) : null;
     const json = JSON.stringify(player);
     if (json !== sentEncounter || force) {
       sentEncounter = json;
@@ -92,6 +95,7 @@ export function startDmPublisher(transports: SyncTransport[]): () => void {
       }
     }),
     useDmCameraStore.subscribe(() => publishCamera(false)),
+    usePlayerViewStore.subscribe(() => publishEncounter(false)),
     ...transports.map((transport) =>
       transport.subscribe((payload) => {
         if (payload.type === 'hello') {

@@ -1,0 +1,449 @@
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { create } from 'zustand';
+import type { BattleMap, Vec2 } from '@/core/model';
+import { calibrateFromSquare, fitSquaresToImage, type GridCalibration } from '@/core/terrain/calibration';
+import { useAppStore } from '@/state/appStore';
+import { useLibraryStore } from '@/state/libraryStore';
+import { CheckboxField, NumberField, SliderField, TextField } from '../components/fields';
+import { completeOnboardingStep } from '../home/onboarding';
+import { Button, Dialog, Icon } from '../kit';
+import { openNewEncounter } from './compendiumUi';
+import { isImageFile, useFileDrop } from './fileDrop';
+import {
+  cornerGesture,
+  createCalibratedMap,
+  gridFromFileName,
+  guessCalibration,
+  mapNameFromFileName,
+  roundCalibration,
+  type ImageSize,
+} from './mapImport';
+
+const IMAGE_TYPES = 'image/png,image/jpeg,image/webp';
+// Screen pixels a press may move and still count as a click.
+const CLICK_SLOP_PX = 4;
+
+interface WizardRequest {
+  /** Bumped per open so a reopened wizard starts fresh. */
+  session: number;
+  open: boolean;
+  file: File | null;
+}
+
+const useWizardStore = create<WizardRequest>(() => ({ session: 0, open: false, file: null }));
+
+/** Opens the new map wizard, optionally with the image already chosen (drag and drop). */
+export function openNewMapWizard(file: File | null = null): void {
+  useWizardStore.setState((s) => ({ session: s.session + 1, open: true, file }));
+}
+
+function closeNewMapWizard(): void {
+  useWizardStore.setState({ open: false, file: null });
+}
+
+export function NewMapWizardHost() {
+  const { session, open, file } = useWizardStore();
+  return open ? <NewMapWizard key={session} initialFile={file} /> : null;
+}
+
+interface Draft {
+  file: File;
+  url: string;
+  image: ImageSize;
+  name: string;
+  calibration: GridCalibration;
+}
+
+function guessFor(source: { file: File; image: ImageSize }): GridCalibration {
+  return roundCalibration(guessCalibration(source.file.name, source.image));
+}
+
+async function readDraft(file: File): Promise<Draft> {
+  if (!isImageFile(file)) {
+    throw new Error(`"${file.name}" is not a PNG, JPEG or WebP image`);
+  }
+  const bitmap = await createImageBitmap(file);
+  const image = { widthPx: bitmap.width, heightPx: bitmap.height };
+  bitmap.close();
+  const draft = { file, url: URL.createObjectURL(file), image, name: mapNameFromFileName(file.name) };
+  return { ...draft, calibration: guessFor(draft) };
+}
+
+type Step = 'image' | 'grid' | 'done';
+
+const STEPS: { id: Step; label: string }[] = [
+  { id: 'image', label: 'Image' },
+  { id: 'grid', label: 'Grid' },
+  { id: 'done', label: 'Done' },
+];
+
+function StepTrail({ step }: { step: Step }) {
+  const current = STEPS.findIndex((s) => s.id === step);
+  return (
+    <ol className="wizard-steps">
+      {STEPS.map((s, i) => (
+        <li key={s.id} className={i === current ? 'current' : i < current ? 'done' : ''}>
+          <span className="wizard-step-number">{i < current ? <Icon name="check" size={14} /> : i + 1}</span>
+          {s.label}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function NewMapWizard({ initialFile }: { initialFile: File | null }) {
+  const repository = useAppStore((s) => s.repository);
+  const reportError = useAppStore((s) => s.reportError);
+  const [step, setStep] = useState<Step>('image');
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [created, setCreated] = useState<BattleMap | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (initialFile) {
+      readDraft(initialFile).then(setDraft, reportError);
+    }
+  }, [initialFile, reportError]);
+
+  useEffect(() => {
+    const url = draft?.url;
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [draft?.url]);
+
+  const createMap = async (source: Draft, calibration: GridCalibration) => {
+    setBusy(true);
+    try {
+      const map = await createCalibratedMap(repository, source.file, {
+        name: source.name.trim() || 'New map',
+        image: source.image,
+        calibration,
+      });
+      await useLibraryStore.getState().refresh('map');
+      await completeOnboardingStep('mapFromImage');
+      useAppStore.getState().notify(`Map "${map.name}" created`);
+      setCreated(map);
+      setStep('done');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openInEditor = (map: BattleMap) => {
+    closeNewMapWizard();
+    useAppStore.getState().navigate({ page: 'map-editor', map: { area: 'data', id: map.id } });
+  };
+
+  const startEncounter = (map: BattleMap) => {
+    closeNewMapWizard();
+    openNewEncounter(null, { area: 'data', id: map.id });
+  };
+
+  let body = (
+    <ImageStep
+      draft={draft}
+      onFile={(file) => readDraft(file).then(setDraft, reportError)}
+      onRename={(name) => draft && setDraft({ ...draft, name })}
+    />
+  );
+  let footer = (
+    <>
+      <Button label="Cancel" onClick={closeNewMapWizard} />
+      <Button label="Next" icon="chevronRight" variant="primary" disabled={!draft} onClick={() => setStep('grid')} />
+    </>
+  );
+  if (step === 'grid' && draft) {
+    body = (
+      <GridStep
+        draft={draft}
+        onChange={(calibration) => setDraft({ ...draft, calibration })}
+        onReset={() => setDraft({ ...draft, calibration: guessFor(draft) })}
+      />
+    );
+    footer = (
+      <>
+        <Button label="Back" disabled={busy} onClick={() => setStep('image')} />
+        <div className="spacer" />
+        <Button
+          label="Skip, keep the guess"
+          disabled={busy}
+          title="Creates the map with the grid guessed from the file name; correct it later in the editor"
+          onClick={() => createMap(draft, guessFor(draft)).catch(reportError)}
+        />
+        <Button
+          label={busy ? 'Creating…' : 'Create map'}
+          icon="check"
+          variant="primary"
+          disabled={busy}
+          onClick={() => createMap(draft, draft.calibration).catch(reportError)}
+        />
+      </>
+    );
+  }
+  if (step === 'done' && created) {
+    body = (
+      <div className="wizard-done">
+        <Icon name="check" size={32} />
+        <p>
+          <strong>{created.name}</strong> is ready: {created.grid.squaresX} × {created.grid.squaresY} squares with a
+          calibrated grid. Walls, doors and terrain are added in the editor.
+        </p>
+      </div>
+    );
+    footer = (
+      <>
+        <Button label="Close" onClick={closeNewMapWizard} />
+        <div className="spacer" />
+        <Button label="Use in a new encounter" icon="swords" onClick={() => startEncounter(created)} />
+        <Button label="Open in editor" icon="edit" variant="primary" onClick={() => openInEditor(created)} />
+      </>
+    );
+  }
+
+  return (
+    <Dialog title="New map" onClose={closeNewMapWizard} width={step === 'grid' ? 1100 : 560} footer={footer}>
+      <StepTrail step={step} />
+      {body}
+    </Dialog>
+  );
+}
+
+interface ImageStepProps {
+  draft: Draft | null;
+  onFile: (file: File) => void;
+  onRename: (name: string) => void;
+}
+
+function ImageStep({ draft, onFile, onRename }: ImageStepProps) {
+  const input = useRef<HTMLInputElement>(null);
+  const { dragging, handlers } = useFileDrop((files) => {
+    const image = files.find(isImageFile);
+    if (image) {
+      onFile(image);
+    } else {
+      useAppStore.getState().reportError(new Error('Drop a PNG, JPEG or WebP image'));
+    }
+  });
+  const fromName = draft && gridFromFileName(draft.file.name);
+  return (
+    <div className="col">
+      <div className={dragging ? 'drop-zone dragging' : 'drop-zone'} {...handlers}>
+        {draft ? (
+          <img className="wizard-preview" src={draft.url} alt={draft.name} />
+        ) : (
+          <>
+            <Icon name="image" size={32} />
+            <span>Drop a battlemap image here</span>
+          </>
+        )}
+        <Button
+          icon="upload"
+          label={draft ? 'Choose another image' : 'Choose image'}
+          variant={draft ? 'default' : 'primary'}
+          onClick={() => input.current?.click()}
+        />
+        <input
+          ref={input}
+          type="file"
+          accept={IMAGE_TYPES}
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onFile(file);
+            e.target.value = '';
+          }}
+        />
+      </div>
+      {draft && (
+        <>
+          <TextField label="Name" value={draft.name} onChange={onRename} />
+          <p className="muted">
+            {draft.image.widthPx} × {draft.image.heightPx} px ·{' '}
+            {fromName
+              ? `the file name says ${fromName.squaresX} × ${fromName.squaresY} squares`
+              : 'no grid size in the file name; you place the grid in the next step'}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Lines through every grid corner within `span` squares of the origin, in grid units. */
+function gridPath(span: number): string {
+  return Array.from({ length: 2 * span + 1 }, (_, k) => {
+    const i = k - span;
+    return `M${i} ${-span}V${span}M${-span} ${i}H${span}`;
+  }).join('');
+}
+
+interface GridStepProps {
+  draft: Draft;
+  onChange: (calibration: GridCalibration) => void;
+  onReset: () => void;
+}
+
+function GridStep({ draft, onChange, onReset }: GridStepProps) {
+  const [actualSize, setActualSize] = useState(false);
+  const [detectRotation, setDetectRotation] = useState(false);
+  const [pending, setPending] = useState<Vec2 | null>(null);
+  const [drag, setDrag] = useState<{ down: Vec2; current: Vec2 } | null>(null);
+  const { image, calibration } = draft;
+  const { pxPerSquare, rotationDeg, offsetPx } = calibration;
+  const squares = fitSquaresToImage(image, pxPerSquare);
+  const span = Math.ceil(Math.hypot(image.widthPx, image.heightPx) / pxPerSquare) + 1;
+  const lines = useMemo(() => gridPath(span), [span]);
+  const marker = Math.max(image.widthPx, image.heightPx) / 160;
+
+  const toImage = (e: PointerEvent<SVGSVGElement>): Vec2 => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scale = image.widthPx / rect.width;
+    return { x: (e.clientX - rect.left) * scale, y: (e.clientY - rect.top) * scale };
+  };
+  const update = (change: Partial<GridCalibration>) => onChange(roundCalibration({ ...calibration, ...change }));
+
+  const onPointerDown = (e: PointerEvent<SVGSVGElement>) => {
+    if (e.button === 0) {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const point = toImage(e);
+      setDrag({ down: point, current: point });
+    }
+  };
+  const onPointerMove = (e: PointerEvent<SVGSVGElement>) => {
+    if (drag) setDrag({ ...drag, current: toImage(e) });
+  };
+  const onPointerUp = (e: PointerEvent<SVGSVGElement>) => {
+    if (drag) {
+      // The overlay's viewBox is the image: screen px to image px.
+      const slop = (CLICK_SLOP_PX * image.widthPx) / e.currentTarget.getBoundingClientRect().width;
+      const gesture = cornerGesture(pending, drag.down, toImage(e), slop);
+      setPending(gesture.pending);
+      setDrag(null);
+      if (gesture.square) {
+        const [a, b] = gesture.square;
+        onChange(roundCalibration(calibrateFromSquare(a, b, detectRotation ? null : rotationDeg)));
+      }
+    }
+  };
+
+  return (
+    <div className="wizard-grid">
+      <div className={actualSize ? 'wizard-canvas actual' : 'wizard-canvas'}>
+        <div className="wizard-stage">
+          <img src={draft.url} alt={draft.name} draggable={false} />
+          <svg
+            viewBox={`0 0 ${image.widthPx} ${image.heightPx}`}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={() => setDrag(null)}
+          >
+            <g transform={`translate(${offsetPx.x} ${offsetPx.y}) rotate(${rotationDeg}) scale(${pxPerSquare})`}>
+              <path d={lines} className="wizard-grid-lines" vectorEffect="non-scaling-stroke" />
+              <rect
+                width={squares.squaresX}
+                height={squares.squaresY}
+                className="wizard-grid-extent"
+                vectorEffect="non-scaling-stroke"
+              />
+            </g>
+            {drag && (
+              <rect
+                x={Math.min(drag.down.x, drag.current.x)}
+                y={Math.min(drag.down.y, drag.current.y)}
+                width={Math.abs(drag.current.x - drag.down.x)}
+                height={Math.abs(drag.current.y - drag.down.y)}
+                className="wizard-drag"
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+            {pending && <circle cx={pending.x} cy={pending.y} r={marker} className="wizard-corner" />}
+          </svg>
+        </div>
+      </div>
+      <div className="wizard-controls col">
+        <p className="muted">
+          {pending
+            ? 'Now click the opposite corner of the same square.'
+            : 'Drag across one grid square of the image, or click two opposite corners of a square.'}
+        </p>
+        <NumberField
+          label="Squares across"
+          value={squares.squaresX}
+          min={1}
+          max={1000}
+          step={1}
+          onChange={(n) => update({ pxPerSquare: image.widthPx / Math.round(n) })}
+        />
+        <SliderField
+          label="Square size"
+          value={pxPerSquare}
+          min={10}
+          max={Math.max(300, Math.ceil(pxPerSquare * 1.5))}
+          step={0.5}
+          suffix=" px"
+          onChange={(v) => update({ pxPerSquare: v })}
+        />
+        <SliderField
+          label="Offset X"
+          value={offsetPx.x}
+          min={-Math.ceil(pxPerSquare)}
+          max={Math.ceil(pxPerSquare)}
+          step={0.5}
+          suffix=" px"
+          onChange={(x) => update({ offsetPx: { ...offsetPx, x } })}
+        />
+        <SliderField
+          label="Offset Y"
+          value={offsetPx.y}
+          min={-Math.ceil(pxPerSquare)}
+          max={Math.ceil(pxPerSquare)}
+          step={0.5}
+          suffix=" px"
+          onChange={(y) => update({ offsetPx: { ...offsetPx, y } })}
+        />
+        <SliderField
+          label="Rotation"
+          value={rotationDeg}
+          min={-45}
+          max={45}
+          step={0.1}
+          suffix="°"
+          onChange={(v) => update({ rotationDeg: v })}
+        />
+        <CheckboxField label="Detect rotation" value={detectRotation} onChange={setDetectRotation} />
+        <p>
+          <strong>
+            {squares.squaresX} × {squares.squaresY} squares
+          </strong>{' '}
+          <span className="muted">
+            ({squares.squaresX * 5} × {squares.squaresY * 5} ft)
+          </span>
+        </p>
+        <div className="row wrap">
+          <Button
+            icon="search"
+            label={actualSize ? 'Fit to window' : 'Actual size'}
+            onClick={() => setActualSize(!actualSize)}
+          />
+          <Button icon="undo" label="Reset guess" onClick={onReset} />
+        </div>
+        <div className="wizard-checklist">
+          <strong>Looks right?</strong>
+          <ul>
+            <li>
+              <Icon name="check" size={14} /> Grid lines run along walls and floor tiles
+            </li>
+            <li>
+              <Icon name="check" size={14} /> Squares still line up at the far edges (use Actual size)
+            </li>
+            <li>
+              <Icon name="check" size={14} /> The outlined area covers the whole map
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}

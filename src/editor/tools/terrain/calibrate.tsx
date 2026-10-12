@@ -5,7 +5,8 @@ import { resampleHeightField } from '@/core/terrain/resample';
 import { useMapRender, type MapPointerEvent } from '@/render/mapRenderContext';
 import { imagePxToWorld, worldToImagePx } from '@/render/projection';
 import { useEditorStore } from '@/state/editorStore';
-import { CheckboxField, Field, NumberField } from '@/ui/components/fields';
+import { CheckboxField, ColorField, Field, NumberField, SliderField } from '@/ui/components/fields';
+import { Button, useShortcuts } from '@/ui/kit';
 import type { EditorTool } from '../../tool';
 import { OverlayLines, overlayPositions } from './overlays';
 import { editorTerrain } from './sculpt';
@@ -18,9 +19,26 @@ const PREVIEW_SQUARES = 8;
 
 // Corner one comes from the press; a release elsewhere drags a square.
 let dragging = false;
+// Tool to return to once a pick started from the map settings ends.
+let returnTool = 'select';
 
 function roundTo(value: number, digits: number): number {
   return Math.round(value * 10 ** digits) / 10 ** digits;
+}
+
+/** Hides the map settings and lets the user pick a grid square on the map. */
+export function startGridPick(): void {
+  const editor = useEditorStore.getState();
+  returnTool = editor.activeTool === 'calibrate' ? returnTool : editor.activeTool;
+  editor.setSettingsOpen(false);
+  editor.setTool('calibrate');
+}
+
+/** Back to the tool used before the pick, with the map settings showing the result. */
+function endGridPick(): void {
+  const editor = useEditorStore.getState();
+  editor.setTool(returnTool);
+  editor.setSettingsOpen(true);
 }
 
 function openGrid(): Grid {
@@ -45,6 +63,7 @@ function calibrate(a: Vec2, b: Vec2): void {
     d.grid.rotationDeg = roundTo(next.rotationDeg, 3);
     d.grid.offsetPx = { x: roundTo(next.offsetPx.x, 2), y: roundTo(next.offsetPx.y, 2) };
   });
+  endGridPick();
 }
 
 /** Changes grid size or terrain resolution; heights are resampled so they stay where they were in feet. */
@@ -120,40 +139,53 @@ function CalibrationPreview() {
   );
 }
 
-function CalibratePanel() {
+/** Grid display, calibration numbers and size; the grid section of the map settings. */
+export function GridFields() {
   const map = useEditorStore((s) => s.map);
-  const cursor = useTerrainToolStore((s) => s.cursor);
-  const first = useTerrainToolStore((s) => s.cornerPx);
-  const detectRotation = useTerrainToolStore((s) => s.detectRotation);
   if (!map) {
-    throw new Error('CalibratePanel needs an open map');
+    throw new Error('GridFields needs an open map');
   }
   const { grid, image } = map;
   const sps = map.terrain.samplesPerSquare;
   const edit = useEditorStore.getState().edit;
-  const px = cursor && worldToImagePx(grid, cursor);
   const fit = image && fitSquaresToImage(image, grid.pxPerSquare);
   const fits = !fit || (fit.squaresX === grid.squaresX && fit.squaresY === grid.squaresY);
   return (
     <>
-      <Field label="Image px under cursor">
-        <span>{px ? `${px.x.toFixed(1)}, ${px.y.toFixed(1)}` : '–'}</span>
-      </Field>
-      <Field label="Picked corner">
-        <span>{first ? `${first.x.toFixed(1)}, ${first.y.toFixed(1)}` : '–'}</span>
-      </Field>
+      <div className="row wrap">
+        <Button
+          icon="calibrate"
+          label="Pick a square on the map"
+          variant="primary"
+          title="Click two opposite corners of one grid square in the image, or drag across one"
+          onClick={startGridPick}
+        />
+        <Button
+          icon="image"
+          label="Fit grid to image"
+          disabled={fits}
+          title="Squares = image size / px per square"
+          onClick={() => fit && regrid('Fit grid to image', fit, sps)}
+        />
+      </div>
       <CheckboxField
-        label="Detect rotation"
-        value={detectRotation}
-        onChange={(v) => useTerrainToolStore.getState().setOptions({ detectRotation: v })}
+        label="Show grid"
+        value={grid.show}
+        onChange={(v) => edit('Toggle grid', (d) => void (d.grid.show = v))}
       />
-      <button
-        disabled={fits}
-        title="Squares = image size / px per square"
-        onClick={() => fit && regrid('Fit grid to image', fit, sps)}
-      >
-        Fit grid to image
-      </button>
+      <ColorField
+        label="Grid color"
+        value={grid.color}
+        onChange={(v) => edit('Grid color', (d) => void (d.grid.color = v))}
+      />
+      <SliderField
+        label="Grid opacity"
+        value={grid.opacity}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => edit('Grid opacity', (d) => void (d.grid.opacity = v))}
+      />
       <NumberField
         label="Px per square"
         value={grid.pxPerSquare}
@@ -207,14 +239,50 @@ function CalibratePanel() {
         onChange={(v) => regrid('Feet per square', { feetPerSquare: v }, sps)}
       />
       <NumberField
-        label="Terrain samples per square"
+        label="Samples per square"
         value={sps}
         min={1}
         max={8}
         step={1}
-        title="Height samples along each square edge; more allows finer sculpting"
+        title="Terrain height samples along each square edge; more allows finer sculpting"
         onChange={(v) => regrid('Terrain resolution', {}, Math.round(v))}
       />
+    </>
+  );
+}
+
+/** Inline options while picking: readouts, rotation detection and the way back to the settings. */
+function CalibratePickBar() {
+  const map = useEditorStore((s) => s.map);
+  const cursor = useTerrainToolStore((s) => s.cursor);
+  const first = useTerrainToolStore((s) => s.cornerPx);
+  const detectRotation = useTerrainToolStore((s) => s.detectRotation);
+  useShortcuts('Map editor: grid pick', [
+    {
+      keys: 'Escape',
+      label: 'Drop the picked corner, else back to the map settings',
+      run: () => {
+        const tools = useTerrainToolStore.getState();
+        if (tools.cornerPx) tools.setCornerPx(null);
+        else endGridPick();
+      },
+    },
+  ]);
+  const px = map && cursor && worldToImagePx(map.grid, cursor);
+  return (
+    <>
+      <Field label="Image px">
+        <span>{px ? `${px.x.toFixed(1)}, ${px.y.toFixed(1)}` : '–'}</span>
+      </Field>
+      <Field label="First corner">
+        <span>{first ? `${first.x.toFixed(1)}, ${first.y.toFixed(1)}` : '–'}</span>
+      </Field>
+      <CheckboxField
+        label="Detect rotation"
+        value={detectRotation}
+        onChange={(v) => useTerrainToolStore.getState().setOptions({ detectRotation: v })}
+      />
+      <Button icon="settings" label="Back to map settings" onClick={endGridPick} />
     </>
   );
 }
@@ -222,12 +290,11 @@ function CalibratePanel() {
 export const calibrateTool: EditorTool = {
   id: 'calibrate',
   label: 'Calibrate grid',
-  icon: '⌗',
-  group: 'terrain',
-  shortcut: 'c',
-  hint: 'Click two opposite corners of one square in the image, or drag across one square',
+  icon: 'calibrate',
+  hint: 'Click two opposite corners of one grid square in the image, or drag across one; Esc goes back',
+  cursor: 'crosshair',
   onPointer: calibratePointer,
-  Panel: CalibratePanel,
+  Panel: CalibratePickBar,
   Overlay: CalibrationPreview,
   deactivate: () => {
     dragging = false;

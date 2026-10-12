@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Encounter } from '@/core/model';
 import { addLog } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
-import { confirmDialog } from '../kit';
+import { Button, confirmDialog } from '../kit';
 
 const MAX_SHOWN = 200;
 
@@ -25,35 +25,34 @@ export function LogPanel({ encounter }: { encounter: Encounter }) {
   };
 
   return (
-    <div className="panel">
-      <div className="row">
-        <h2 style={{ margin: 0 }}>Log</h2>
-        <div className="spacer" />
-        <button
-          disabled={encounter.log.length === 0}
-          onClick={() => {
-            void confirmDialog({
-              title: 'Clear log',
-              message: 'All log entries of this encounter are deleted.',
-              confirmLabel: 'Clear log',
-              danger: true,
-            }).then((ok) => ok && update((d) => void (d.log = [])));
-          }}
-        >
-          Clear
-        </button>
-      </div>
+    <div className="col log-panel">
       <div className="row">
         <input
           className="grow"
           placeholder="Add a note"
+          aria-label="Note"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') addNote();
           }}
         />
-        <button onClick={addNote}>Add</button>
+        <Button label="Add" onClick={addNote} />
+        <Button
+          icon="trash"
+          label="Clear log"
+          iconOnly
+          variant="ghost"
+          disabled={encounter.log.length === 0}
+          onClick={() => {
+            void confirmDialog({
+              title: 'Clear log',
+              message: 'All log entries of this encounter are deleted. This cannot be undone.',
+              confirmLabel: 'Clear log',
+              danger: true,
+            }).then((ok) => ok && update((d) => void (d.log = [])));
+          }}
+        />
       </div>
       <div className="log">
         {entries.map((e) => (

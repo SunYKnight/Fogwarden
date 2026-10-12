@@ -4,18 +4,39 @@ import { splitWallAtVertex } from '@/core/geometry/wallEdit';
 import { wallSegmentEnds } from '@/core/geometry/walls';
 import { useEditorStore, type Selection } from '@/state/editorStore';
 import { CheckboxField, NumberField, SelectField, TextField } from '@/ui/components/fields';
+import { Button } from '@/ui/kit';
 import { editItem, editorMap, removeItem } from './documentEdits';
 import { LightFields, OpeningFields, RegionFields, RoomFields, WallFields } from './propertyFields';
 import { GizmoModeButtons } from './propTool';
 
 type PanelProps = { id: string };
+type SelectionKind = NonNullable<Selection>['kind'];
 
-function DeleteButton({ label, onDelete }: { label: string; onDelete: () => void }) {
-  return (
-    <button className="danger" onClick={onDelete}>
-      {label}
-    </button>
-  );
+function deleteWall(id: string): void {
+  const editor = useEditorStore.getState();
+  editor.edit('Delete wall', (d) => {
+    d.walls = d.walls.filter((w) => w.id !== id);
+    d.openings = d.openings.filter((o) => o.wallId !== id);
+  });
+  editor.select(null);
+}
+
+const DELETERS: Record<SelectionKind, (id: string) => void> = {
+  wall: deleteWall,
+  opening: (id) => removeItem('Delete opening', (d) => d.openings, id),
+  room: (id) => removeItem('Delete room', (d) => d.rooms, id),
+  region: (id) => removeItem('Delete region', (d) => d.regions, id),
+  light: (id) => removeItem('Delete light', (d) => d.lights, id),
+  prop: (id) => removeItem('Delete prop', (d) => d.props, id),
+};
+
+/** Removes the selected object as one undoable step (a wall takes its openings along). */
+export function deleteSelection(selection: NonNullable<Selection>): void {
+  DELETERS[selection.kind](selection.id);
+}
+
+function DeleteButton({ kind, id }: { kind: SelectionKind; id: string }) {
+  return <Button icon="trash" label="Delete" variant="danger" shortcut="Del" onClick={() => DELETERS[kind](id)} />;
 }
 
 /** Vertex picker plus coordinates, so vertices can be edited without dragging. */
@@ -102,15 +123,6 @@ function splitWall(wall: Wall, vertex: number): void {
   editor.select({ kind: 'wall', id: wall.id, vertex: null });
 }
 
-function deleteWall(id: string): void {
-  const editor = useEditorStore.getState();
-  editor.edit('Delete wall', (d) => {
-    d.walls = d.walls.filter((w) => w.id !== id);
-    d.openings = d.openings.filter((o) => o.wallId !== id);
-  });
-  editor.select(null);
-}
-
 function WallPanel({ id }: PanelProps) {
   const wall = useEditorStore((s) => s.map?.walls.find((w) => w.id === id));
   const vertex = useEditorStore((s) => (s.selection?.id === id ? s.selection.vertex : null));
@@ -169,7 +181,7 @@ function WallPanel({ id }: PanelProps) {
         >
           Close
         </button>
-        <DeleteButton label="Delete" onDelete={() => deleteWall(id)} />
+        <DeleteButton kind="wall" id={id} />
       </div>
     </div>
   ) : null;
@@ -225,7 +237,7 @@ function OpeningPanel({ id }: PanelProps) {
           )
         }
       />
-      <DeleteButton label="Delete" onDelete={() => removeItem('Delete opening', (d) => d.openings, id)} />
+      <DeleteButton kind="opening" id={id} />
     </div>
   ) : null;
 }
@@ -271,7 +283,7 @@ function RoomPanel({ id }: PanelProps) {
           )
         }
       />
-      <DeleteButton label="Delete" onDelete={() => removeItem('Delete room', (d) => d.rooms, id)} />
+      <DeleteButton kind="room" id={id} />
     </div>
   ) : null;
 }
@@ -330,7 +342,7 @@ function RegionPanel({ id }: PanelProps) {
           )
         }
       />
-      <DeleteButton label="Delete" onDelete={() => removeItem('Delete region', (d) => d.regions, id)} />
+      <DeleteButton kind="region" id={id} />
     </div>
   ) : null;
 }
@@ -404,7 +416,7 @@ function LightPanel({ id }: PanelProps) {
           )
         }
       />
-      <DeleteButton label="Delete" onDelete={() => removeItem('Delete light', (d) => d.lights, id)} />
+      <DeleteButton kind="light" id={id} />
     </div>
   ) : null;
 }
@@ -431,7 +443,9 @@ function PropPanel({ id }: PanelProps) {
       {activeTool === 'prop' ? (
         <GizmoModeButtons />
       ) : (
-        <button onClick={() => useEditorStore.getState().setTool('prop')}>Move / rotate / scale with gizmo</button>
+        <button onClick={() => useEditorStore.getState().setTool('prop', 'objects')}>
+          Move / rotate / scale with gizmo
+        </button>
       )}
       <Vec3Fields
         label="Position"
@@ -517,7 +531,7 @@ function PropPanel({ id }: PanelProps) {
           )
         }
       />
-      <DeleteButton label="Delete" onDelete={() => removeItem('Delete prop', (d) => d.props, id)} />
+      <DeleteButton kind="prop" id={id} />
     </div>
   ) : null;
 }

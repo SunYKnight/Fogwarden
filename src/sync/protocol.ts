@@ -16,7 +16,10 @@ export interface PlayerEncounter {
   encounterId: string;
   round: number;
   activeCombatantId: string | null;
+  /** In turn order. */
   combatants: PlayerCombatant[];
+  /** The DM lets players see the turn order as an initiative ribbon. */
+  showTurnOrder: boolean;
   markers: AreaMarker[];
   openingStates: Record<string, OpeningState>;
 }

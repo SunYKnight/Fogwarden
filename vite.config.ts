@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { contentDevServer } from './tools/vite-content-plugin.ts';
+import { gitRevision } from './tools/gitRevision.ts';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 
@@ -11,6 +12,8 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   plugins: [react(), contentDevServer(resolve(root, 'content'))],
   clearScreen: false,
+  // Shown under Settings > About to tell builds apart.
+  define: { __GIT_REVISION__: JSON.stringify(gitRevision(root)) },
   resolve: {
     alias: { '@': resolve(root, 'src') },
   },

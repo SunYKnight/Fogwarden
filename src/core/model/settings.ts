@@ -1,9 +1,29 @@
 import { z } from 'zod';
 
-export const SETTINGS_SCHEMA_VERSION = 2;
+export const SETTINGS_SCHEMA_VERSION = 3;
 
 export const encounterLocatorSchema = z.object({ campaignId: z.string(), encounterId: z.string() });
 export type EncounterLocator = z.infer<typeof encounterLocatorSchema>;
+
+export const onboardingSchema = z.object({
+  /** The Home page hides the first steps card once dismissed or all steps are done. */
+  dismissed: z.boolean(),
+  done: z.object({
+    dataFolder: z.boolean(),
+    legacyImport: z.boolean(),
+    mapFromImage: z.boolean(),
+    sampleEncounter: z.boolean(),
+  }),
+});
+export type Onboarding = z.infer<typeof onboardingSchema>;
+export type OnboardingStep = keyof Onboarding['done'];
+
+export function defaultOnboarding(): Onboarding {
+  return {
+    dismissed: false,
+    done: { dataFolder: false, legacyImport: false, mapFromImage: false, sampleEncounter: false },
+  };
+}
 
 export const settingsSchema = z.object({
   schema: z.literal('settings'),
@@ -18,6 +38,7 @@ export const settingsSchema = z.object({
   lan: z.object({ port: z.number().int().min(1024).max(65535) }),
   /** Encounter the Play screen shows; survives restarts so "Continue" works. */
   lastEncounter: encounterLocatorSchema.nullable(),
+  onboarding: onboardingSchema,
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -29,5 +50,6 @@ export function defaultSettings(): Settings {
     diagonalRule: '5-5-5',
     lan: { port: 7717 },
     lastEncounter: null,
+    onboarding: defaultOnboarding(),
   };
 }

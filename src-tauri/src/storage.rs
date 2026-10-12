@@ -183,19 +183,41 @@ pub fn storage_roots(state: State<'_, StorageState>) -> Result<Roots, StorageErr
     state.roots()
 }
 
-#[tauri::command]
-pub fn storage_set_data_root(
-    app: AppHandle,
-    state: State<'_, StorageState>,
-    path: String,
-) -> Result<Roots, StorageError> {
-    let root = PathBuf::from(path);
+// Assets of the new root must load at once; the bootstrap file keeps the
+// choice across restarts.
+fn switch_data_root(app: &AppHandle, state: &StorageState, root: PathBuf) -> Result<Roots, StorageError> {
     fs::create_dir_all(&root)?;
     app.asset_protocol_scope().allow_directory(&root, true)?;
     let bootstrap = serde_json::to_string_pretty(&Bootstrap { data_root: root.clone() })?;
     write_atomic(&state.bootstrap_path, bootstrap.as_bytes())?;
     *state.data_root.lock().map_err(|e| StorageError(e.to_string()))? = root;
     state.roots()
+}
+
+#[tauri::command]
+pub fn storage_set_data_root(
+    app: AppHandle,
+    state: State<'_, StorageState>,
+    path: String,
+) -> Result<Roots, StorageError> {
+    switch_data_root(&app, &state, PathBuf::from(path))
+}
+
+#[cfg(target_os = "windows")]
+const FILE_MANAGER: &str = "explorer";
+#[cfg(target_os = "macos")]
+const FILE_MANAGER: &str = "open";
+#[cfg(all(unix, not(target_os = "macos")))]
+const FILE_MANAGER: &str = "xdg-open";
+
+/// Shows the data root in the OS file manager.
+#[tauri::command]
+pub fn storage_open_data_root(state: State<'_, StorageState>) -> Result<(), StorageError> {
+    // Explorer exits with 1 even on success, so only the spawn is checked.
+    std::process::Command::new(FILE_MANAGER)
+        .arg(state.root(Area::Data)?)
+        .spawn()?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -288,5 +310,88 @@ pub fn storage_copy(state: State<'_, StorageState>, area: Area, from: String, to
         Err(StorageError(format!("nothing to copy at {from}")))
     } else {
         copy_recursive(&source, &resolve(&state.root(Area::Data)?, &to)?)
+    }
+}
+
+/// Copies the whole data root `from` into `to`, an existing empty folder that neither contains nor lies inside it.
+fn copy_data_root(from: &Path, to: &Path) -> Result<(), StorageError> {
+    if !to.is_absolute() || !to.is_dir() {
+        Err(StorageError(format!("choose an existing empty folder: {}", to.display())))
+    } else {
+        let source = fs::canonicalize(from)?;
+        let target = fs::canonicalize(to)?;
+        if target.starts_with(&source) || source.starts_with(&target) {
+            Err(StorageError(format!(
+                "the new folder must be outside the data folder and not contain it: {}",
+                to.display()
+            )))
+        } else if fs::read_dir(&target)?.next().is_some() {
+            Err(StorageError(format!("the new folder is not empty: {}", to.display())))
+        } else {
+            copy_recursive(&source, &target)
+        }
+    }
+}
+
+/// Copies the data root into the empty folder `path` and makes that folder the data root.
+#[tauri::command]
+pub fn storage_copy_data_root(
+    app: AppHandle,
+    state: State<'_, StorageState>,
+    path: String,
+) -> Result<Roots, StorageError> {
+    let target = PathBuf::from(path);
+    copy_data_root(&state.root(Area::Data)?, &target)?;
+    switch_data_root(&app, &state, target)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Inside the project's ignored data-local/ so test files never leave the repo.
+    fn test_dir(name: &str) -> PathBuf {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("data-local")
+            .join(format!("storage-test-{name}"));
+        if dir.exists() {
+            fs::remove_dir_all(&dir).unwrap();
+        }
+        fs::create_dir_all(dir.join("root/library/maps/m1/assets")).unwrap();
+        fs::write(dir.join("root/settings.json"), b"{}").unwrap();
+        fs::write(dir.join("root/library/maps/m1/assets/map.png"), b"PNGDATA").unwrap();
+        fs::canonicalize(dir).unwrap()
+    }
+
+    #[test]
+    fn copies_the_data_root_into_an_empty_folder() {
+        let dir = test_dir("copy");
+        let target = dir.join("copy");
+        fs::create_dir_all(&target).unwrap();
+        copy_data_root(&dir.join("root"), &target).unwrap();
+        assert_eq!(fs::read(target.join("settings.json")).unwrap(), b"{}");
+        assert_eq!(fs::read(target.join("library/maps/m1/assets/map.png")).unwrap(), b"PNGDATA");
+        assert!(dir.join("root/settings.json").is_file());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_unsafe_copy_targets() {
+        let dir = test_dir("refuse");
+        let root = dir.join("root");
+        let full = dir.join("full");
+        fs::create_dir_all(&full).unwrap();
+        fs::write(full.join("keep.txt"), b"x").unwrap();
+        let inside = root.join("inside");
+        fs::create_dir_all(&inside).unwrap();
+        assert!(copy_data_root(&root, &full).is_err());
+        assert!(copy_data_root(&root, &inside).is_err());
+        assert!(copy_data_root(&root, &root).is_err());
+        assert!(copy_data_root(&root, &dir).is_err());
+        assert!(copy_data_root(&root, &dir.join("missing")).is_err());
+        assert!(copy_data_root(&root, Path::new("relative")).is_err());
+        assert_eq!(fs::read(full.join("keep.txt")).unwrap(), b"x");
+        fs::remove_dir_all(dir).unwrap();
     }
 }

@@ -93,12 +93,13 @@ function RoomToolOverlay() {
 export const roomTool: EditorTool = {
   id: 'room',
   label: 'Room',
-  icon: '⌂',
-  group: 'structure',
+  icon: 'room',
+  step: 'areas',
   shortcut: 'r',
   hint:
     'Click inside or on a closed wall to make it a room, or click polygon points; ' +
     'double-click, Enter or the first point finishes',
+  cursor: 'crosshair',
   onPointer: roomPointer,
   Panel: RoomToolPanel,
   Overlay: RoomToolOverlay,

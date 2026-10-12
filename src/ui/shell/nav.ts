@@ -12,6 +12,7 @@ export interface NavItem {
 
 /** Main destinations in workflow order: prepare (maps, compendium, campaigns) then play. */
 export const NAV_ITEMS: NavItem[] = [
+  { id: 'home', label: 'Home', icon: 'home', route: { page: 'home' }, matches: (r) => r.page === 'home' },
   {
     id: 'maps',
     label: 'Maps',
@@ -24,7 +25,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Compendium',
     icon: 'book',
     route: { page: 'compendium', tab: 'creatures' },
-    matches: (r) => r.page === 'compendium',
+    matches: (r) => r.page === 'compendium' || r.page === 'creature-editor',
   },
   {
     id: 'campaigns',

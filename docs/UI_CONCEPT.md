@@ -1,6 +1,6 @@
 # UI Concept
 
-Status: **draft for review** · Applies to the DM window, the map editor and the player view.
+Status: **approved** · Applies to the DM window, the map editor and the player view.
 
 ## 1. Goal
 
@@ -182,7 +182,7 @@ ghost preview before every placement, snapping indicator (dot on the snapped poi
 
 ## 6. Visual language and components
 
-- **Icons:** one consistent outline icon set with text labels (`lucide-react`, ISC license) instead of Unicode glyphs.
+- **Icons:** one consistent outline icon set drawn for this project (`src/ui/kit/icons.tsx`), always with text labels.
 - **Color semantics:** accent = primary action / active; red = destructive / enemy; blue = players; green = allies /
   healthy; yellow = current turn. Same colors on tokens, initiative strip and log.
 - **Components:** `Panel` with collapsible `Section`s, `Tabs`, `Toolbar` + `ToolButton` (icon, label, shortcut
@@ -218,10 +218,9 @@ ghost preview before every placement, snapping indicator (dot on the snapped poi
 Verification per phase: GUI smoke in the running app over the WebView2 DevTools port with screenshots of each screen at
 1600×900 and 1280×720, plus the flows in §7 timed by click count.
 
-## 9. Decisions for review
+## 9. Decisions
 
-- **Icon set:** add `lucide-react` (ISC, tree-shaken) vs. hand-drawn SVG icons in the repo.
-- **Native folder picker:** add `tauri-plugin-dialog` (folder dialog for the data root) vs. keep typing paths.
-- **Sample content:** ship one CC0/own sample battlemap for the first-run sample encounter (needs a license-clean
-  image; none in the repo yet).
-- **Editor steps:** tabs (free order, recommended) vs. a guided wizard with "next" buttons.
+- **Icon set:** own SVG icons in the repo (`src/ui/kit/icons.tsx`), no icon dependency.
+- **Folder picker:** native folder dialog via `tauri-plugin-dialog`.
+- **Sample content:** a generated, license-free sample battlemap and a sample encounter built from SRD creatures.
+- **Editor steps:** tabs in the recommended order (Ground → Walls → Areas → Light & objects), free to switch.

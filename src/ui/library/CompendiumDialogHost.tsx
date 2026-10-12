@@ -1,0 +1,219 @@
+import { useEffect, useState } from 'react';
+import { createCampaign, createEncounter, type Campaign, type Creature, type DocRef } from '@/core/model';
+import { parseStatBlock, StatBlockError } from '@/core/import/statblock';
+import { useAppStore } from '@/state/appStore';
+import { useLibraryStore } from '@/state/libraryStore';
+import { AssetImage } from '../components/AssetImage';
+import { Field, TextField } from '../components/fields';
+import { StatBlock } from '../creature/StatBlock';
+import { Button, Dialog, Icon } from '../kit';
+import { closeCompendiumDialog, useCompendiumDialogStore } from './compendiumUi';
+
+function CreatureImportDialog({ initialText }: { initialText: string }) {
+  const repository = useAppStore((s) => s.repository);
+  const reportError = useAppStore((s) => s.reportError);
+  const refresh = useLibraryStore((s) => s.refresh);
+  const [text, setText] = useState(initialText);
+  const [source, setSource] = useState('Custom');
+  const [license, setLicense] = useState('');
+  const [parsed, setParsed] = useState<Creature | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  // A stat block that doesn't parse is a user input problem shown in place.
+  const parse = () => {
+    try {
+      setParsed(parseStatBlock(text, { source, license }));
+      setProblem(null);
+    } catch (error) {
+      setParsed(null);
+      setProblem(error instanceof StatBlockError ? error.message : null);
+      if (!(error instanceof StatBlockError)) reportError(error);
+    }
+  };
+
+  const save = async (creature: Creature) => {
+    const stored = await repository.save('creature', creature);
+    await refresh('creature');
+    closeCompendiumDialog();
+    useAppStore.getState().notify(`Imported "${stored.name}"`);
+    useAppStore.getState().navigate({ page: 'creature-editor', ref: { area: 'data', id: stored.id } });
+  };
+
+  return (
+    <Dialog
+      title="Import creature from stat block text"
+      onClose={closeCompendiumDialog}
+      width={1000}
+      footer={
+        <>
+          <Button label="Cancel" onClick={closeCompendiumDialog} />
+          <Button icon="check" label="Check" disabled={text.trim() === ''} onClick={parse} />
+          <Button
+            icon="upload"
+            label="Save and edit"
+            variant="primary"
+            disabled={!parsed}
+            onClick={() => parsed && save(parsed).catch(reportError)}
+          />
+        </>
+      }
+    >
+      <div className="import-body">
+        <div className="col">
+          <textarea
+            rows={20}
+            value={text}
+            placeholder="Paste a stat block (name, size/type line, Armor Class, Hit Points, ...)"
+            onChange={(e) => {
+              setText(e.target.value);
+              setParsed(null);
+            }}
+          />
+          <TextField label="Source" value={source} onChange={setSource} />
+          <TextField label="License" value={license} onChange={setLicense} />
+          {problem && (
+            <div className="error-text" role="alert">
+              <Icon name="alert" size={16} /> {problem}
+            </div>
+          )}
+        </div>
+        <div className="creature-preview">
+          {parsed ? <StatBlock creature={parsed} /> : <p className="muted">Check the text to see the stat block.</p>}
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+const NEW_CAMPAIGN = '';
+
+function NewEncounterDialog({ campaignId, initialMap }: { campaignId: string | null; initialMap: DocRef | null }) {
+  const repository = useAppStore((s) => s.repository);
+  const reportError = useAppStore((s) => s.reportError);
+  const maps = useLibraryStore((s) => s.listings.map.entries);
+  const [campaigns, setCampaigns] = useState<Campaign[] | null>(null);
+  const [chosenCampaign, setChosenCampaign] = useState(campaignId ?? NEW_CAMPAIGN);
+  const [campaignName, setCampaignName] = useState('');
+  const [name, setName] = useState('');
+  const [map, setMap] = useState<DocRef | null>(initialMap);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (campaignId === null) {
+      repository.listCampaigns().then((listing) => {
+        setCampaigns(listing.campaigns);
+        setChosenCampaign((current) => current || (listing.campaigns[0]?.id ?? NEW_CAMPAIGN));
+      }, reportError);
+    }
+  }, [repository, campaignId, reportError]);
+
+  const creatingCampaign = chosenCampaign === NEW_CAMPAIGN;
+  const valid = name.trim() !== '' && (!creatingCampaign || campaignName.trim() !== '');
+
+  const create = async () => {
+    setBusy(true);
+    try {
+      const targetId = creatingCampaign
+        ? (await repository.saveCampaign(createCampaign(campaignName.trim()))).id
+        : chosenCampaign;
+      const encounter = await repository.saveEncounter(createEncounter(name.trim(), targetId, map));
+      closeCompendiumDialog();
+      await useAppStore.getState().openEncounter({ campaignId: targetId, encounterId: encounter.id });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const mapKey = map ? `${map.area}:${map.id}` : '';
+  return (
+    <Dialog
+      title="New encounter"
+      onClose={closeCompendiumDialog}
+      width={760}
+      footer={
+        <>
+          <Button label="Cancel" onClick={closeCompendiumDialog} />
+          <Button
+            icon="play"
+            label="Create and play"
+            variant="primary"
+            disabled={!valid || busy}
+            onClick={() => create().catch(reportError)}
+          />
+        </>
+      }
+    >
+      <form
+        className="col"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid && !busy) create().catch(reportError);
+        }}
+      >
+        <Field label="Name">
+          <input value={name} placeholder="e.g. Ambush on the road" onChange={(e) => setName(e.target.value)} />
+        </Field>
+        {campaignId === null && (
+          <Field label="Campaign">
+            <select value={chosenCampaign} onChange={(e) => setChosenCampaign(e.target.value)}>
+              {campaigns?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+              <option value={NEW_CAMPAIGN}>New campaign...</option>
+            </select>
+          </Field>
+        )}
+        {campaignId === null && creatingCampaign && (
+          <Field label="Campaign name">
+            <input value={campaignName} onChange={(e) => setCampaignName(e.target.value)} />
+          </Field>
+        )}
+        <span className="muted">Map</span>
+        <div className="map-picker" role="listbox" aria-label="Map">
+          <button
+            type="button"
+            role="option"
+            aria-selected={map === null}
+            className={map === null ? 'map-pick selected' : 'map-pick'}
+            onClick={() => setMap(null)}
+          >
+            <span className="map-pick-thumb">
+              <Icon name="list" size={28} />
+            </span>
+            <span>No map (tracker only)</span>
+          </button>
+          {maps.map((m) => {
+            const key = `${m.ref.area}:${m.ref.id}`;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="option"
+                aria-selected={key === mapKey}
+                className={key === mapKey ? 'map-pick selected' : 'map-pick'}
+                onClick={() => setMap(m.ref)}
+              >
+                <AssetImage asset={m.doc.image?.asset ?? null} alt="" className="map-pick-thumb" />
+                <span>{m.doc.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+/** Mounted once in the shell so any page can open these dialogs. */
+export function CompendiumDialogHost() {
+  const dialog = useCompendiumDialogStore((s) => s.dialog);
+  let shown = null;
+  if (dialog?.kind === 'creature-import') {
+    shown = <CreatureImportDialog initialText={dialog.text} />;
+  } else if (dialog?.kind === 'new-encounter') {
+    shown = <NewEncounterDialog campaignId={dialog.campaignId} initialMap={dialog.map} />;
+  }
+  return shown;
+}

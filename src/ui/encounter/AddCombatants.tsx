@@ -6,13 +6,26 @@ import { createPc, spawnCombatant, type HpMode } from '@/state/encounterActions'
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { CheckboxField, NumberField, SelectField, TextField } from '../components/fields';
+import { Button, Dialog, Tabs, type TabSpec } from '../kit';
+import { useEncounterUi } from './encounterUiStore';
 
-const MAX_MATCHES = 8;
+const MAX_MATCHES = 12;
+
+type AddTab = 'library' | 'pc';
+
+const ADD_TABS: TabSpec<AddTab>[] = [
+  { id: 'library', label: 'From the compendium', icon: 'book' },
+  { id: 'pc', label: 'Player character', icon: 'user' },
+];
+
+// Module-level so the dialog's focus effect, keyed on `onClose`, runs once.
+const close = () => useEncounterUi.setState({ addDialogOpen: false });
 
 function FromLibrary() {
   const entries = useLibraryStore((s) => s.listings.creature.entries);
   const update = useEncounterStore((s) => s.update);
   const reportError = useAppStore((s) => s.reportError);
+  const notify = useAppStore((s) => s.notify);
   const [search, setSearch] = useState('');
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [count, setCount] = useState(1);
@@ -20,7 +33,7 @@ function FromLibrary() {
   const [hpMode, setHpMode] = useState<HpMode>('average');
   const picked = entries.find((e) => e.ref.id === pickedId);
   const needle = search.toLowerCase();
-  const matches = needle === '' ? [] : entries.filter((e) => e.doc.name.toLowerCase().includes(needle));
+  const matches = entries.filter((e) => e.doc.name.toLowerCase().includes(needle));
 
   // A library creature with a broken HP formula fails only when rolled.
   const add = () => {
@@ -30,7 +43,9 @@ function FromLibrary() {
           const takenNames = d.combatants.map((c) => c.name);
           d.combatants.push(spawnCombatant(picked.doc, picked.ref, { hpMode, side, takenNames }));
         }
-      });
+      }, `Add ${count} × ${picked?.doc.name}`);
+      notify(`Added ${count} × ${picked?.doc.name}`);
+      close();
     } catch (error) {
       reportError(error);
     }
@@ -38,9 +53,13 @@ function FromLibrary() {
 
   return (
     <div className="col">
-      <h3>From the creature library</h3>
-      <input placeholder="Search creatures" value={search} onChange={(e) => setSearch(e.target.value)} />
-      <div className="list">
+      <input
+        placeholder="Search creatures"
+        aria-label="Search creatures"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+      <div className="list add-matches">
         {matches.slice(0, MAX_MATCHES).map((e) => (
           <div
             key={e.ref.id}
@@ -54,7 +73,10 @@ function FromLibrary() {
             <span className="muted small">CR {formatCr(e.doc.challenge)}</span>
           </div>
         ))}
-        {matches.length > MAX_MATCHES && <span className="muted small">{matches.length - MAX_MATCHES} more…</span>}
+        {matches.length > MAX_MATCHES && (
+          <span className="muted small">{matches.length - MAX_MATCHES} more, refine the search</span>
+        )}
+        {matches.length === 0 && <span className="muted small">No creature matches.</span>}
       </div>
       <NumberField label="Count" min={1} max={30} value={count} onChange={(v) => setCount(Math.round(v))} />
       <SelectField label="Side" value={side} options={sideSchema.options} onChange={setSide} />
@@ -65,15 +87,22 @@ function FromLibrary() {
         format={(m) => (m === 'average' ? 'Average' : 'Roll the formula')}
         onChange={setHpMode}
       />
-      <button className="primary" disabled={!picked} onClick={add}>
-        Add {picked ? `${count} × ${picked.doc.name}` : ''}
-      </button>
+      <div className="dialog-actions">
+        <Button
+          icon="plus"
+          label={picked ? `Add ${count} × ${picked.doc.name}` : 'Pick a creature'}
+          variant="primary"
+          disabled={!picked}
+          onClick={add}
+        />
+      </div>
     </div>
   );
 }
 
 function PlayerCharacterForm() {
   const update = useEncounterStore((s) => s.update);
+  const notify = useAppStore((s) => s.notify);
   const [name, setName] = useState('');
   const [armorClass, setArmorClass] = useState(14);
   const [maxHp, setMaxHp] = useState(20);
@@ -82,32 +111,41 @@ function PlayerCharacterForm() {
 
   const add = () => {
     const senses = darkvision > 0 ? { darkvision } : {};
-    update((d) => void d.combatants.push(createPc({ name: name.trim(), armorClass, maxHp, senses, visionSource })));
-    setName('');
+    const pc = createPc({ name: name.trim(), armorClass, maxHp, senses, visionSource });
+    update((d) => void d.combatants.push(pc), `Add ${pc.name}`);
+    notify(`Added ${pc.name}`);
+    close();
   };
 
   return (
     <div className="col">
-      <h3>Player character</h3>
       <TextField label="Name" value={name} onChange={setName} />
       <NumberField label="Armor class" value={armorClass} onChange={(v) => setArmorClass(Math.round(v))} />
       <NumberField label="Max HP" min={1} value={maxHp} onChange={(v) => setMaxHp(Math.round(v))} />
       <NumberField label="Darkvision" min={0} suffix="ft" value={darkvision} onChange={setDarkvision} />
       <CheckboxField label="Vision source" value={visionSource} onChange={setVisionSource} />
-      <button className="primary" disabled={name.trim() === ''} onClick={add}>
-        Add player character
-      </button>
+      <div className="dialog-actions">
+        <Button
+          icon="plus"
+          label="Add player character"
+          variant="primary"
+          disabled={name.trim() === ''}
+          onClick={add}
+        />
+      </div>
     </div>
   );
 }
 
-export function AddCombatants() {
+/** "+ Add" of the initiative strip: creatures from the compendium or an ad-hoc player character. */
+export function AddCombatantsDialog() {
+  const [tab, setTab] = useState<AddTab>('library');
   return (
-    <div className="panel">
-      <h2>Add combatants</h2>
-      <FromLibrary />
-      <hr className="separator" />
-      <PlayerCharacterForm />
-    </div>
+    <Dialog title="Add combatants" onClose={close} width={480}>
+      <div className="col">
+        <Tabs tabs={ADD_TABS} value={tab} onChange={setTab} label="Add from" />
+        {tab === 'library' ? <FromLibrary /> : <PlayerCharacterForm />}
+      </div>
+    </Dialog>
   );
 }

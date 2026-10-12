@@ -21,6 +21,7 @@ tokio = { version = "1", features = ["net", "sync", "fs", "macros", "rt"] }
 tokio-util = { version = "0.7", features = ["io"] }
 getrandom = "0.3"
 if-addrs = "0.15.0"
+tauri-plugin-dialog = "2"
 
 [profile.release]
 codegen-units = 1

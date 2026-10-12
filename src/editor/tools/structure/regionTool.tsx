@@ -47,10 +47,11 @@ function RegionToolOverlay() {
 export const regionTool: EditorTool = {
   id: 'region',
   label: 'Region',
-  icon: '⬡',
-  group: 'structure',
+  icon: 'region',
+  step: 'areas',
   shortcut: 'g',
   hint: 'Click polygon points (Shift = no snapping); double-click, Enter or the first point finishes; Esc cancels',
+  cursor: 'crosshair',
   onPointer: (event) => draftPointer(event, REGION_DRAFT),
   Panel: RegionToolPanel,
   Overlay: RegionToolOverlay,

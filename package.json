@@ -26,6 +26,7 @@
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
     "@tauri-apps/api": "^2.12.3",
+    "@tauri-apps/plugin-dialog": "^2.8.2",
     "immer": "^11.1.21",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

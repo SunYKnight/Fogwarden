@@ -117,6 +117,19 @@ describe('WebSocketTransport', () => {
     expect(received).toEqual([map]);
   });
 
+  it('reports connects and disconnects to connection watchers', () => {
+    const { transport, sockets } = setup('player');
+    const states: boolean[] = [];
+    const stop = transport.watchConnection((open) => states.push(open));
+    sockets[0]!.open();
+    sockets[0]!.close();
+    vi.advanceTimersToNextTimer();
+    sockets[1]!.open();
+    stop();
+    sockets[1]!.close();
+    expect(states).toEqual([false, true, false, true]);
+  });
+
   it('stops reconnecting once closed, also with a retry pending', () => {
     const open = setup('player');
     open.sockets[0]!.open();

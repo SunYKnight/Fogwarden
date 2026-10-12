@@ -7,8 +7,12 @@ import { startDmPublisher } from '@/sync/dmPublisher';
 import { startFogTracker } from '@/sync/fogTracker';
 import { createLocalTransport } from '@/sync/transports';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { CreatureEditorPage } from './creature/CreatureEditorPage';
 import { MapEditorPage } from './editor/MapEditorPage';
+import { HomePage } from './home/HomePage';
 import { ConfirmHost, ContextMenuHost, ShortcutHost, ToastHost } from './kit';
+import { CompendiumDialogHost } from './library/CompendiumDialogHost';
+import { NewMapWizardHost } from './library/NewMapWizard';
 import { CampaignsPage } from './pages/CampaignsPage';
 import { CompendiumPage } from './pages/CompendiumPage';
 import { MapsPage } from './pages/MapsPage';
@@ -20,6 +24,9 @@ import { NavRail } from './shell/NavRail';
 function Page({ route }: { route: Route }) {
   let page: ReactNode;
   switch (route.page) {
+    case 'home':
+      page = <HomePage />;
+      break;
     case 'maps':
       page = <MapsPage />;
       break;
@@ -37,6 +44,11 @@ function Page({ route }: { route: Route }) {
       break;
     case 'settings':
       page = <SettingsPage />;
+      break;
+    case 'creature-editor':
+      page = (
+        <CreatureEditorPage key={route.ref ? `${route.ref.area}:${route.ref.id}` : 'new'} creatureRef={route.ref} />
+      );
       break;
   }
   return page;
@@ -87,6 +99,8 @@ export function DmApp() {
       <ConfirmHost />
       <ContextMenuHost />
       <ShortcutHost />
+      <CompendiumDialogHost />
+      <NewMapWizardHost />
     </div>
   );
 }

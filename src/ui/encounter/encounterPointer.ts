@@ -36,7 +36,7 @@ function toggleOpening(id: string, lockToggle: boolean): void {
     update((d) => {
       d.openingStates[id] = next;
       addLog(d, 'note', `${opening.kind} ${OPENING_VERB[next]}`);
-    });
+    }, `${opening.kind} ${OPENING_VERB[next]}`);
   }
 }
 
@@ -62,11 +62,23 @@ function placeMarker(point: MapPoint): void {
     useEncounterStore.getState().update((d) => {
       d.markers.push(marker);
       addLog(d, 'note', `${template.name} placed`);
-    });
+    }, `Place ${template.name}`);
     useEncounterUi.setState({ placement: null, pointer: null });
   } else if (placement) {
     useEncounterUi.setState({ placement: { ...placement, origin: point } });
   }
+}
+
+/** Puts the placing combatant down; when placing all, the next unplaced one follows. */
+function placeToken(id: string, point: MapPoint): void {
+  const store = useEncounterStore.getState();
+  const placed = snapFor(id, point, null);
+  const name = store.encounter?.combatants.find((c) => c.id === id)?.name;
+  if (placed) store.update((d) => void (d.combatants.find((c) => c.id === id)!.position = placed), `Place ${name}`);
+  const next = useEncounterUi.getState().placingAll
+    ? useEncounterStore.getState().encounter?.combatants.find((c) => c.position === null && c.id !== id)
+    : undefined;
+  useEncounterUi.setState({ placingId: next?.id ?? null, placingAll: next !== undefined });
 }
 
 function selectPointer(event: MapPointerEvent): void {
@@ -74,12 +86,9 @@ function selectPointer(event: MapPointerEvent): void {
   const store = useEncounterStore.getState();
   const { point, hit } = event;
   const primaryDown = event.type === 'down' && event.button === 0 && point;
-  const placed = primaryDown && ui.placingId && snapFor(ui.placingId, point, null);
   const token = hit?.kind === 'token' ? store.encounter?.combatants.find((c) => c.id === hit.id) : undefined;
   if (primaryDown && ui.placingId) {
-    const id = ui.placingId;
-    if (placed) store.update((d) => void (d.combatants.find((c) => c.id === id)!.position = placed));
-    useEncounterUi.setState({ placingId: null, pointer: null });
+    placeToken(ui.placingId, point);
   } else if (primaryDown && token) {
     store.select(token.id);
     if (token.position)
@@ -95,8 +104,9 @@ function selectPointer(event: MapPointerEvent): void {
     useEncounterUi.setState({ pointer: point });
   } else if (event.type === 'up' && ui.drag) {
     const { combatantId, from, to } = ui.drag;
+    const name = store.encounter?.combatants.find((c) => c.id === combatantId)?.name;
     if (from.x !== to.x || from.y !== to.y || from.elevationFt !== to.elevationFt) {
-      store.update((d) => void (d.combatants.find((c) => c.id === combatantId)!.position = to));
+      store.update((d) => void (d.combatants.find((c) => c.id === combatantId)!.position = to), `Move ${name}`);
     }
     useEncounterUi.setState({ drag: null });
   }

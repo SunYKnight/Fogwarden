@@ -23,7 +23,8 @@ const AMBIENT_INTENSITY: Record<LightLevel, number> = {
   'magical-darkness': 0.05,
 };
 
-function findHit(object: Object3D | null): HitTag | null {
+/** Hit tag of the object or its nearest tagged ancestor. */
+export function findHit(object: Object3D | null): HitTag | null {
   let current = object;
   let hit: HitTag | null = null;
   while (current && !hit) {

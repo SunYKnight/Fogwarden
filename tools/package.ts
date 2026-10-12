@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
+import { gitRevision } from './gitRevision.ts';
 
 // Installers are copied to artifacts/: the one place build output leaves.
 const root = resolve(import.meta.dirname, '..');
@@ -13,13 +14,7 @@ const packageJson = z
   .parse(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')));
 const version = packageJson.version;
 
-function gitRevision(): string {
-  const git = (args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
-  const dirty = git(['status', '--porcelain']).length > 0;
-  return `${git(['rev-parse', '--short', 'HEAD'])}${dirty ? '-dirty' : ''}`;
-}
-
-const revision = existsSync(join(root, '.git')) ? gitRevision() : 'nogit';
+const revision = gitRevision(root);
 // Running the CLI's script with node avoids a shell (pnpm is a .cmd on Windows).
 execFileSync(process.execPath, [tauriCli, 'build'], { cwd: root, stdio: 'inherit' });
 

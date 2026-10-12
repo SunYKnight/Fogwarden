@@ -12,6 +12,7 @@ const HELLO: SyncPayload = { type: 'hello' };
  */
 export class WebSocketTransport implements SyncTransport {
   private readonly handlers = new Set<(payload: SyncPayload) => void>();
+  private readonly connectionHandlers = new Set<(open: boolean) => void>();
   private socket: WebSocket | null = null;
   private attempts = 0;
   private retryTimer?: number;
@@ -29,6 +30,7 @@ export class WebSocketTransport implements SyncTransport {
     const socket = this.createSocket(this.url);
     socket.onopen = () => {
       this.attempts = 0;
+      this.notifyConnection(true);
       this.announce();
     };
     socket.onmessage = (event: MessageEvent<unknown>) => this.receive(event.data);
@@ -48,6 +50,7 @@ export class WebSocketTransport implements SyncTransport {
 
   private reconnect(socket: WebSocket): void {
     if (!this.closed && socket === this.socket) {
+      this.notifyConnection(false);
       const delay = RECONNECT_DELAYS_MS[Math.min(this.attempts, RECONNECT_DELAYS_MS.length - 1)];
       this.attempts += 1;
       this.retryTimer = window.setTimeout(() => this.connect(), delay);
@@ -70,6 +73,12 @@ export class WebSocketTransport implements SyncTransport {
     }
   }
 
+  private notifyConnection(open: boolean): void {
+    for (const handler of this.connectionHandlers) {
+      handler(open);
+    }
+  }
+
   send(payload: SyncPayload): void {
     if (this.socket?.readyState === WebSocket.OPEN) {
       const message: SyncMessage = { protocol: SYNC_PROTOCOL_VERSION, from: this.role, payload };
@@ -80,6 +89,13 @@ export class WebSocketTransport implements SyncTransport {
   subscribe(handler: (payload: SyncPayload) => void): () => void {
     this.handlers.add(handler);
     return () => this.handlers.delete(handler);
+  }
+
+  /** Calls `handler` with whether the socket is open: now and on every connect and disconnect. */
+  watchConnection(handler: (open: boolean) => void): () => void {
+    this.connectionHandlers.add(handler);
+    handler(this.socket?.readyState === WebSocket.OPEN);
+    return () => this.connectionHandlers.delete(handler);
   }
 
   close(): void {

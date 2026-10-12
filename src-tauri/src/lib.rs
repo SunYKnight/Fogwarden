@@ -3,6 +3,7 @@ mod storage;
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(lan::LanState::default())
         .setup(|app| {
             storage::init(app.handle())?;
@@ -19,6 +20,8 @@ pub fn run() {
             storage::storage_remove,
             storage::storage_asset_path,
             storage::storage_copy,
+            storage::storage_copy_data_root,
+            storage::storage_open_data_root,
             lan::lan_start,
             lan::lan_stop,
             lan::lan_status,

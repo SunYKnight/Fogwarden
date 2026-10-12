@@ -1,8 +1,10 @@
 import { applyPatches, enablePatches, produceWithPatches, type Draft } from 'immer';
 import { create } from 'zustand';
-import type { BattleMap } from '@/core/model';
+import type { BattleMap, MapPoint } from '@/core/model';
 import { HeightField } from '@/core/terrain/heightfield';
+import type { EditorStep } from '@/editor/tool';
 import type { CameraMode } from '@/render/CameraRig';
+import type { HitTag } from '@/render/mapRenderContext';
 import { History, type HistoryEntry } from './history';
 
 enablePatches();
@@ -30,7 +32,14 @@ interface EditorState {
   canUndo: boolean;
   canRedo: boolean;
   activeTool: string;
+  /** Step tab shown in the tool bar. */
+  step: EditorStep;
   selection: Selection;
+  /** Object a click of the select tool would select, highlighted on the map. */
+  hover: HitTag | null;
+  /** Map point under the pointer, for the status bar readouts. */
+  pointer: MapPoint | null;
+  settingsOpen: boolean;
   layers: Record<LayerId, boolean>;
   camera: CameraMode;
   previewAsPlayer: boolean;
@@ -47,8 +56,13 @@ interface EditorState {
   endTerrainStroke(label: string): void;
   undo(): void;
   redo(): void;
-  setTool(id: string): void;
+  /** Activates a tool; tools of a step also show that step's tab. */
+  setTool(id: string, step?: EditorStep): void;
+  setStep(step: EditorStep): void;
   select(selection: Selection): void;
+  setHover(hover: HitTag | null): void;
+  setPointer(pointer: MapPoint | null): void;
+  setSettingsOpen(open: boolean): void;
   toggleLayer(id: LayerId): void;
   setCamera(mode: CameraMode): void;
   setPreviewAsPlayer(on: boolean): void;
@@ -73,7 +87,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   canUndo: false,
   canRedo: false,
   activeTool: 'select',
+  step: 'ground',
   selection: null,
+  hover: null,
+  pointer: null,
+  settingsOpen: false,
   layers: allLayers(),
   camera: 'top',
   previewAsPlayer: false,
@@ -90,12 +108,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       canRedo: false,
       activeTool: 'select',
       selection: null,
+      hover: null,
+      pointer: null,
+      settingsOpen: false,
     });
   },
 
   close: () => {
     get().history.clear();
-    set({ map: null, terrain: null, selection: null, canUndo: false, canRedo: false });
+    set({
+      map: null,
+      terrain: null,
+      selection: null,
+      hover: null,
+      pointer: null,
+      settingsOpen: false,
+      canUndo: false,
+      canRedo: false,
+    });
   },
 
   edit: (label, recipe) => {
@@ -150,8 +180,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   undo: () => applyHistoryEntry(get().history.takeUndo(), 'undo'),
   redo: () => applyHistoryEntry(get().history.takeRedo(), 'redo'),
 
-  setTool: (id) => set({ activeTool: id }),
+  setTool: (id, step) => set(step ? { activeTool: id, step, hover: null } : { activeTool: id, hover: null }),
+  setStep: (step) => set({ step }),
   select: (selection) => set({ selection }),
+  // Pointer moves repeat the same target; unchanged hovers must not re-render.
+  setHover: (hover) => {
+    const current = get().hover;
+    if (current?.kind !== hover?.kind || current?.id !== hover?.id) set({ hover });
+  },
+  setPointer: (pointer) => set({ pointer }),
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   toggleLayer: (id) => set((s) => ({ layers: { ...s.layers, [id]: !s.layers[id] } })),
   setCamera: (camera) => set({ camera }),
   setPreviewAsPlayer: (previewAsPlayer) => set({ previewAsPlayer }),

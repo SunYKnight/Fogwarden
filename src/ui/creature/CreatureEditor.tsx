@@ -1,5 +1,5 @@
-import { produce, type Draft } from 'immer';
-import { useRef, useState, type ReactNode } from 'react';
+import type { Draft } from 'immer';
+import { useRef } from 'react';
 import {
   ABILITIES,
   ALIGNMENTS,
@@ -18,13 +18,12 @@ import { abilityModifier, formatCr, formatModifier, proficiencyBonusForCr, xpFor
 import { averageDice } from '@/core/rules/dice';
 import type { Repository } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
-import { useLibraryStore } from '@/state/libraryStore';
 import { AssetImage } from '../components/AssetImage';
 import { CheckboxField, Field, NumberField, SelectField, TextField } from '../components/fields';
-import { confirmDialog } from '../kit';
+import { Section } from '../kit';
 import { ListField, OptionalNumberField } from './creatureFields';
 import { ActionListEditor, LegendaryListEditor, TraitListEditor } from './EntryEditors';
-import { StatBlock, titleCase } from './StatBlock';
+import { titleCase } from './StatBlock';
 
 const CR_VALUES = [0, 0.125, 0.25, 0.5, ...Array.from({ length: 30 }, (_, i) => i + 1)].map(String);
 
@@ -84,20 +83,11 @@ function ImageField(props: {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="panel">
-      <h2>{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-type Change = (recipe: (draft: Draft<Creature>) => void) => void;
+export type Change = (recipe: (draft: Draft<Creature>) => void) => void;
 
 function BasicsSection({ c, change }: { c: Creature; change: Change }) {
   return (
-    <Section title="Basics">
+    <Section title="Basics" collapsible>
       <TextField label="Name" value={c.name} onChange={(v) => change((d) => void (d.name = v))} />
       <SelectField
         label="Kind"
@@ -149,7 +139,7 @@ function DefenseSection({ c, change }: { c: Creature; change: Change }) {
     }
   };
   return (
-    <Section title="Defense and movement">
+    <Section title="Defense and movement" collapsible>
       <NumberField label="Armor class" value={c.armorClass} onChange={(v) => change((d) => void (d.armorClass = v))} />
       <TextField label="Armor note" value={c.armorNote} onChange={(v) => change((d) => void (d.armorNote = v))} />
       <NumberField
@@ -225,7 +215,7 @@ function DefenseSection({ c, change }: { c: Creature; change: Change }) {
 function AbilitiesSection({ c, change }: { c: Creature; change: Change }) {
   const pb = proficiencyBonusForCr(c.challenge);
   return (
-    <Section title="Abilities, saves and skills">
+    <Section title="Abilities, saves and skills" collapsible>
       {ABILITIES.map((a) => (
         <NumberField
           key={a}
@@ -263,7 +253,7 @@ function AbilitiesSection({ c, change }: { c: Creature; change: Change }) {
 
 function SensesSection({ c, change }: { c: Creature; change: Change }) {
   return (
-    <Section title="Senses, languages and challenge">
+    <Section title="Senses, languages and challenge" collapsible>
       {SENSES.map((s) => (
         <OptionalNumberField
           key={s}
@@ -298,7 +288,7 @@ function SensesSection({ c, change }: { c: Creature; change: Change }) {
 
 function ActionsSection({ c, change }: { c: Creature; change: Change }) {
   return (
-    <Section title="Traits and actions">
+    <Section title="Traits and actions" collapsible>
       <TraitListEditor title="Traits" items={c.traits} onChange={(v) => change((d) => void (d.traits = v))} />
       <ActionListEditor title="Actions" items={c.actions} onChange={(v) => change((d) => void (d.actions = v))} />
       <ActionListEditor
@@ -319,67 +309,15 @@ function ActionsSection({ c, change }: { c: Creature; change: Change }) {
   );
 }
 
-/** Full-screen editor for one creature with a live stat block; saving always writes the user copy. */
-export function CreatureEditor({ creature, onClose }: { creature: Creature; onClose: () => void }) {
-  const repository = useAppStore((s) => s.repository);
-  const reportError = useAppStore((s) => s.reportError);
-  const refresh = useLibraryStore((s) => s.refresh);
-  const [saved, setSaved] = useState(creature);
-  const [draft, setDraft] = useState(creature);
-  const [busy, setBusy] = useState(false);
-  const dirty = draft !== saved;
-  const change: Change = (recipe) => setDraft((c) => produce(c, recipe));
-
-  const save = async () => {
-    setBusy(true);
-    try {
-      const stored = await repository.save('creature', draft);
-      setSaved(stored);
-      setDraft(stored);
-      await refresh('creature');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const close = () => {
-    if (dirty) {
-      void confirmDialog({
-        title: 'Discard changes',
-        message: 'Your unsaved changes to this creature are lost.',
-        confirmLabel: 'Discard',
-        danger: true,
-      }).then((ok) => ok && onClose());
-    } else {
-      onClose();
-    }
-  };
-
+/** All creature fields grouped into collapsible sections. */
+export function CreatureForm({ c, change }: { c: Creature; change: Change }) {
   return (
-    <div className="modal-backdrop">
-      <div className="modal creature-editor">
-        <div className="topbar">
-          <strong>{draft.name}</strong>
-          <span className="muted">{dirty ? 'unsaved changes' : 'saved'}</span>
-          <div className="spacer" />
-          <button className="primary" disabled={!dirty || busy} onClick={() => save().catch(reportError)}>
-            Save
-          </button>
-          <button onClick={close}>Close</button>
-        </div>
-        <div className="creature-editor-body">
-          <div className="col creature-form">
-            <BasicsSection c={draft} change={change} />
-            <DefenseSection c={draft} change={change} />
-            <AbilitiesSection c={draft} change={change} />
-            <SensesSection c={draft} change={change} />
-            <ActionsSection c={draft} change={change} />
-          </div>
-          <div className="creature-preview">
-            <StatBlock creature={draft} />
-          </div>
-        </div>
-      </div>
+    <div className="col creature-form">
+      <BasicsSection c={c} change={change} />
+      <DefenseSection c={c} change={change} />
+      <AbilitiesSection c={c} change={change} />
+      <SensesSection c={c} change={change} />
+      <ActionsSection c={c} change={change} />
     </div>
   );
 }

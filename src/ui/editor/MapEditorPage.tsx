@@ -1,111 +1,259 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, type ReactNode } from 'react';
 import type { BattleMap, DocRef } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { SELECTION_PANELS } from '@/editor/selectionPanels';
+import type { EditorStep, EditorTool } from '@/editor/tool';
 import { toolById, TOOLS } from '@/editor/tools';
+import { SNAP_LABELS, useDraft } from '@/editor/tools/structure/drafting';
+import { ModelDropTarget } from '@/editor/tools/structure/propTool';
+import { deleteSelection } from '@/editor/tools/structure/selectionPanels';
 import { SCENE_LAYERS } from '@/render/layers';
 import type { MapPointerEvent } from '@/render/mapRenderContext';
 import { MapView } from '@/render/MapView';
 import { useAppStore } from '@/state/appStore';
 import { flushMap } from '@/state/autosave';
-import { LAYERS, useEditorStore } from '@/state/editorStore';
-import { MapPropertiesPanel } from './MapPropertiesPanel';
+import { LAYERS, useEditorStore, type LayerId } from '@/state/editorStore';
+import {
+  Button,
+  PageHeader,
+  Panel,
+  Section,
+  StatusBar,
+  Tabs,
+  ToolButton,
+  Toolbar,
+  useShortcuts,
+  type Shortcut,
+  type TabSpec,
+} from '../kit';
+import { MapSettingsDialog } from './MapSettingsDialog';
 
-function isTyping(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
-  );
-}
+/** Step tabs in the recommended order of work; the digit keys follow this order. */
+const STEP_TABS: TabSpec<EditorStep>[] = [
+  { id: 'ground', label: '1 Ground', icon: 'raise' },
+  { id: 'walls', label: '2 Walls', icon: 'wall' },
+  { id: 'areas', label: '3 Areas', icon: 'room' },
+  { id: 'objects', label: '4 Light & objects', icon: 'light' },
+];
 
-function handleEditorKey(e: KeyboardEvent): void {
+const STEP_HELP: Record<EditorStep, string> = {
+  ground:
+    'Shape the terrain under the battlemap: raise hills, dig pits, smooth, flatten, add ramps and terraces. ' +
+    'Alt+click picks a height for Flatten. The grid calibration is in Map settings.',
+  walls:
+    'Trace the walls of the battlemap image with the Wall tool, then put doors and windows on them. ' +
+    'Walls block sight, light and movement for the players.',
+  areas:
+    'Turn closed walls into rooms with floor, ceiling and roof, and mark regions: darkness, difficult terrain, ' +
+    'water, hazards or notes for yourself.',
+  objects:
+    'Place light sources such as torches and lanterns, and 3D props from .glb or .gltf files ' +
+    '(or drop the file onto the map).',
+};
+
+const LAYER_LABELS: Record<LayerId, string> = {
+  image: 'Battlemap image',
+  grid: 'Grid',
+  terrain: 'Terrain',
+  walls: 'Walls and doors',
+  rooms: 'Room floors',
+  roofs: 'Roofs',
+  regions: 'Regions',
+  lights: 'Lights',
+  props: 'Props',
+};
+
+/** Shows a step; a tool of another step gives way to Select so the bar always shows the active tool. */
+function showStep(step: EditorStep): void {
   const editor = useEditorStore.getState();
-  const key = e.key.toLowerCase();
-  const command = e.ctrlKey || e.metaKey;
-  const tool = TOOLS.find((t) => t.shortcut === key);
-  if (command && key === 'z') {
-    e.preventDefault();
-    if (e.shiftKey) editor.redo();
-    else editor.undo();
-  } else if (command && key === 'y') {
-    e.preventDefault();
-    editor.redo();
-  } else if (!command && !e.altKey && tool) {
-    editor.setTool(tool.id);
-  } else if (key === 'escape') {
-    editor.select(null);
+  const tool = toolById(editor.activeTool);
+  editor.setStep(step);
+  if (tool.step && tool.step !== step) {
+    editor.setTool('select');
   }
 }
 
-function useEditorShortcuts() {
-  useEffect(() => {
-    // Typing in a side panel field must not trigger tools or undo.
-    const onKey = (e: KeyboardEvent) => {
-      if (!isTyping(e.target)) handleEditorKey(e);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+function deleteSelected(): void {
+  const { selection } = useEditorStore.getState();
+  if (selection) {
+    deleteSelection(selection);
+  }
 }
 
-function EditorToolbar() {
-  const map = useEditorStore((s) => s.map);
+// Fallback: tools register their own Esc while a drawing is in progress.
+function escape(): void {
+  const editor = useEditorStore.getState();
+  if (editor.selection) {
+    editor.select(null);
+  } else {
+    editor.setTool('select');
+  }
+}
+
+function toggleCamera(): void {
+  const editor = useEditorStore.getState();
+  editor.setCamera(editor.camera === 'top' ? 'perspective' : 'top');
+}
+
+const EDITOR_SHORTCUTS: Shortcut[] = [
+  { keys: 'Ctrl+Z', label: 'Undo', run: () => useEditorStore.getState().undo() },
+  { keys: 'Ctrl+Y', label: 'Redo', run: () => useEditorStore.getState().redo() },
+  { keys: 'Ctrl+Shift+Z', label: 'Redo', run: () => useEditorStore.getState().redo() },
+  { keys: 'Delete', label: 'Delete the selection', run: deleteSelected },
+  { keys: 'Backspace', label: 'Delete the selection', run: deleteSelected },
+  { keys: 'Escape', label: 'Cancel drawing, deselect, then back to Select', run: escape },
+  { keys: 'T', label: 'Switch between top view and 3D', run: toggleCamera },
+  ...STEP_TABS.map((s, i) => ({ keys: String(i + 1), label: `Step ${s.label}`, run: () => showStep(s.id) })),
+  ...TOOLS.flatMap((t) =>
+    t.shortcut
+      ? [{ keys: t.shortcut.toUpperCase(), label: t.label, run: () => useEditorStore.getState().setTool(t.id, t.step) }]
+      : [],
+  ),
+].map((s: Shortcut) => ({
+  ...s,
+  run: (event: KeyboardEvent) => {
+    try {
+      // Keys in the map settings dialog must not edit the map behind it.
+      if (!useEditorStore.getState().settingsOpen) s.run(event);
+    } catch (error) {
+      useAppStore.getState().reportError(error);
+    }
+  },
+}));
+
+function EditorHeader({ map }: { map: BattleMap }) {
   const canUndo = useEditorStore((s) => s.canUndo);
   const canRedo = useEditorStore((s) => s.canRedo);
   const camera = useEditorStore((s) => s.camera);
-  const layers = useEditorStore((s) => s.layers);
-  const dirty = useEditorStore((s) => s.revision !== s.savedRevision);
   const preview = useEditorStore((s) => s.previewAsPlayer);
-  const { undo, redo, setCamera, toggleLayer, setPreviewAsPlayer } = useEditorStore.getState();
-  const navigate = useAppStore((s) => s.navigate);
-  const reportError = useAppStore((s) => s.reportError);
-  const [showLayers, setShowLayers] = useState(false);
-
+  const saving = useEditorStore((s) => s.revision !== s.savedRevision);
+  const { undo, redo, setCamera, setPreviewAsPlayer, setSettingsOpen } = useEditorStore.getState();
   return (
-    <div className="topbar toolbar">
-      <button className="crumb" onClick={() => flushMap().then(() => navigate({ page: 'maps' }), reportError)}>
-        Maps
-      </button>
-      <span className="muted">›</span>
-      <strong>{map?.name}</strong>
-      <span className="muted">{dirty ? 'saving…' : 'saved'}</span>
-      <button disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)">
-        ↶
-      </button>
-      <button disabled={!canRedo} onClick={redo} title="Redo (Ctrl+Y)">
-        ↷
-      </button>
-      <div className="spacer" />
-      <div style={{ position: 'relative' }}>
-        <button onClick={() => setShowLayers(!showLayers)}>Layers ▾</button>
-        {showLayers && (
-          <div className="panel" style={{ position: 'absolute', right: 0, top: 32, zIndex: 10, minWidth: 160 }}>
-            {LAYERS.map((layer) => (
-              <label key={layer} className="row">
-                <input type="checkbox" checked={layers[layer]} onChange={() => toggleLayer(layer)} />
-                {layer}
-              </label>
-            ))}
-          </div>
-        )}
+    <PageHeader
+      crumbs={[{ label: 'Maps', route: { page: 'maps' } }, { label: map.name }]}
+      status={saving ? 'Saving…' : 'Saved'}
+    >
+      <Button icon="undo" label="Undo" iconOnly shortcut="Ctrl+Z" disabled={!canUndo} onClick={undo} />
+      <Button icon="redo" label="Redo" iconOnly shortcut="Ctrl+Y" disabled={!canRedo} onClick={redo} />
+      <Button icon="settings" label="Map settings" onClick={() => setSettingsOpen(true)} />
+      <div className="segmented" role="group" aria-label="Camera">
+        <Button icon="map" label="Top" shortcut="T" active={camera === 'top'} onClick={() => setCamera('top')} />
+        <Button
+          icon="cube"
+          label="3D"
+          shortcut="T"
+          active={camera === 'perspective'}
+          onClick={() => setCamera('perspective')}
+        />
       </div>
-      <label className="row">
-        <input type="checkbox" checked={preview} onChange={(e) => setPreviewAsPlayer(e.target.checked)} />
-        Preview as player
-      </label>
-      <button className={camera === 'top' ? 'active' : ''} onClick={() => setCamera('top')}>
-        Top
-      </button>
-      <button className={camera === 'perspective' ? 'active' : ''} onClick={() => setCamera('perspective')}>
-        3D
-      </button>
+      <Button
+        icon="eye"
+        label="Player look"
+        active={preview}
+        title="Show the map with the players' lighting"
+        onClick={() => setPreviewAsPlayer(!preview)}
+      />
+    </PageHeader>
+  );
+}
+
+/** Select, the tools of the shown step and the active tool's options in one bar. */
+function ToolBar({ tool, step }: { tool: EditorTool; step: EditorStep }) {
+  // The active tool stays visible even outside every step (calibration).
+  const tools = TOOLS.filter((t) => t.id === 'select' || t.step === step || t.id === tool.id);
+  const Options = tool.Panel;
+  return (
+    <div className="editor-toolbar">
+      <Toolbar label="Tools">
+        {tools.map((t) => (
+          <ToolButton
+            key={t.id}
+            icon={t.icon}
+            label={t.label}
+            shortcut={t.shortcut}
+            active={t.id === tool.id}
+            onClick={() => useEditorStore.getState().setTool(t.id, t.step)}
+          />
+        ))}
+      </Toolbar>
+      {Options && (
+        <div className="tool-options" role="group" aria-label={`${tool.label} options`}>
+          <Options />
+        </div>
+      )}
     </div>
   );
 }
 
-function SelectionPanel() {
+function Inspector({ step }: { step: EditorStep }) {
   const selection = useEditorStore((s) => s.selection);
-  const Panel = selection ? SELECTION_PANELS[selection.kind] : undefined;
-  return Panel && selection ? <Panel id={selection.id} /> : null;
+  const layers = useEditorStore((s) => s.layers);
+  const SelectionPanel = selection ? SELECTION_PANELS[selection.kind] : undefined;
+  return (
+    <aside className="editor-inspector" aria-label="Inspector">
+      {SelectionPanel && selection ? (
+        <SelectionPanel id={selection.id} />
+      ) : (
+        <>
+          <Panel>
+            <h3>What to do in this step</h3>
+            <p className="muted">{STEP_HELP[step]}</p>
+          </Panel>
+          <Section title="Layers" collapsible>
+            {LAYERS.map((layer) => (
+              <label key={layer} className="row">
+                <input
+                  type="checkbox"
+                  checked={layers[layer]}
+                  onChange={() => useEditorStore.getState().toggleLayer(layer)}
+                />
+                {LAYER_LABELS[layer]}
+              </label>
+            ))}
+          </Section>
+        </>
+      )}
+    </aside>
+  );
+}
+
+function EditorStatus({ hint, terrain }: { hint?: string; terrain: HeightField }) {
+  const pointer = useEditorStore((s) => s.pointer);
+  const saving = useEditorStore((s) => s.revision !== s.savedRevision);
+  // Subscribed so the height follows sculpting under a still pointer.
+  useEditorStore((s) => s.terrainVersion);
+  const snap = useDraft((s) => s.cursor?.kind);
+  return (
+    <StatusBar hint={hint}>
+      {pointer && (
+        <>
+          <span>x {pointer.x.toFixed(1)} ft</span>
+          <span>y {pointer.y.toFixed(1)} ft</span>
+          <span>h {terrain.sample(pointer.x, pointer.y).toFixed(2)} ft</span>
+        </>
+      )}
+      {snap && <span>{SNAP_LABELS[snap]}</span>}
+      <span>{saving ? 'Saving…' : 'Saved'}</span>
+    </StatusBar>
+  );
+}
+
+/** Canvas host; only it re-renders on hover, the passed map view stays untouched. */
+function Viewport({ tool, children }: { tool: EditorTool; children: ReactNode }) {
+  const hovering = useEditorStore((s) => s.hover !== null);
+  const cursor = tool.id === 'select' && hovering ? 'pointer' : (tool.cursor ?? 'default');
+  return (
+    <div
+      className="map-viewport"
+      style={{ cursor }}
+      onPointerLeave={() => {
+        useEditorStore.getState().setPointer(null);
+        useEditorStore.getState().setHover(null);
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
 function EditorLayout({ map, terrain }: { map: BattleMap; terrain: HeightField }) {
@@ -113,15 +261,21 @@ function EditorLayout({ map, terrain }: { map: BattleMap; terrain: HeightField }
   const terrainVersion = useEditorStore((s) => s.terrainVersion);
   const camera = useEditorStore((s) => s.camera);
   const activeTool = useEditorStore((s) => s.activeTool);
+  const step = useEditorStore((s) => s.step);
   const preview = useEditorStore((s) => s.previewAsPlayer);
+  const settingsOpen = useEditorStore((s) => s.settingsOpen);
   const tool = toolById(activeTool);
-  const { Panel, Overlay } = tool;
+  const { Overlay } = tool;
 
+  useShortcuts('Map editor', EDITOR_SHORTCUTS);
   useEffect(() => tool.deactivate, [tool]);
 
   const onPointer = useCallback(
     (event: MapPointerEvent) => {
       try {
+        if (event.type === 'move') {
+          useEditorStore.getState().setPointer(event.point);
+        }
         // Right and middle buttons belong to the camera.
         if (event.type === 'move' || event.button === 0) tool.onPointer?.(event);
       } catch (error) {
@@ -132,48 +286,35 @@ function EditorLayout({ map, terrain }: { map: BattleMap; terrain: HeightField }
   );
 
   return (
-    <div className="editor">
-      <EditorToolbar />
-      <div className="tools">
-        {TOOLS.map((t) => (
-          <button
-            key={t.id}
-            className={t.id === activeTool ? 'active' : ''}
-            title={`${t.label}${t.shortcut ? ` (${t.shortcut.toUpperCase()})` : ''}`}
-            onClick={() => useEditorStore.getState().setTool(t.id)}
-          >
-            {t.icon}
-          </button>
-        ))}
+    <div className="page-frame">
+      <EditorHeader map={map} />
+      <div className="map-editor-body">
+        <div className="map-editor-main">
+          <Tabs tabs={STEP_TABS} value={step} onChange={showStep} label="Editor steps" />
+          <ToolBar tool={tool} step={step} />
+          <Viewport tool={tool}>
+            <MapView
+              map={map}
+              terrain={terrain}
+              terrainVersion={terrainVersion}
+              mode={preview ? 'player' : 'editor'}
+              fogMode="off"
+              camera={camera}
+              ambient={preview ? map.ambientLight : 'bright'}
+              onPointer={onPointer}
+            >
+              {SCENE_LAYERS.map(({ id, Component }) => (
+                <Component key={id} />
+              ))}
+              {Overlay && <Overlay />}
+              <ModelDropTarget />
+            </MapView>
+          </Viewport>
+        </div>
+        <Inspector step={step} />
       </div>
-      <div className="viewport">
-        <MapView
-          map={map}
-          terrain={terrain}
-          terrainVersion={terrainVersion}
-          mode={preview ? 'player' : 'editor'}
-          fogMode="off"
-          camera={camera}
-          ambient={preview ? map.ambientLight : 'bright'}
-          onPointer={onPointer}
-        >
-          {SCENE_LAYERS.map(({ id, Component }) => (
-            <Component key={id} />
-          ))}
-          {Overlay && <Overlay />}
-        </MapView>
-        {tool.hint && <div className="viewport-hint">{tool.hint}</div>}
-      </div>
-      <div className="side">
-        {Panel && (
-          <div className="panel">
-            <h2>{tool.label}</h2>
-            <Panel />
-          </div>
-        )}
-        <SelectionPanel />
-        <MapPropertiesPanel />
-      </div>
+      <EditorStatus hint={tool.hint} terrain={terrain} />
+      {settingsOpen && <MapSettingsDialog />}
     </div>
   );
 }
@@ -188,7 +329,6 @@ export function MapEditorPage({ mapRef }: { mapRef: DocRef }) {
   const map = useEditorStore((s) => s.map);
   const terrain = useEditorStore((s) => s.terrain);
   const { area, id } = mapRef;
-  useEditorShortcuts();
 
   useEffect(() => {
     const session = ++editorSession;

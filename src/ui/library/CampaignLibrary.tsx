@@ -1,67 +1,169 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createCampaign, createEncounter, type Campaign, type Encounter } from '@/core/model';
+import { createCampaign, newId, nowIso, type Campaign, type Encounter } from '@/core/model';
 import type { LoadProblem } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
-import { TextField } from '../components/fields';
-import { confirmDialog } from '../kit';
+import { AssetImage } from '../components/AssetImage';
+import { Field } from '../components/fields';
+import { Button, confirmDialog, Dialog, EmptyState, PageHeader, Section } from '../kit';
+import { openNewEncounter } from './compendiumUi';
+import { encounterStatus, statusLabel } from './encounterStatus';
+
+const CAMPAIGNS = { page: 'campaigns', campaignId: null } as const;
+const NOTES_SAVE_MS = 800;
+
+function formatWhen(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
 
 function Problems({ problems }: { problems: LoadProblem[] }) {
   return problems.map((p) => (
     <div key={p.path} className="error-text">
-      {p.path} — {p.message}
+      {p.path}: {p.message}
     </div>
   ));
 }
 
-function NewEncounterForm({ campaignId, onCreated }: { campaignId: string; onCreated: () => void }) {
+function NameDialog(props: {
+  title: string;
+  initial: string;
+  confirmLabel: string;
+  onSubmit: (name: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const { title, initial, confirmLabel, onSubmit, onClose } = props;
+  const reportError = useAppStore((s) => s.reportError);
+  const [name, setName] = useState(initial);
+  const valid = name.trim() !== '';
+  const submit = () => onSubmit(name.trim()).then(onClose, reportError);
+  return (
+    <Dialog
+      title={title}
+      onClose={onClose}
+      width={420}
+      footer={
+        <>
+          <Button label="Cancel" onClick={onClose} />
+          <Button label={confirmLabel} variant="primary" disabled={!valid} onClick={submit} />
+        </>
+      }
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid) submit();
+        }}
+      >
+        <Field label="Name">
+          <input value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+      </form>
+    </Dialog>
+  );
+}
+
+interface CampaignSummary {
+  campaign: Campaign;
+  encounters: number;
+  lastPlayed: string | null;
+}
+
+/** All campaigns as cards with encounter count and last activity. */
+export function CampaignList() {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
-  const maps = useLibraryStore((s) => s.listings.map.entries);
-  const [name, setName] = useState('');
-  const [mapKey, setMapKey] = useState('');
+  const navigate = useAppStore((s) => s.navigate);
+  const [summaries, setSummaries] = useState<CampaignSummary[] | null>(null);
+  const [problems, setProblems] = useState<LoadProblem[]>([]);
+  const [creating, setCreating] = useState(false);
 
-  const create = async () => {
-    const ref = maps.find((m) => `${m.ref.area}:${m.ref.id}` === mapKey)?.ref ?? null;
-    await repository.saveEncounter(createEncounter(name.trim(), campaignId, ref));
-    setName('');
-    onCreated();
+  useEffect(() => {
+    const load = async () => {
+      const listing = await repository.listCampaigns();
+      const lists = await Promise.all(listing.campaigns.map((c) => repository.listEncounters(c.id)));
+      setProblems([...listing.problems, ...lists.flatMap((l) => l.problems)]);
+      setSummaries(
+        listing.campaigns.map((campaign, i) => ({
+          campaign,
+          encounters: lists[i]!.encounters.length,
+          lastPlayed: lists[i]!.encounters[0]?.updatedAt ?? null,
+        })),
+      );
+    };
+    load().catch(reportError);
+  }, [repository, reportError]);
+
+  const create = async (name: string) => {
+    const campaign = await repository.saveCampaign(createCampaign(name));
+    navigate({ page: 'campaigns', campaignId: campaign.id });
   };
 
   return (
-    <div className="row wrap">
-      <input placeholder="Encounter name" value={name} onChange={(e) => setName(e.target.value)} />
-      <select value={mapKey} onChange={(e) => setMapKey(e.target.value)}>
-        <option value="">No map (tracker only)</option>
-        {maps.map((m) => (
-          <option key={`${m.ref.area}:${m.ref.id}`} value={`${m.ref.area}:${m.ref.id}`}>
-            {m.doc.name}
-          </option>
-        ))}
-      </select>
-      <button className="primary" disabled={name.trim() === ''} onClick={() => create().catch(reportError)}>
-        Create encounter
-      </button>
+    <div className="page-frame">
+      <PageHeader crumbs={[{ label: 'Campaigns' }]}>
+        <Button icon="plus" label="New campaign" variant="primary" onClick={() => setCreating(true)} />
+      </PageHeader>
+      <div className="page-body">
+        <Problems problems={problems} />
+        <div className="card-grid">
+          {summaries?.map(({ campaign, encounters, lastPlayed }) => (
+            <button
+              key={campaign.id}
+              type="button"
+              className="card campaign-card"
+              onClick={() => navigate({ page: 'campaigns', campaignId: campaign.id })}
+            >
+              <span className="body">
+                <strong>{campaign.name}</strong>
+                <span className="muted">
+                  {encounters} {encounters === 1 ? 'encounter' : 'encounters'}
+                </span>
+                <span className="muted">
+                  {lastPlayed ? `Last activity ${formatWhen(lastPlayed)}` : 'Not played yet'}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+        {summaries?.length === 0 && (
+          <EmptyState
+            icon="swords"
+            title="No campaigns yet."
+            action={<Button icon="plus" label="New campaign" variant="primary" onClick={() => setCreating(true)} />}
+          >
+            A campaign groups the encounters you prepare and play.
+          </EmptyState>
+        )}
+      </div>
+      {creating && (
+        <NameDialog
+          title="New campaign"
+          initial=""
+          confirmLabel="Create"
+          onSubmit={create}
+          onClose={() => setCreating(false)}
+        />
+      )}
     </div>
   );
 }
 
-function EncounterList({ campaign }: { campaign: Campaign }) {
+function EncounterRow({ encounter, onChanged }: { encounter: Encounter; onChanged: () => void }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
-  const openEncounter = useAppStore((s) => s.openEncounter);
-  const maps = useLibraryStore((s) => s.listings.map.entries);
-  const [listing, setListing] = useState<{ encounters: Encounter[]; problems: LoadProblem[] } | null>(null);
+  const map = useLibraryStore((s) => s.listings.map.entries.find((m) => m.ref.id === encounter.map?.id));
+  const status = encounterStatus(encounter);
+  const locator = { campaignId: encounter.campaignId, encounterId: encounter.id };
 
-  const load = useCallback(
-    () => repository.listEncounters(campaign.id).then(setListing, reportError),
-    [repository, campaign.id, reportError],
-  );
-  useEffect(() => {
-    load();
-  }, [load]);
+  const duplicate = async () => {
+    const at = nowIso();
+    const copy = { ...encounter, id: newId(), name: `${encounter.name} copy`, createdAt: at, updatedAt: at };
+    await repository.saveEncounter(copy);
+    useAppStore.getState().notify(`Created "${copy.name}"`);
+    onChanged();
+  };
 
-  const remove = async (encounter: Encounter) => {
+  const remove = async () => {
     const ok = await confirmDialog({
       title: 'Delete encounter',
       message: `"${encounter.name}" with its combatants, log and fog will be deleted.`,
@@ -69,127 +171,170 @@ function EncounterList({ campaign }: { campaign: Campaign }) {
       danger: true,
     });
     if (ok) {
-      await repository.removeEncounter(campaign.id, encounter.id);
-      await useAppStore.getState().forgetEncounter({ campaignId: campaign.id, encounterId: encounter.id });
-      await load();
+      await repository.removeEncounter(encounter.campaignId, encounter.id);
+      await useAppStore.getState().forgetEncounter(locator);
+      onChanged();
     }
   };
-  const open = (encounter: Encounter) =>
-    openEncounter({ campaignId: campaign.id, encounterId: encounter.id }).catch(reportError);
 
+  const mapName = encounter.map ? (map?.doc.name ?? 'Missing map') : 'No map';
   return (
-    <div className="col">
-      <h2>Encounters</h2>
-      <NewEncounterForm campaignId={campaign.id} onCreated={load} />
-      <Problems problems={listing?.problems ?? []} />
-      <div className="list">
-        {listing?.encounters.map((e) => (
-          <div key={e.id} className="list-item" onDoubleClick={() => open(e)}>
-            <span style={{ flex: 1 }}>
-              <strong>{e.name}</strong>{' '}
-              <span className="muted">
-                {e.map ? (maps.find((m) => m.ref.id === e.map?.id)?.doc.name ?? 'missing map') : 'no map'} ·{' '}
-                {e.combatants.length} combatants{e.round > 0 ? ` · round ${e.round}` : ''}
-              </span>
-            </span>
-            <button className="primary" onClick={() => open(e)}>
-              Play
-            </button>
-            <button className="danger" onClick={() => remove(e).catch(reportError)}>
-              Delete
-            </button>
-          </div>
-        ))}
+    <div
+      className="encounter-row"
+      onDoubleClick={() => useAppStore.getState().openEncounter(locator).catch(reportError)}
+    >
+      <AssetImage asset={map?.doc.image?.asset ?? null} alt="" className="encounter-thumb" />
+      <div className="encounter-info">
+        <strong>{encounter.name}</strong>
+        <span className="muted">
+          {mapName} · {encounter.combatants.length} combatants ·{' '}
+          {status.kind === 'not-started' ? 'Created' : 'Last played'} {formatWhen(encounter.updatedAt)}
+        </span>
       </div>
-      {listing?.encounters.length === 0 && <p className="muted">No encounters in this campaign yet.</p>}
+      <span className={`status-chip ${status.kind}`}>{statusLabel(status)}</span>
+      <Button
+        icon="play"
+        label="Play"
+        variant="primary"
+        onClick={() => useAppStore.getState().openEncounter(locator).catch(reportError)}
+      />
+      <Button icon="copy" label="Duplicate" iconOnly onClick={() => duplicate().catch(reportError)} />
+      <Button icon="trash" label="Delete" iconOnly variant="danger" onClick={() => remove().catch(reportError)} />
     </div>
   );
 }
 
-export function CampaignLibrary({ selectedId }: { selectedId: string | null }) {
+function CampaignNotes({ campaign, onSaved }: { campaign: Campaign; onSaved: (c: Campaign) => void }) {
+  const repository = useAppStore((s) => s.repository);
+  const reportError = useAppStore((s) => s.reportError);
+  const [notes, setNotes] = useState(campaign.notes);
+  const pending = notes !== campaign.notes;
+
+  const flush = useCallback(() => {
+    if (notes !== campaign.notes) {
+      repository.saveCampaign({ ...campaign, notes }).then(onSaved, reportError);
+    }
+  }, [repository, campaign, notes, onSaved, reportError]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(flush, NOTES_SAVE_MS);
+    return () => window.clearTimeout(timer);
+  }, [flush]);
+
+  return (
+    <Section title="Notes" actions={<span className="muted">{pending ? 'Saving...' : 'Saved'}</span>}>
+      <textarea
+        className="campaign-notes"
+        rows={6}
+        aria-label="Campaign notes"
+        placeholder="Plot threads, NPCs, what happened last session"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        onBlur={flush}
+      />
+    </Section>
+  );
+}
+
+/** One campaign: notes and its encounters with status and Play. */
+export function CampaignDetail({ campaignId }: { campaignId: string }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const navigate = useAppStore((s) => s.navigate);
-  const [listing, setListing] = useState<{ campaigns: Campaign[]; problems: LoadProblem[] } | null>(null);
-  const [newName, setNewName] = useState('');
-  const selected = listing?.campaigns.find((c) => c.id === selectedId) ?? null;
-  const setSelectedId = (campaignId: string | null) => navigate({ page: 'campaigns', campaignId });
+  const [campaign, setCampaign] = useState<Campaign | null | undefined>(undefined);
+  const [listing, setListing] = useState<{ encounters: Encounter[]; problems: LoadProblem[] } | null>(null);
+  const [renaming, setRenaming] = useState(false);
 
-  const load = useCallback(() => repository.listCampaigns().then(setListing, reportError), [repository, reportError]);
   useEffect(() => {
-    load();
-  }, [load]);
+    repository
+      .listCampaigns()
+      .then((l) => setCampaign(l.campaigns.find((c) => c.id === campaignId) ?? null), reportError);
+  }, [repository, campaignId, reportError]);
 
-  const create = async () => {
-    const campaign = await repository.saveCampaign(createCampaign(newName.trim()));
-    setNewName('');
-    await load();
-    setSelectedId(campaign.id);
+  const loadEncounters = useCallback(
+    () => repository.listEncounters(campaignId).then(setListing, reportError),
+    [repository, campaignId, reportError],
+  );
+  useEffect(() => {
+    loadEncounters();
+  }, [loadEncounters]);
+
+  const rename = async (name: string) => {
+    if (campaign) setCampaign(await repository.saveCampaign({ ...campaign, name }));
   };
 
-  const save = async (campaign: Campaign) => {
-    await repository.saveCampaign(campaign);
-    await load();
-  };
-
-  const remove = async (campaign: Campaign) => {
+  const remove = async (target: Campaign) => {
     const ok = await confirmDialog({
       title: 'Delete campaign',
-      message: `"${campaign.name}" and all its encounters will be deleted.`,
+      message: `"${target.name}" and all its encounters will be deleted.`,
       confirmLabel: 'Delete campaign',
       danger: true,
     });
     if (ok) {
-      await repository.storage.remove(`campaigns/${campaign.id}`);
-      await useAppStore.getState().forgetEncounter({ campaignId: campaign.id });
-      setSelectedId(null);
-      await load();
+      await repository.storage.remove(`campaigns/${target.id}`);
+      await useAppStore.getState().forgetEncounter({ campaignId: target.id });
+      navigate(CAMPAIGNS);
     }
   };
 
-  return (
-    <div className="library-split">
-      <div className="col">
-        <div className="row">
-          <input placeholder="Campaign name" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <button className="primary" disabled={newName.trim() === ''} onClick={() => create().catch(reportError)}>
-            New campaign
-          </button>
-        </div>
-        <Problems problems={listing?.problems ?? []} />
-        <div className="list">
-          {listing?.campaigns.map((c) => (
-            <div
-              key={c.id}
-              className={c.id === selectedId ? 'list-item selected' : 'list-item'}
-              onClick={() => setSelectedId(c.id)}
-            >
-              {c.name}
-            </div>
-          ))}
-        </div>
-        {listing?.campaigns.length === 0 && <p className="muted">No campaigns yet.</p>}
-      </div>
-      {selected && (
-        <div className="col" key={selected.id}>
-          <div className="panel">
-            <TextField
-              label="Name"
-              value={selected.name}
-              onChange={(name) => save({ ...selected, name }).catch(reportError)}
-            />
-            <TextField
-              label="Notes"
-              multiline
-              value={selected.notes}
-              onChange={(notes) => save({ ...selected, notes }).catch(reportError)}
-            />
-            <button className="danger" onClick={() => remove(selected).catch(reportError)}>
-              Delete campaign
-            </button>
+  const encounters = listing?.encounters ?? [];
+  return campaign === null ? (
+    <div className="page-frame">
+      <PageHeader crumbs={[{ label: 'Campaigns', route: CAMPAIGNS }, { label: 'Missing campaign' }]} />
+      <EmptyState
+        icon="alert"
+        title="This campaign no longer exists."
+        action={<Button label="All campaigns" onClick={() => navigate(CAMPAIGNS)} />}
+      />
+    </div>
+  ) : (
+    <div className="page-frame">
+      <PageHeader crumbs={[{ label: 'Campaigns', route: CAMPAIGNS }, { label: campaign?.name ?? '...' }]}>
+        <Button icon="edit" label="Rename" disabled={!campaign} onClick={() => setRenaming(true)} />
+        <Button
+          icon="trash"
+          label="Delete"
+          variant="danger"
+          disabled={!campaign}
+          onClick={() => campaign && remove(campaign).catch(reportError)}
+        />
+        <Button icon="plus" label="New encounter" variant="primary" onClick={() => openNewEncounter(campaignId)} />
+      </PageHeader>
+      <div className="page-body campaign-page">
+        <Section title={`Encounters (${encounters.length})`}>
+          <Problems problems={listing?.problems ?? []} />
+          <div className="col">
+            {encounters.map((e) => (
+              <EncounterRow key={e.id} encounter={e} onChanged={loadEncounters} />
+            ))}
           </div>
-          <EncounterList campaign={selected} />
-        </div>
+          {listing?.encounters.length === 0 && (
+            <EmptyState
+              icon="swords"
+              title="No encounters in this campaign yet."
+              action={
+                <Button
+                  icon="plus"
+                  label="New encounter"
+                  variant="primary"
+                  onClick={() => openNewEncounter(campaignId)}
+                />
+              }
+            >
+              Pick a name and a map, then play it right away.
+            </EmptyState>
+          )}
+        </Section>
+        {campaign && <CampaignNotes key={campaign.id} campaign={campaign} onSaved={setCampaign} />}
+      </div>
+      {renaming && campaign && (
+        <NameDialog
+          title="Rename campaign"
+          initial={campaign.name}
+          confirmLabel="Rename"
+          onSubmit={rename}
+          onClose={() => setRenaming(false)}
+        />
       )}
     </div>
   );

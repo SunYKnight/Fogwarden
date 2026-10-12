@@ -26,7 +26,7 @@ between modules.
 | `src/workers` | Web workers (visibility).                                                                                   |
 | `src-tauri`   | Rust shell: storage commands, later LAN server.                                                             |
 | `tools`       | Node CLI scripts (run with `pnpm tsx tools/<script>.ts`).                                                   |
-| `content`     | Shipped, read-only content (SRD only).                                                                      |
+| `content`     | Shipped, read-only content (SRD and the generated sample map).                                              |
 
 ## Documents and storage
 
@@ -54,7 +54,8 @@ between modules.
 - CLI (`pnpm tsx tools/<script>.ts`, default data root = the desktop app's, override with `--data-root`):
   `import-statblocks.ts <folder> [--source <name>]`, `import-legacy.ts <240722_DnD_DMTool_Data folder>`,
   `build-srd.ts [--input <5e-SRD-Monsters.json>]` regenerates `content/creatures` and `content/markers`
-  (SRD 5.1, attribution in `content/LICENSE-SRD.md`).
+  (SRD 5.1, attribution in `content/LICENSE-SRD.md`), `build-sample.ts` regenerates the sample map
+  `content/maps/sample-chapel` (procedural drawing, own PNG encoder `tools/png.ts`, `content/LICENSE-SAMPLE.md`).
 
 ## Map rendering
 
@@ -108,25 +109,43 @@ between modules.
   terrain mesh then rewrites only that region (positions, normals, BVH nodes). Unmarked version bumps (undo, load)
   rebuild the whole mesh. Grid size/resolution changes go through `resampleHeightField` (`src/core/terrain/resample.ts`).
 - Tools receive pointer down/up only for the left button; right and middle belong to the camera.
-- Tools implement `EditorTool` (`src/editor/tool.ts`) and are listed in `TERRAIN_TOOLS`
-  (`src/editor/tools/terrain/index.ts`) or `STRUCTURE_TOOLS` (`src/editor/tools/structure/index.ts`).
-  `Overlay` renders inside the canvas (cursor, previews), `Panel` in the side panel.
+- Tools implement `EditorTool` (`src/editor/tool.ts`: kit `icon`, `step` tab, `shortcut` letter, `hint`, `cursor`) and
+  are listed in `TERRAIN_TOOLS` (`src/editor/tools/terrain/index.ts`) or `STRUCTURE_TOOLS`
+  (`src/editor/tools/structure/index.ts`); `TOOLS` adds select and calibration, which belong to no step.
+  `Overlay` renders inside the canvas (cursor, previews), `Panel` inline in the tool bar (compact fields).
+- Page (`src/ui/editor/MapEditorPage.tsx`): header (undo/redo, map settings, Top/3D, player look), step tabs
+  (`editorStore.step`), tool bar, canvas, inspector (selection panel, else step help + layers), status bar
+  (hint, cursor x/y/height, snapping, save state). Map-wide settings live in `MapSettingsDialog`; its grid section
+  (`GridFields` in `calibrate.tsx`) starts the calibrate tool with `startGridPick()` and reopens after the pick.
+- Keys go through `useShortcuts('Map editor', …)`: Ctrl+Z/Y, 1-4 steps, tool letters, T camera, Del/Backspace
+  delete the selection (`deleteSelection`), Esc deselects then returns to Select. Tools register higher-priority
+  keys only while they have something to cancel (`useDraftKeys`, grid pick, pending prop).
 - Selection panels: `SELECTION_PANELS[kind]` (`src/editor/selectionPanels.ts`), rendered for `editorStore.selection`.
+  The select tool sets `editorStore.hover` (what a click would select); `SelectionOverlay` outlines it.
 - Structure tools draw with `src/editor/tools/structure/drafting.tsx` (click points, double-click/Enter/first point
-  finishes, Esc cancels, panel buttons as mouse-free alternatives). The select tool drags vertices of the selected
+  finishes, Esc cancels, tool bar buttons as mouse-free alternatives). The select tool drags vertices of the selected
   wall/room/region (`selectionEditing.tsx`, one undo step per drop); the prop tool's TransformControls write back on
-  release.
+  release. `ModelDropTarget` imports `.glb`/`.gltf` files dropped on the canvas and places them at the drop point.
 
 ## Encounters and player view
 
-- `useEncounterStore`: open encounter + its map + terrain; `update(recipe)` (immer); autosaved.
-  Door states during play live in `encounter.openingStates`, never in the map.
+- `useEncounterStore`: open encounter + its map + terrain; `update(recipe, label?)` (immer); autosaved.
+  Door states during play live in `encounter.openingStates`, never in the map. Every update that changes more than
+  `log` and `fog` becomes one labelled undo step (`undo()`/`redo()` return the label; bounded `History`); log and
+  fog patches are left out of the steps, so undo never erases log lines or re-fogs explored ground, and fog
+  tracking, fog brush strokes and dice rolls don't flood the history.
 - Encounter rules (`src/state/encounterActions.ts`): pure helpers used inside `update` recipes — damage/healing/temp
   HP, `spawnCombatant` (average or rolled HP, unique numbered names), initiative order (ties by Dex), turns and rounds,
   log entries, `rollAttack` (critical hits double the dice).
-- Encounter page (`src/ui/encounter/EncounterPage.tsx`, route `encounter`): tracker, combatant panel, dice, log,
-  marker panel and `ENCOUNTER_PANELS`; map interaction (token select/drag/place, ruler, marker placement, door
-  toggling with Shift+click to lock) goes through `handleEncounterPointer` with transient state in `useEncounterUi`.
+- Play page (`src/ui/encounter/EncounterPage.tsx`, shown by `PlayPage` for `settings.lastEncounter`): header with
+  breadcrumb, round and undo/redo; `InitiativeStrip` (turn order, inline initiative, drag to reorder, "+ Add" →
+  `AddCombatantsDialog`); `PlayViewport` (map, canvas toolbar with Select/Measure/Area/camera/Fog menu, "n not on
+  map" chip that places unplaced combatants one after another, right click without drag → `openCombatantMenu`);
+  `TurnBar` (attacks of the current combatant, quick damage/heal for the selection, turn buttons); `Inspector` tabs
+  Creature/Dice/Log/Areas. Commands shared by these (HP, conditions, turns, initiative, removal) are in
+  `combatantCommands.ts`; keys are registered with `useShortcuts('Play', …)`. Map interaction (token
+  select/drag/place, ruler, marker placement, door toggling with Shift+click to lock) goes through
+  `handleEncounterPointer` with transient state in `useEncounterUi`.
 - `TokenLayer` / `MarkerLayer` (`src/render/tokens`, `src/render/markers`): read `useEncounterStore` in `dm` mode and
   `usePlayerStore` in `player` mode. Tokens snap to whole squares by 5e size (`snapTokenPoint`).
 - Sync (`src/sync/protocol.ts`): the DM sends `map` (filtered for players), `encounter` (`PlayerEncounter`), `fog`
@@ -142,8 +161,9 @@ between modules.
 - DM side, started in `DmApp`: `startFogTracker()` (`src/sync/fogTracker.ts`) runs visibility in
   `src/workers/visibility.worker.ts` (latest request wins), merges explored cells and DM overrides into
   `useFogViewStore.fog` and persists `encounter.fog.explored` at most once per second. `startDmPublisher(transports)`
-  sends `playerFilter` output on change and a full resend on start and on `hello`. The encounter page feeds
-  `useDmCameraStore` (camera push), `useFogViewStore.showFogToDm` (fog mode) and `fogBrushPointer` (reveal/hide brush).
+  sends `playerFilter` output on change and a full resend on start and on `hello`. The Play page feeds
+  `useDmCameraStore` (camera), `useFogViewStore.showFogToDm` (fog mode) and `fogBrushPointer` (reveal/hide brush,
+  both from the canvas Fog menu).
 
 ## LAN player view
 
@@ -158,7 +178,8 @@ between modules.
   from disk, so run `pnpm build` before testing the LAN view under `pnpm app:dev`. For player-code work, open
   `http://localhost:1420/player.html?token=<t>&ws=ws://127.0.0.1:<port>/ws` on the Vite dev server instead.
 - DM side: `useLanStore` (`src/state/lanStore.ts`) holds the DM's `WebSocketTransport`; `DmApp` adds it to
-  `startDmPublisher`. UI: `LanPanel` in `ENCOUNTER_PANELS` (start/stop, URLs, token, QR code via `uqr`).
+  `startDmPublisher`. UI: `LanControls` (`src/ui/shell/LanControls.tsx`) in the rail's Players popover (start/stop,
+  URLs, copy, QR code via `uqr`); the port is set under Settings.
 - Browser client: `player.html?token=` → `src/app/player.tsx` sets `useAppStore`'s repository to a read-only
   `LanStorage` (`src/data/lanStorage.ts`, `assetUrl` → `/asset/...`) before rendering `PlayerApp`.
 
@@ -166,6 +187,13 @@ between modules.
 
 - Library tabs: `LIBRARY_TABS` (`src/ui/library/LibraryPage.tsx`).
 - Routes: `Route` union in `src/state/appStore.ts` + `Page` switch in `src/ui/DmApp.tsx`.
+- Home (`src/ui/home/HomePage.tsx`, default route): Continue card (`settings.lastEncounter`), recent maps and
+  encounters, `FirstSteps` (progress in `settings.onboarding`, `completeOnboardingStep(step)`), drop zone.
+  `openSampleEncounter()` (`onboarding.ts`) creates campaign `sample-campaign` / encounter `sample-goblin-ambush`
+  once from `sampleContent.ts` and opens it.
+- New map wizard: `openNewMapWizard(file?)` (`src/ui/library/NewMapWizard.tsx`, host in `DmApp`); image → grid
+  (`calibrateFromSquare` from a drag or two clicks, SVG overlay in image pixels) → `createCalibratedMap`
+  (`mapImport.ts`) saves the map already calibrated. File drops use `useFileDrop` (`src/ui/library/fileDrop.ts`).
 - Form fields: `src/ui/components/fields.tsx` (`NumberField`, `TextField`, `SelectField`, `CheckboxField`,
   `SliderField`, `ColorField`, `Field`); errors: `useAppStore.getState().reportError(error)`.
 

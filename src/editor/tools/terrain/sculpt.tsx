@@ -16,7 +16,8 @@ import type { HeightField } from '@/core/terrain/heightfield';
 import type { MapPointerEvent } from '@/render/mapRenderContext';
 import { markTerrainDirty } from '@/render/terrain/terrainDirty';
 import { useEditorStore } from '@/state/editorStore';
-import { CheckboxField, Field, NumberField, SelectField, SliderField } from '@/ui/components/fields';
+import { CheckboxField, NumberField, SelectField, SliderField } from '@/ui/components/fields';
+import type { IconName } from '@/ui/kit';
 import type { EditorTool } from '../../tool';
 import { BrushCursor } from './overlays';
 import { useTerrainToolStore, type TerrainToolOptions } from './terrainToolStore';
@@ -29,7 +30,7 @@ const DAB_SPACING = 0.25;
 interface SculptSpec {
   id: string;
   label: string;
-  icon: string;
+  icon: IconName;
   shortcut: string;
   hint: string;
   dab(field: HeightField, brush: Brush, options: TerrainToolOptions, startHeightFt: number): SampleRect | null;
@@ -110,19 +111,6 @@ function sculptPointer(spec: SculptSpec, event: MapPointerEvent): void {
   }
 }
 
-function HeightReadout() {
-  const cursor = useTerrainToolStore((s) => s.cursor);
-  const terrain = useEditorStore((s) => s.terrain);
-  // Subscribed so the readout follows sculpting under a still pointer.
-  useEditorStore((s) => s.terrainVersion);
-  const height = cursor && terrain ? `${terrain.sample(cursor.x, cursor.y).toFixed(2)} ft` : '–';
-  return (
-    <Field label="Height under cursor">
-      <span>{height}</span>
-    </Field>
-  );
-}
-
 /** Brush options shared by every sculpt tool, plus the tool's own fields. */
 export function SculptPanel({ children }: { children?: ReactNode }) {
   const radiusFt = useTerrainToolStore((s) => s.radiusFt);
@@ -150,7 +138,6 @@ export function SculptPanel({ children }: { children?: ReactNode }) {
       />
       <SelectField label="Falloff" value={falloff} options={FALLOFFS} onChange={(v) => setOptions({ falloff: v })} />
       {children}
-      <HeightReadout />
     </>
   );
 }
@@ -217,9 +204,10 @@ function sculptTool(spec: SculptSpec): EditorTool {
     id: spec.id,
     label: spec.label,
     icon: spec.icon,
-    group: 'terrain',
+    step: 'ground',
     shortcut: spec.shortcut,
     hint: spec.hint,
+    cursor: 'none',
     onPointer: (event) => sculptPointer(spec, event),
     Panel: () => <SculptPanel>{Options && <Options />}</SculptPanel>,
     Overlay: BrushCursor,
@@ -235,8 +223,8 @@ const PICK_HINT = 'Alt+click picks the flatten height';
 export const raiseTool = sculptTool({
   id: 'raise',
   label: 'Raise',
-  icon: '▲',
-  shortcut: '1',
+  icon: 'raise',
+  shortcut: 'e',
   hint: `Drag to raise the terrain · ${PICK_HINT}`,
   dab: (field, brush, options) => raiseBrush(field, brush, options.strength * RAISE_FT_PER_DAB),
 });
@@ -244,8 +232,8 @@ export const raiseTool = sculptTool({
 export const lowerTool = sculptTool({
   id: 'lower',
   label: 'Lower',
-  icon: '▼',
-  shortcut: '2',
+  icon: 'lower',
+  shortcut: 'q',
   hint: `Drag to lower the terrain · ${PICK_HINT}`,
   dab: (field, brush, options) => raiseBrush(field, brush, -options.strength * RAISE_FT_PER_DAB),
 });
@@ -253,8 +241,8 @@ export const lowerTool = sculptTool({
 export const smoothTool = sculptTool({
   id: 'smooth',
   label: 'Smooth',
-  icon: '≈',
-  shortcut: '3',
+  icon: 'smooth',
+  shortcut: 's',
   hint: `Drag to smooth bumps and edges · ${PICK_HINT}`,
   dab: (field, brush, options) => smoothBrush(field, brush, options.strength),
 });
@@ -262,8 +250,8 @@ export const smoothTool = sculptTool({
 export const flattenTool = sculptTool({
   id: 'flatten',
   label: 'Flatten',
-  icon: '▬',
-  shortcut: '4',
+  icon: 'flatten',
+  shortcut: 'f',
   hint: `Drag to flatten to the height at the stroke start (or the typed height) · ${PICK_HINT}`,
   dab: (field, brush, options, startHeightFt) =>
     flattenBrush(field, brush, options.flattenToTyped ? options.flattenHeightFt : startHeightFt, options.strength),
@@ -273,8 +261,8 @@ export const flattenTool = sculptTool({
 export const terraceTool = sculptTool({
   id: 'terrace',
   label: 'Terrace',
-  icon: '≡',
-  shortcut: '6',
+  icon: 'terrace',
+  shortcut: 'c',
   hint: `Drag to snap heights to steps; full strength makes cliffs · ${PICK_HINT}`,
   dab: (field, brush, options) => terraceBrush(field, brush, options.terraceStepFt, options.strength),
   options: TerraceOptions,
@@ -283,8 +271,8 @@ export const terraceTool = sculptTool({
 export const noiseTool = sculptTool({
   id: 'noise',
   label: 'Noise',
-  icon: '∿',
-  shortcut: '7',
+  icon: 'noise',
+  shortcut: 'n',
   hint: `Drag to add rough ground; the same seed gives the same pattern · ${PICK_HINT}`,
   dab: (field, brush, options) =>
     noiseBrush(field, brush, options.strength * RAISE_FT_PER_DAB, options.noiseScaleFt, options.noiseSeed),

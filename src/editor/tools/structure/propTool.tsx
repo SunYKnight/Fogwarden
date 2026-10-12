@@ -1,12 +1,15 @@
 import { TransformControls } from '@react-three/drei';
 import { createPortal, useThree } from '@react-three/fiber';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
+import { Raycaster, Vector2, type Camera, type Object3D } from 'three';
 import { create } from 'zustand';
 import { newId, type AssetRef, type MapPoint, type Prop, type WorldVec3 } from '@/core/model';
+import { findHit } from '@/render/MapView';
 import { usePropObjects } from '@/render/props/propObjects';
 import { useAppStore } from '@/state/appStore';
 import { useEditorStore } from '@/state/editorStore';
 import { CheckboxField } from '@/ui/components/fields';
+import { Button, useShortcuts } from '@/ui/kit';
 import type { EditorTool } from '../../tool';
 import { addItem, editItem, editorMap } from './documentEdits';
 import { OverlayMarker } from './drafting';
@@ -19,7 +22,7 @@ const SCALE_SNAP = 0.1;
 const MODEL_FILE = /\.(glb|gltf)$/i;
 
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
-const GIZMO_MODES: GizmoMode[] = ['translate', 'rotate', 'scale'];
+const GIZMO_LABELS: Record<GizmoMode, string> = { translate: 'Move', rotate: 'Rotate', scale: 'Scale' };
 
 interface PropToolState {
   /** Imported model waiting for a click on the map. */
@@ -90,14 +93,13 @@ export function GizmoModeButtons() {
   const gizmo = usePropTool((s) => s.gizmo);
   return (
     <div className="row">
-      {GIZMO_MODES.map((mode) => (
-        <button
+      {(Object.entries(GIZMO_LABELS) as [GizmoMode, string][]).map(([mode, label]) => (
+        <Button
           key={mode}
-          className={mode === gizmo ? 'active' : ''}
+          label={label}
+          active={mode === gizmo}
           onClick={() => usePropTool.setState({ gizmo: mode })}
-        >
-          {mode}
-        </button>
+        />
       ))}
     </div>
   );
@@ -106,6 +108,11 @@ export function GizmoModeButtons() {
 function PropToolPanel() {
   const { pending, last, importing, snap } = usePropTool();
   const reportError = useAppStore((s) => s.reportError);
+  useShortcuts(
+    'Map editor: prop',
+    [{ keys: 'Escape', label: 'Stop placing the model', run: () => usePropTool.setState({ pending: null }) }],
+    pending !== null,
+  );
   return (
     <>
       <div className="field">
@@ -122,21 +129,72 @@ function PropToolPanel() {
           }}
         />
       </div>
-      <p className="muted">
+      <span className="muted">
         {importing
           ? 'Importing…'
           : pending
             ? `Click the map to place “${pending.name}”.`
-            : 'Select a .glb, or a .gltf together with its .bin and texture files.'}
-      </p>
+            : 'A .glb, or a .gltf with its .bin and textures; or drop the files on the map.'}
+      </span>
       {last && !pending && (
-        <button onClick={() => usePropTool.setState({ pending: last })}>Place “{last.name}” again</button>
+        <Button
+          icon="plus"
+          label={`Place “${last.name}” again`}
+          onClick={() => usePropTool.setState({ pending: last })}
+        />
       )}
-      <h3>Gizmo for the selected prop</h3>
+      <span className="muted">Selected prop:</span>
       <GizmoModeButtons />
       <CheckboxField label="Snap to grid" value={snap} onChange={(v) => usePropTool.setState({ snap: v })} />
     </>
   );
+}
+
+const dropRay = new Raycaster();
+const dropNdc = new Vector2();
+
+/** Map point under a screen position: the nearest tagged map object, like a pointer event. */
+function mapPointAt(event: DragEvent, canvas: HTMLElement, camera: Camera, scene: Object3D): MapPoint | null {
+  const rect = canvas.getBoundingClientRect();
+  dropNdc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+  dropRay.setFromCamera(dropNdc, camera);
+  const hit = dropRay.intersectObjects(scene.children, true).find((i) => findHit(i.object) !== null);
+  return hit ? { x: hit.point.x, y: hit.point.z, elevationFt: hit.point.y } : null;
+}
+
+async function dropModel(files: File[], point: MapPoint | null): Promise<void> {
+  if (!point) {
+    throw new Error('Drop the model onto the map');
+  }
+  await importModel(files);
+  placeProp(point);
+}
+
+/** Dropping a .glb (or a .gltf with its files) on the canvas imports it and places it at the drop point. */
+export function ModelDropTarget() {
+  const canvas = useThree((s) => s.gl.domElement);
+  const camera = useThree((s) => s.camera);
+  const scene = useThree((s) => s.scene);
+  useEffect(() => {
+    // Without preventDefault on dragover the browser refuses the drop.
+    const over = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+    };
+    const drop = (e: DragEvent) => {
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      if (files.length > 0) {
+        e.preventDefault();
+        dropModel(files, mapPointAt(e, canvas, camera, scene)).catch(useAppStore.getState().reportError);
+      }
+    };
+    canvas.addEventListener('dragover', over);
+    canvas.addEventListener('drop', drop);
+    return () => {
+      canvas.removeEventListener('dragover', over);
+      canvas.removeEventListener('drop', drop);
+    };
+  }, [canvas, camera, scene]);
+  return null;
 }
 
 function rounded(values: number[]): WorldVec3 {
@@ -206,10 +264,13 @@ function PropToolOverlay() {
 export const propTool: EditorTool = {
   id: 'prop',
   label: 'Prop',
-  icon: '◈',
-  group: 'scene',
+  icon: 'cube',
+  step: 'objects',
   shortcut: 'p',
-  hint: 'Import a .glb/.gltf in the side panel, click to place it; click a prop to move, rotate or scale it',
+  hint:
+    'Import a .glb/.gltf in the tool bar (or drop it on the map), click to place it; ' +
+    'click a prop to move, rotate or scale it',
+  cursor: 'crosshair',
   onPointer: (event) => {
     const select = event.type === 'down' && event.button === 0 && event.hit?.kind === 'prop';
     if (event.point && event.type === 'move') {
