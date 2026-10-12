@@ -2,6 +2,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { create } from 'zustand';
 import type { DocRef, EncounterLocator, Settings } from '@/core/model';
 import { BrowserStorage } from '@/data/browserStorage';
+import { migrateDataRoot } from '@/data/layoutMigration';
 import { Repository } from '@/data/repository';
 import type { StorageRoots } from '@/data/storage';
 import { TauriStorage } from '@/data/tauriStorage';
@@ -114,6 +115,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   init: async () => {
     const repository = get().repository;
+    repository.layoutProblems = await migrateDataRoot(repository);
     const [roots, settings] = await Promise.all([repository.storage.roots(), repository.loadSettings()]);
     set({ roots, settings });
   },

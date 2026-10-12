@@ -19,6 +19,7 @@ export interface Storage {
   roots(): Promise<StorageRoots>;
   setDataRoot(absolutePath: string): Promise<StorageRoots>;
   readText(area: StorageArea, path: string): Promise<string>;
+  readBytes(area: StorageArea, path: string): Promise<Uint8Array>;
   writeText(path: string, text: string): Promise<void>;
   writeBytes(path: string, bytes: Uint8Array): Promise<void>;
   list(area: StorageArea, dir: string): Promise<DirEntry[]>;

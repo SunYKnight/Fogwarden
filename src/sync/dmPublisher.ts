@@ -170,9 +170,7 @@ export function startDmPublisher(transports: DmTransport[]): () => void {
       if (state.views !== previous.views) publishViews();
     }),
     useLibraryStore.subscribe((state, previous) => {
-      if (state.listings.creature !== previous.listings.creature || state.portraits !== previous.portraits) {
-        publishViews();
-      }
+      if (state.listings.creature !== previous.listings.creature) publishViews();
     }),
     useAppStore.subscribe((state, previous) => {
       if (state.settings !== previous.settings) publishViews();

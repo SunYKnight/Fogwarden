@@ -126,7 +126,6 @@ export function CreatureLibrary() {
   const navigate = useAppStore((s) => s.navigate);
   const listing = useLibraryStore((s) => s.listings.creature);
   const refresh = useLibraryStore((s) => s.refresh);
-  const portraits = useLibraryStore((s) => s.portraits);
   const [filter, setFilter] = useState(NO_FILTER);
   const [sort, setSort] = useState<SortKey>('name');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -137,7 +136,7 @@ export function CreatureLibrary() {
     [listing, filter, sort],
   );
   const selected = listing.entries.find((e) => e.ref.id === selectedId) ?? null;
-  const selectedPortrait = selected && creaturePortrait(selected.doc, portraits[selected.ref.id]);
+  const selectedPortrait = selected && creaturePortrait(selected.doc);
 
   const edit = (entry: Entry) => navigate({ page: 'creature-editor', ref: entry.ref });
 
@@ -223,11 +222,7 @@ export function CreatureLibrary() {
               }}
               onContextMenu={(e) => showMenu(e, entry)}
             >
-              <AssetImage
-                asset={creaturePortrait(entry.doc, portraits[entry.ref.id])}
-                alt=""
-                className="creature-row-thumb"
-              />
+              <AssetImage asset={creaturePortrait(entry.doc)} alt="" className="creature-row-thumb" />
               <span className="row-name">{entry.doc.name}</span>
               <span className="row-cr">CR {formatCr(entry.doc.challenge)}</span>
               <span className="muted row-type">{entry.doc.type}</span>

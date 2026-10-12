@@ -2,6 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
+import { formatCreatureFile } from '../src/core/import/creatureFile';
 import { parseStatBlock } from '../src/core/import/statblock';
 import {
   ABILITIES,
@@ -17,7 +18,7 @@ import { abilityModifier, formatCr, formatModifier } from '../src/core/rules/abi
 import { CONTENT_ROOT } from './cli';
 
 /**
- * Builds the shipped SRD 5.1 content (`content/creatures`, `content/markers`).
+ * Builds the shipped SRD 5.1 content (`content/creatures/*.txt`, `content/markers/*.json`).
  * Source: 5e-bits/5e-database (MIT), whose monster data is SRD 5.1 text (CC-BY-4.0). Each monster is rendered
  * as stat block text and read back with the app's stat block parser, so shipped and imported creatures share
  * one conversion; structured dataset values cross-check the result.
@@ -154,7 +155,14 @@ function renderStatBlock(m: Monster): string {
     ['Damage Vulnerabilities', m.damage_vulnerabilities.join('; ')],
     ['Damage Resistances', m.damage_resistances.join('; ')],
     ['Damage Immunities', m.damage_immunities.join('; ')],
-    ['Condition Immunities', m.condition_immunities.map((c) => c.name.toLowerCase()).join(', ')],
+    // Alphabetical; the dataset lists some creatures' conditions unsorted.
+    [
+      'Condition Immunities',
+      m.condition_immunities
+        .map((c) => c.name.toLowerCase())
+        .sort()
+        .join(', '),
+    ],
   ];
   const lowerName = m.name.toLowerCase();
   const sections: [string, Entry[] | undefined, string[]][] = [
@@ -216,14 +224,15 @@ function check(m: Monster, c: Creature): void {
   }
 }
 
-function writeDocs(dir: string, docs: { id: string }[]): void {
+/** Writes `files` (name to text) and removes generated files of earlier runs that are no longer produced. */
+function writeFiles(dir: string, files: [string, string][]): void {
   mkdirSync(dir, { recursive: true });
-  const fresh = new Set(docs.map((d) => `${d.id}.json`));
+  const fresh = new Set(files.map(([name]) => name));
   for (const stale of readdirSync(dir).filter((n) => n.startsWith('srd-') && !fresh.has(n))) {
     rmSync(join(dir, stale));
   }
-  for (const doc of docs) {
-    writeFileSync(join(dir, `${doc.id}.json`), `${JSON.stringify(doc, null, 2)}\n`);
+  for (const [name, text] of files) {
+    writeFileSync(join(dir, name), text);
   }
 }
 
@@ -261,6 +270,12 @@ const markers: MarkerTemplate[] = MARKERS.map((m) =>
     notes: `${m.name} (${SOURCE}, ${LICENSE})`,
   }),
 );
-writeDocs(join(CONTENT_ROOT, 'creatures'), creatures);
-writeDocs(join(CONTENT_ROOT, 'markers'), markers);
+writeFiles(
+  join(CONTENT_ROOT, 'creatures'),
+  creatures.map((c) => [`${c.id}.txt`, formatCreatureFile(c)]),
+);
+writeFiles(
+  join(CONTENT_ROOT, 'markers'),
+  markers.map((m) => [`${m.id}.json`, `${JSON.stringify(m, null, 2)}\n`]),
+);
 console.log(`Wrote ${creatures.length} creatures and ${markers.length} marker templates to ${CONTENT_ROOT}`);

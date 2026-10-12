@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { assetRefSchema, docHeader } from './common';
 
-export const CREATURE_SCHEMA_VERSION = 1;
+export const CREATURE_SCHEMA_VERSION = 2;
 
 export const ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
 export const abilitySchema = z.enum(ABILITIES);

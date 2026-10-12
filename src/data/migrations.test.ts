@@ -95,14 +95,18 @@ describe('encounter migration', () => {
 
   it('gives every player character and vision source the shared explored cells of a v1 encounter', () => {
     const { doc, thorin, blind, owl } = v1Encounter('/w==');
-    const migrated = encounterSchema.parse(migrate('encounter', doc));
+    const migrated = encounterSchema.parse(migrate('encounter', doc, 2));
     expect(migrated.version).toBe(2);
     expect(migrated.fog.exploredBy).toEqual({ [thorin.id]: '/w==', [blind.id]: '/w==', [owl.id]: '/w==' });
     expect('explored' in migrated.fog).toBe(false);
   });
 
   it('starts with nobody having explored anything when the v1 encounter had no explored cells', () => {
-    const migrated = encounterSchema.parse(migrate('encounter', v1Encounter('').doc));
+    const migrated = encounterSchema.parse(migrate('encounter', v1Encounter('').doc, 2));
     expect(migrated.fog.exploredBy).toEqual({});
+  });
+
+  it('refuses to read an encounter of the old file layout as a current one', () => {
+    expect(() => migrate('encounter', v1Encounter('').doc)).toThrow(/version 2 uses the old file layout/);
   });
 });

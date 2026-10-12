@@ -382,6 +382,13 @@ fn asset_mime(extension: &str) -> Option<&'static str> {
     }
 }
 
+// Pictures inside document folders: campaign folders hold fog masks
+// (what each character explored), maps their terrain heightmap.
+fn document_data(file: &Path) -> bool {
+    let in_campaigns = file.components().next().is_some_and(|c| c.as_os_str() == "campaigns");
+    in_campaigns || file.file_name().is_some_and(|name| name == "terrain.png")
+}
+
 // Images and models only: documents hold DM secrets (hidden monsters,
 // secret doors, notes) and must never reach a player.
 fn asset_file(root: &Path, path: &str) -> Result<(PathBuf, &'static str), HttpError> {
@@ -390,6 +397,7 @@ fn asset_file(root: &Path, path: &str) -> Result<(PathBuf, &'static str), HttpEr
         .extension()
         .and_then(|e| e.to_str())
         .and_then(asset_mime)
+        .filter(|_| !document_data(Path::new(path)))
         .ok_or_else(|| HttpError(StatusCode::FORBIDDEN, format!("not a map asset: {path}")))?;
     if file.is_file() {
         Ok((file, mime))
@@ -858,6 +866,9 @@ mod tests {
         assert_eq!(asset_status(&root, "library/maps/m1/map.json"), StatusCode::FORBIDDEN);
         assert_eq!(asset_status(&root, "library/maps/m1"), StatusCode::FORBIDDEN);
         assert_eq!(asset_status(&root, ""), StatusCode::FORBIDDEN);
+        let fog = "campaigns/c1/encounters/e1/fog/explored/pc.png";
+        assert_eq!(asset_status(&root, fog), StatusCode::FORBIDDEN);
+        assert_eq!(asset_status(&root, "library/maps/m1/terrain.png"), StatusCode::FORBIDDEN);
         assert_eq!(asset_status(&root, "folder.png"), StatusCode::NOT_FOUND);
         assert_eq!(asset_status(&root, "missing.glb"), StatusCode::NOT_FOUND);
         std::fs::remove_dir_all(root).unwrap();

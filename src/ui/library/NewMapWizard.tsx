@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { create } from 'zustand';
+import { damMargin, parseDamProject, type DamProject } from '@/core/import/damProject';
+import type { DamObjectChoices } from '@/core/import/damObjects';
+import type { ImportedContent } from '@/core/import/importedMap';
+import { isUvttFileName, parseUvtt } from '@/core/import/uvtt';
 import type { BattleMap, Vec2 } from '@/core/model';
 import { calibrateFromSquare, fitSquaresToImage, type GridCalibration } from '@/core/terrain/calibration';
 import { useAppStore } from '@/state/appStore';
@@ -8,7 +12,9 @@ import { CheckboxField, NumberField, SliderField, TextField } from '../component
 import { completeOnboardingStep } from '../home/onboarding';
 import { Button, Dialog, Icon } from '../kit';
 import { openNewEncounter } from './compendiumUi';
-import { isImageFile, useFileDrop } from './fileDrop';
+import { damPropsFor, loadDamObjectChoices, saveDamObjectChoices } from './daObjects';
+import { choicesForProject, DamObjectsPanel } from './DamObjectsPanel';
+import { isDamFile, isImageFile, isMapSourceFile, useFileDrop } from './fileDrop';
 import {
   cornerGesture,
   createCalibratedMap,
@@ -19,7 +25,7 @@ import {
   type ImageSize,
 } from './mapImport';
 
-const IMAGE_TYPES = 'image/png,image/jpeg,image/webp';
+const MAP_FILE_TYPES = 'image/png,image/jpeg,image/webp,.dd2vtt,.df2vtt,.uvtt';
 // Screen pixels a press may move and still count as a click.
 const CLICK_SLOP_PX = 4;
 
@@ -27,71 +33,151 @@ interface WizardRequest {
   /** Bumped per open so a reopened wizard starts fresh. */
   session: number;
   open: boolean;
-  file: File | null;
+  files: File[];
 }
 
-const useWizardStore = create<WizardRequest>(() => ({ session: 0, open: false, file: null }));
+const useWizardStore = create<WizardRequest>(() => ({ session: 0, open: false, files: [] }));
 
-/** Opens the new map wizard, optionally with the image already chosen (drag and drop). */
-export function openNewMapWizard(file: File | null = null): void {
-  useWizardStore.setState((s) => ({ session: s.session + 1, open: true, file }));
+/**
+ * Opens the new map wizard, optionally with dropped files: a battlemap image or Universal VTT
+ * export, plus a Dungeon Alchemist project (`.dam`) for terrain and objects.
+ */
+export function openNewMapWizard(files: File[] = []): void {
+  useWizardStore.setState((s) => ({ session: s.session + 1, open: true, files }));
 }
 
 function closeNewMapWizard(): void {
-  useWizardStore.setState({ open: false, file: null });
+  useWizardStore.setState({ open: false, files: [] });
 }
 
 export function NewMapWizardHost() {
-  const { session, open, file } = useWizardStore();
-  return open ? <NewMapWizard key={session} initialFile={file} /> : null;
+  const { session, open, files } = useWizardStore();
+  return open ? <NewMapWizard key={session} initialFiles={files} /> : null;
+}
+
+/** What a map maker export brings besides the picture. */
+interface ExportInfo {
+  fileName: string;
+  content: ImportedContent;
+  project: DamProject | null;
+  objects: DamObjectChoices | null;
 }
 
 interface Draft {
+  /** The picture, decoded from the export for Universal VTT files. */
   file: File;
   url: string;
   image: ImageSize;
   name: string;
   calibration: GridCalibration;
+  /** Starting grid: the export's, else guessed from the file name. */
+  guess: GridCalibration;
+  source: ExportInfo | null;
 }
 
-function guessFor(source: { file: File; image: ImageSize }): GridCalibration {
-  return roundCalibration(guessCalibration(source.file.name, source.image));
+async function imageSize(file: Blob): Promise<ImageSize> {
+  const bitmap = await createImageBitmap(file);
+  const size = { widthPx: bitmap.width, heightPx: bitmap.height };
+  bitmap.close();
+  return size;
 }
 
 async function readDraft(file: File): Promise<Draft> {
-  if (!isImageFile(file)) {
-    throw new Error(`"${file.name}" is not a PNG, JPEG or WebP image`);
+  let draft: Draft;
+  if (isUvttFileName(file.name)) {
+    const uvtt = parseUvtt(await file.text(), file.name);
+    const name = mapNameFromFileName(file.name);
+    const { extension } = uvtt.image;
+    const picture = new File([uvtt.image.bytes], `${name}.${extension}`, {
+      type: `image/${extension === 'jpg' ? 'jpeg' : extension}`,
+    });
+    const image = await imageSize(picture);
+    const source = { fileName: file.name, content: uvtt.content, project: null, objects: null };
+    const url = URL.createObjectURL(picture);
+    draft = { file: picture, url, image, name, calibration: uvtt.calibration, guess: uvtt.calibration, source };
+  } else if (isImageFile(file)) {
+    const image = await imageSize(file);
+    const guess = roundCalibration(guessCalibration(file.name, image));
+    const url = URL.createObjectURL(file);
+    draft = { file, url, image, name: mapNameFromFileName(file.name), calibration: guess, guess, source: null };
+  } else {
+    throw new Error(`"${file.name}" is not a PNG, JPEG or WebP image or a Universal VTT export`);
   }
-  const bitmap = await createImageBitmap(file);
-  const image = { widthPx: bitmap.width, heightPx: bitmap.height };
-  bitmap.close();
-  const draft = { file, url: URL.createObjectURL(file), image, name: mapNameFromFileName(file.name) };
-  return { ...draft, calibration: guessFor(draft) };
+  return draft;
 }
 
-type Step = 'image' | 'grid' | 'done';
+/** Attaches a Dungeon Alchemist project to an export draft once it fits the map's squares. */
+async function withProject(draft: Draft, file: File): Promise<Draft> {
+  if (!draft.source) {
+    throw new Error(`"${file.name}" adds terrain to Universal VTT exports; choose the .dd2vtt file first`);
+  }
+  const project = parseDamProject(await file.text(), file.name);
+  damMargin(project, fitSquaresToImage(draft.image, draft.calibration.pxPerSquare));
+  const { repository } = useAppStore.getState();
+  const kept = project.objects.length > 0 ? await loadDamObjectChoices(repository) : null;
+  const objects = kept && choicesForProject(project, kept);
+  return { ...draft, source: { ...draft.source, project, objects } };
+}
 
-const STEPS: { id: Step; label: string }[] = [
-  { id: 'image', label: 'Image' },
-  { id: 'grid', label: 'Grid' },
-  { id: 'done', label: 'Done' },
-];
+/** Draft from dropped or picked files: the first map file, then a project file if any. */
+async function readFiles(files: File[], current: Draft | null): Promise<Draft> {
+  const mapFile = files.find(isMapSourceFile);
+  const projectFile = files.find(isDamFile);
+  if (!mapFile && !projectFile) {
+    throw new Error('Choose a battlemap image (PNG, JPEG, WebP) or a .dd2vtt, .df2vtt or .uvtt export');
+  }
+  const draft = mapFile ? await readDraft(mapFile) : current;
+  if (!draft) {
+    throw new Error(`Choose the .dd2vtt export before its project "${projectFile!.name}"`);
+  }
+  return projectFile ? withProject(draft, projectFile) : draft;
+}
 
-function StepTrail({ step }: { step: Step }) {
-  const current = STEPS.findIndex((s) => s.id === step);
+function exportSummary(content: ImportedContent): string {
+  const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const doors = content.openings.filter((o) => o.kind === 'door').length;
+  return [
+    count(content.walls.length, 'wall'),
+    count(doors, 'door'),
+    count(content.openings.length - doors, 'window'),
+    count(content.lights.length, 'light'),
+  ].join(', ');
+}
+
+function projectSummary(project: DamProject): string {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const height of project.terrain.data) {
+    min = Math.min(min, height);
+    max = Math.max(max, height);
+  }
+  const objects = project.objects.length > 0 ? `, ${project.objects.length} objects` : '';
+  return `ground heights ${min.toFixed(1)} to ${max.toFixed(1)} ft${objects}`;
+}
+
+type Step = 'image' | 'grid' | 'objects' | 'done';
+
+const STEP_LABELS: Record<Step, string> = { image: 'Image', grid: 'Grid', objects: 'Objects', done: 'Done' };
+
+function stepsFor(draft: Draft | null): Step[] {
+  return draft?.source?.objects ? ['image', 'grid', 'objects', 'done'] : ['image', 'grid', 'done'];
+}
+
+function StepTrail({ steps, step }: { steps: Step[]; step: Step }) {
+  const current = steps.indexOf(step);
   return (
     <ol className="wizard-steps">
-      {STEPS.map((s, i) => (
-        <li key={s.id} className={i === current ? 'current' : i < current ? 'done' : ''}>
+      {steps.map((s, i) => (
+        <li key={s} className={i === current ? 'current' : i < current ? 'done' : ''}>
           <span className="wizard-step-number">{i < current ? <Icon name="check" size={14} /> : i + 1}</span>
-          {s.label}
+          {STEP_LABELS[s]}
         </li>
       ))}
     </ol>
   );
 }
 
-function NewMapWizard({ initialFile }: { initialFile: File | null }) {
+function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const [step, setStep] = useState<Step>('image');
@@ -100,10 +186,10 @@ function NewMapWizard({ initialFile }: { initialFile: File | null }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (initialFile) {
-      readDraft(initialFile).then(setDraft, reportError);
+    if (initialFiles.length > 0) {
+      readFiles(initialFiles, null).then(setDraft, reportError);
     }
-  }, [initialFile, reportError]);
+  }, [initialFiles, reportError]);
 
   useEffect(() => {
     const url = draft?.url;
@@ -115,10 +201,18 @@ function NewMapWizard({ initialFile }: { initialFile: File | null }) {
   const createMap = async (source: Draft, calibration: GridCalibration) => {
     setBusy(true);
     try {
+      const project = source.source?.project ?? null;
+      const objects = source.source?.objects ?? null;
+      if (project && objects) {
+        await saveDamObjectChoices(repository, objects);
+      }
       const map = await createCalibratedMap(repository, source.file, {
         name: source.name.trim() || 'New map',
         image: source.image,
         calibration,
+        content: source.source?.content,
+        project,
+        props: project && objects ? damPropsFor(repository, project, objects) : undefined,
       });
       await useLibraryStore.getState().refresh('map');
       await completeOnboardingStep('mapFromImage');
@@ -140,17 +234,43 @@ function NewMapWizard({ initialFile }: { initialFile: File | null }) {
     openNewEncounter(null, { area: 'data', id: map.id });
   };
 
+  const createButton = draft && (
+    <Button
+      label={busy ? 'Creating…' : 'Create map'}
+      icon="check"
+      variant="primary"
+      disabled={busy}
+      onClick={() => createMap(draft, draft.calibration).catch(reportError)}
+    />
+  );
+  // Exports carry their grid; the grid step only checks it.
+  const exportNext = draft?.source?.objects ? (
+    <Button label="Next" icon="chevronRight" variant="primary" onClick={() => setStep('objects')} />
+  ) : (
+    createButton
+  );
   let body = (
     <ImageStep
       draft={draft}
-      onFile={(file) => readDraft(file).then(setDraft, reportError)}
+      onFiles={(files) => readFiles(files, draft).then(setDraft, reportError)}
       onRename={(name) => draft && setDraft({ ...draft, name })}
+      onRemoveProject={() =>
+        draft?.source && setDraft({ ...draft, source: { ...draft.source, project: null, objects: null } })
+      }
     />
   );
   let footer = (
     <>
       <Button label="Cancel" onClick={closeNewMapWizard} />
-      <Button label="Next" icon="chevronRight" variant="primary" disabled={!draft} onClick={() => setStep('grid')} />
+      <div className="spacer" />
+      {draft?.source ? (
+        <>
+          <Button label="Check grid" icon="grid" disabled={busy} onClick={() => setStep('grid')} />
+          {exportNext}
+        </>
+      ) : (
+        <Button label="Next" icon="chevronRight" variant="primary" disabled={!draft} onClick={() => setStep('grid')} />
+      )}
     </>
   );
   if (step === 'grid' && draft) {
@@ -158,36 +278,57 @@ function NewMapWizard({ initialFile }: { initialFile: File | null }) {
       <GridStep
         draft={draft}
         onChange={(calibration) => setDraft({ ...draft, calibration })}
-        onReset={() => setDraft({ ...draft, calibration: guessFor(draft) })}
+        onReset={() => setDraft({ ...draft, calibration: draft.guess })}
       />
     );
     footer = (
       <>
         <Button label="Back" disabled={busy} onClick={() => setStep('image')} />
         <div className="spacer" />
-        <Button
-          label="Skip, keep the guess"
-          disabled={busy}
-          title="Creates the map with the grid guessed from the file name; correct it later in the editor"
-          onClick={() => createMap(draft, guessFor(draft)).catch(reportError)}
-        />
-        <Button
-          label={busy ? 'Creating…' : 'Create map'}
-          icon="check"
-          variant="primary"
-          disabled={busy}
-          onClick={() => createMap(draft, draft.calibration).catch(reportError)}
-        />
+        {draft.source ? (
+          exportNext
+        ) : (
+          <>
+            <Button
+              label="Skip, keep the guess"
+              disabled={busy}
+              title="Creates the map with the grid guessed from the file name; correct it later in the editor"
+              onClick={() => createMap(draft, draft.guess).catch(reportError)}
+            />
+            {createButton}
+          </>
+        )}
+      </>
+    );
+  }
+  if (step === 'objects' && draft?.source?.project && draft.source.objects) {
+    const source = draft.source;
+    body = (
+      <DamObjectsPanel
+        project={draft.source.project}
+        choices={draft.source.objects}
+        onChange={(objects) => setDraft({ ...draft, source: { ...source, objects } })}
+      />
+    );
+    footer = (
+      <>
+        <Button label="Back" disabled={busy} onClick={() => setStep('image')} />
+        <div className="spacer" />
+        {createButton}
       </>
     );
   }
   if (step === 'done' && created) {
+    const placed = created.props.length > 0 ? `, ${created.props.length} objects` : '';
     body = (
       <div className="wizard-done">
         <Icon name="check" size={32} />
         <p>
           <strong>{created.name}</strong> is ready: {created.grid.squaresX} × {created.grid.squaresY} squares with a
-          calibrated grid. Walls, doors and terrain are added in the editor.
+          calibrated grid.{' '}
+          {draft?.source
+            ? `Imported ${exportSummary(draft.source.content)}${draft.source.project ? `, terrain${placed}` : ''}.`
+            : 'Walls, doors and terrain are added in the editor.'}
         </p>
       </div>
     );
@@ -201,9 +342,10 @@ function NewMapWizard({ initialFile }: { initialFile: File | null }) {
     );
   }
 
+  const wide = step === 'grid' || step === 'objects';
   return (
-    <Dialog title="New map" onClose={closeNewMapWizard} width={step === 'grid' ? 1100 : 560} footer={footer}>
-      <StepTrail step={step} />
+    <Dialog title="New map" onClose={closeNewMapWizard} width={wide ? 1100 : 560} footer={footer}>
+      <StepTrail steps={stepsFor(draft)} step={step} />
       {body}
     </Dialog>
   );
@@ -211,21 +353,54 @@ function NewMapWizard({ initialFile }: { initialFile: File | null }) {
 
 interface ImageStepProps {
   draft: Draft | null;
-  onFile: (file: File) => void;
+  onFiles: (files: File[]) => void;
   onRename: (name: string) => void;
+  onRemoveProject: () => void;
 }
 
-function ImageStep({ draft, onFile, onRename }: ImageStepProps) {
+function ImageStep({ draft, onFiles, onRename, onRemoveProject }: ImageStepProps) {
   const input = useRef<HTMLInputElement>(null);
-  const { dragging, handlers } = useFileDrop((files) => {
-    const image = files.find(isImageFile);
-    if (image) {
-      onFile(image);
-    } else {
-      useAppStore.getState().reportError(new Error('Drop a PNG, JPEG or WebP image'));
-    }
-  });
+  const projectInput = useRef<HTMLInputElement>(null);
+  const { dragging, handlers } = useFileDrop(onFiles);
   const fromName = draft && gridFromFileName(draft.file.name);
+  const source = draft?.source ?? null;
+  let details = null;
+  if (draft && source) {
+    details = (
+      <>
+        <p className="muted">
+          {source.fileName}: {draft.image.widthPx} × {draft.image.heightPx} px at {draft.calibration.pxPerSquare} px per
+          square · {exportSummary(source.content)}
+        </p>
+        <div className="row">
+          {source.project ? (
+            <>
+              <span className="muted">
+                {source.project.fileName}: {projectSummary(source.project)}
+              </span>
+              <Button label="Remove" icon="close" onClick={onRemoveProject} />
+            </>
+          ) : (
+            <Button
+              label="Add Dungeon Alchemist project (.dam)…"
+              icon="upload"
+              title="Ground heights and object positions from the project the export was made from"
+              onClick={() => projectInput.current?.click()}
+            />
+          )}
+        </div>
+      </>
+    );
+  } else if (draft) {
+    details = (
+      <p className="muted">
+        {draft.image.widthPx} × {draft.image.heightPx} px ·{' '}
+        {fromName
+          ? `the file name says ${fromName.squaresX} × ${fromName.squaresY} squares`
+          : 'no grid size in the file name; you place the grid in the next step'}
+      </p>
+    );
+  }
   return (
     <div className="col">
       <div className={dragging ? 'drop-zone dragging' : 'drop-zone'} {...handlers}>
@@ -234,23 +409,33 @@ function ImageStep({ draft, onFile, onRename }: ImageStepProps) {
         ) : (
           <>
             <Icon name="image" size={32} />
-            <span>Drop a battlemap image here</span>
+            <span>Drop a battlemap image or a Universal VTT export (.dd2vtt, .df2vtt, .uvtt) here</span>
           </>
         )}
         <Button
           icon="upload"
-          label={draft ? 'Choose another image' : 'Choose image'}
+          label={draft ? 'Choose another file' : 'Choose file'}
           variant={draft ? 'default' : 'primary'}
           onClick={() => input.current?.click()}
         />
         <input
           ref={input}
           type="file"
-          accept={IMAGE_TYPES}
+          accept={`${MAP_FILE_TYPES},.dam`}
+          multiple
           hidden
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onFile(file);
+            onFiles([...(e.target.files ?? [])]);
+            e.target.value = '';
+          }}
+        />
+        <input
+          ref={projectInput}
+          type="file"
+          accept=".dam"
+          hidden
+          onChange={(e) => {
+            onFiles([...(e.target.files ?? [])]);
             e.target.value = '';
           }}
         />
@@ -258,12 +443,7 @@ function ImageStep({ draft, onFile, onRename }: ImageStepProps) {
       {draft && (
         <>
           <TextField label="Name" value={draft.name} onChange={onRename} />
-          <p className="muted">
-            {draft.image.widthPx} × {draft.image.heightPx} px ·{' '}
-            {fromName
-              ? `the file name says ${fromName.squaresX} × ${fromName.squaresY} squares`
-              : 'no grid size in the file name; you place the grid in the next step'}
-          </p>
+          {details}
         </>
       )}
     </div>

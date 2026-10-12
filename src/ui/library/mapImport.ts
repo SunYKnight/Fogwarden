@@ -1,4 +1,6 @@
-import { createMap, type BattleMap, type MapImage, type Vec2 } from '@/core/model';
+import { damTerrainField, type DamProject } from '@/core/import/damProject';
+import type { ImportedContent } from '@/core/import/importedMap';
+import { createMap, type AssetRef, type BattleMap, type Grid, type MapImage, type Prop, type Vec2 } from '@/core/model';
 import { fitSquaresToImage, type GridCalibration } from '@/core/terrain/calibration';
 import type { Repository } from '@/data/repository';
 
@@ -13,11 +15,15 @@ export function gridFromFileName(name: string): { squaresX: number; squaresY: nu
   return match ? { squaresX: Number(match[1]), squaresY: Number(match[2]) } : null;
 }
 
+// Dungeon Alchemist appends " UniversalVTT" or " AboveVTT" to UVTT names.
+const FORMAT_SUFFIX = /\s+(UniversalVTT|AboveVTT)$/i;
+
 export function mapNameFromFileName(fileName: string): string {
   return fileName
     .replace(/\.[^.]+$/, '')
     .replace(/[_]+/g, ' ')
-    .trim();
+    .trim()
+    .replace(FORMAT_SUFFIX, '');
 }
 
 /** Starting grid for the wizard: the file name's square count if present, else 70 px squares. */
@@ -62,19 +68,48 @@ export function cornerGesture(pending: Vec2 | null, down: Vec2, up: Vec2, minPx:
   return result;
 }
 
-/** Saves a new map for the image with the grid already placed, so it opens calibrated. */
-export async function createCalibratedMap(
-  repository: Repository,
-  file: File,
-  options: { name: string; image: ImageSize; calibration: GridCalibration },
-): Promise<BattleMap> {
-  const { name, image, calibration } = options;
+export interface ImportedMapOptions {
+  name: string;
+  image: ImageSize;
+  calibration: GridCalibration;
+  /** Walls, doors, lights and ambient light from a map maker export. */
+  content?: ImportedContent;
+  /** Dungeon Alchemist project whose ground heights become the terrain. */
+  project?: DamProject | null;
+  /** Stores the battlemap picture in the new map's asset folder. */
+  writeImage: (mapId: string) => Promise<AssetRef>;
+  /** Props placed on the new map; their models go to its asset folder. */
+  props?: (mapId: string, grid: Grid) => Promise<Prop[]>;
+}
+
+/** Saves a new map for an image with the grid already placed, so it opens calibrated. */
+export async function saveImportedMap(repository: Repository, options: ImportedMapOptions): Promise<BattleMap> {
+  const { name, image, calibration, content, project } = options;
   const squares = fitSquaresToImage(image, calibration.pxPerSquare);
   const map = createMap({ name, image: null, ...squares, pxPerSquare: calibration.pxPerSquare });
-  const asset = await repository.importMapAsset(map.id, file.name, new Uint8Array(await file.arrayBuffer()));
+  const grid = { ...map.grid, ...calibration };
+  // Terrain first: a misfit project must fail before files are written.
+  const heights = project ? damTerrainField(project, grid, map.terrain.samplesPerSquare).encode() : null;
+  const asset = await options.writeImage(map.id);
+  const props = options.props ? await options.props(map.id, grid) : [];
   return repository.save('map', {
     ...map,
+    ...content,
     image: { asset, ...image },
-    grid: { ...map.grid, ...calibration },
+    grid,
+    terrain: heights === null ? map.terrain : { ...map.terrain, heights },
+    props,
+  });
+}
+
+/** Saves a new map for the image file with the grid already placed. */
+export function createCalibratedMap(
+  repository: Repository,
+  file: File,
+  options: Omit<ImportedMapOptions, 'writeImage'>,
+): Promise<BattleMap> {
+  return saveImportedMap(repository, {
+    ...options,
+    writeImage: async (mapId) => repository.importMapAsset(mapId, file.name, new Uint8Array(await file.arrayBuffer())),
   });
 }

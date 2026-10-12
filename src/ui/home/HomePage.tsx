@@ -6,13 +6,13 @@ import { useLibraryStore } from '@/state/libraryStore';
 import { AssetImage } from '../components/AssetImage';
 import { Button, EmptyState, Icon, PageHeader } from '../kit';
 import { openCreatureImport } from '../library/compendiumUi';
-import { isImageFile, useFileDrop } from '../library/fileDrop';
+import { isDamFile, isMapSourceFile, useFileDrop } from '../library/fileDrop';
 import { openNewMapWizard } from '../library/NewMapWizard';
 import { FirstSteps } from './FirstSteps';
 import { recentItems, type RecentItem } from './recent';
 
 const RECENT_LIMIT = 6;
-const DROP_TYPES = 'image/png,image/jpeg,image/webp,.txt,.glb';
+const DROP_TYPES = 'image/png,image/jpeg,image/webp,.dd2vtt,.df2vtt,.uvtt,.dam,.txt,.glb';
 
 /** Battlemap image of a library map, for encounter thumbnails; a user copy shadows the shipped map. */
 function useMapImage(ref: DocRef | null): AssetRef | null {
@@ -100,21 +100,23 @@ function RecentCard({ item }: { item: RecentItem }) {
   );
 }
 
-/** Routes dropped files: images become maps, stat blocks go to the creature import. */
+/** Routes dropped files: images and map exports become maps, stat blocks go to the creature import. */
 async function handleDrop(files: File[]): Promise<void> {
   const { notify } = useAppStore.getState();
   const file = files[0];
   if (!file) {
     throw new Error('Nothing was dropped');
   }
-  if (isImageFile(file)) {
-    openNewMapWizard(file);
+  if (files.some(isMapSourceFile)) {
+    openNewMapWizard(files);
+  } else if (isDamFile(file)) {
+    notify(`Drop "${file.name}" together with the .dd2vtt export it belongs to.`, 'info');
   } else if (/\.txt$/i.test(file.name)) {
     openCreatureImport(await file.text());
   } else if (/\.glb$/i.test(file.name)) {
     notify('3D models are added in the map editor: open a map and drop the .glb onto the canvas.', 'info');
   } else {
-    notify(`"${file.name}" is not supported here: drop a battlemap image or a .txt stat block.`, 'info');
+    notify(`"${file.name}" is not supported here: drop a battlemap image, a map export or a .txt stat block.`, 'info');
   }
 }
 
@@ -127,13 +129,15 @@ function DropZone() {
       <Icon name="upload" size={32} />
       <strong>Drop files here</strong>
       <span className="muted">
-        A battlemap image becomes a new map · a <code>.txt</code> stat block opens the creature import
+        A battlemap image or a <code>.dd2vtt</code> export becomes a new map · a <code>.txt</code> stat block opens the
+        creature import
       </span>
       <Button icon="folder" label="Choose file" onClick={() => input.current?.click()} />
       <input
         ref={input}
         type="file"
         accept={DROP_TYPES}
+        multiple
         hidden
         onChange={(e) => {
           handleDrop([...(e.target.files ?? [])]).catch(reportError);

@@ -1,7 +1,6 @@
 import { produce } from 'immer';
 import { useEffect, useState } from 'react';
 import { createCreature, type Creature, type DocRef } from '@/core/model';
-import type { LibraryEntry } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { Button, confirmDialog, EmptyState, PageHeader } from '../kit';
@@ -17,22 +16,6 @@ function confirmDiscard(): Promise<boolean> {
     confirmLabel: 'Discard',
     danger: true,
   });
-}
-
-/** Shipped creatures stay read-only; their Image and Token fields edit the portrait index instead. */
-function editableCreature(entry: LibraryEntry<'creature'>): Creature {
-  const portrait = useLibraryStore.getState().portraits[entry.ref.id];
-  return entry.ref.area === 'content' && portrait
-    ? { ...entry.doc, image: entry.doc.image ?? portrait.image, token: entry.doc.token ?? portrait.token }
-    : entry.doc;
-}
-
-async function savePortrait(creature: Creature): Promise<void> {
-  const { portraits, savePortraits } = useLibraryStore.getState();
-  const { [creature.id]: _previous, ...others } = portraits;
-  const kept =
-    creature.image || creature.token ? { [creature.id]: { image: creature.image, token: creature.token } } : {};
-  await savePortraits({ ...others, ...kept });
 }
 
 function CreatureEditorBody({ creature }: { creature: Creature }) {
@@ -58,8 +41,11 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
     setBusy(true);
     try {
       if (shipped && unpictured(draft) === unpictured(saved)) {
-        await savePortrait(draft);
-        setSaved(draft);
+        const pictures = await repository.storeCreaturePictures(draft.id, draft);
+        const stored = { ...draft, ...pictures };
+        setSaved(stored);
+        setDraft(stored);
+        await refresh('creature');
         useAppStore.getState().notify(`Saved the pictures of "${draft.name}"; the creature stays shipped`);
       } else {
         const stored = await repository.save('creature', draft);
@@ -87,8 +73,8 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
       if (!original) {
         throw new Error(`Shipped creature "${draft.name}" is missing`);
       }
-      setSaved(editableCreature(original));
-      setDraft(editableCreature(original));
+      setSaved(original.doc);
+      setDraft(original.doc);
       useAppStore.getState().notify(`Reverted "${original.doc.name}"`);
     }
   };
@@ -114,7 +100,7 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
       {shipped && (
         <div className="hint-bar" role="note">
           Shipped creature: saving creates your copy, which you can revert later. Changing only Image or Token keeps it
-          shipped and stores the pictures separately.
+          shipped and stores the pictures as files named after it.
         </div>
       )}
       <div className="creature-editor-body">
@@ -132,7 +118,7 @@ export function CreatureEditorPage({ creatureRef }: { creatureRef: DocRef | null
   const [creature] = useState(() => {
     const entries = useLibraryStore.getState().listings.creature.entries;
     const entry = creatureRef && entries.find((e) => e.ref.id === creatureRef.id);
-    return creatureRef ? entry && editableCreature(entry) : createCreature('New creature');
+    return creatureRef ? entry?.doc : createCreature('New creature');
   });
   return creature ? (
     <CreatureEditorBody creature={creature} />

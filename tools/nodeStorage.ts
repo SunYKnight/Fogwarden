@@ -48,6 +48,10 @@ export class NodeStorage implements Storage {
     return readFile(this.resolve(area, path), 'utf8');
   }
 
+  async readBytes(area: StorageArea, path: string): Promise<Uint8Array> {
+    return new Uint8Array(await readFile(this.resolve(area, path)));
+  }
+
   writeText(path: string, text: string): Promise<void> {
     return this.writeAtomic(path, text);
   }

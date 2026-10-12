@@ -2246,6 +2246,22 @@ kbd {
   padding: 3px 8px;
 }
 
+/* Dungeon Alchemist object kinds: one row per kind with its model choice */
+.dam-objects {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dam-objects th,
+.dam-objects td {
+  padding: 3px 6px;
+  text-align: left;
+}
+
+.dam-objects input[type='number'] {
+  width: 6em;
+}
+
 /* Player links: one view picked from a list, its link and QR code */
 .player-links-head > .field {
   flex: 1;

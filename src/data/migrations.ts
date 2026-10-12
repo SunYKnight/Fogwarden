@@ -8,13 +8,15 @@ import {
   MAP_SCHEMA_VERSION,
   MARKER_SCHEMA_VERSION,
   PARTY_VIEW,
-  PORTRAITS_SCHEMA_VERSION,
   SETTINGS_SCHEMA_VERSION,
 } from '@/core/model';
 
-export type SchemaName = 'creature' | 'map' | 'marker' | 'campaign' | 'encounter' | 'settings' | 'portraits';
+export type SchemaName = 'creature' | 'map' | 'marker' | 'campaign' | 'encounter' | 'settings';
 
 type Migration = (doc: Record<string, unknown>) => Record<string, unknown>;
+
+/** A step that moved data into other files; `layoutMigration.ts` performs it once per data root. */
+const LAYOUT = 'layout';
 
 export const CURRENT_VERSION: Record<SchemaName, number> = {
   creature: CREATURE_SCHEMA_VERSION,
@@ -23,22 +25,32 @@ export const CURRENT_VERSION: Record<SchemaName, number> = {
   campaign: CAMPAIGN_SCHEMA_VERSION,
   encounter: ENCOUNTER_SCHEMA_VERSION,
   settings: SETTINGS_SCHEMA_VERSION,
-  portraits: PORTRAITS_SCHEMA_VERSION,
 };
 
 /**
  * `MIGRATIONS[schema][n]` upgrades a document from version n+1 to n+2.
  * A schema version bump must append exactly one step here.
  */
-const MIGRATIONS: Record<SchemaName, Migration[]> = {
-  creature: [],
-  map: [],
+const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
+  creature: [
+    // v2: creatures are text files (stat block plus header).
+    LAYOUT,
+  ],
+  map: [
+    // v2: terrain heights moved from base64 into terrain.png.
+    LAYOUT,
+  ],
   marker: [],
-  campaign: [],
+  campaign: [
+    // v2: campaign notes moved into notes.md.
+    LAYOUT,
+  ],
   encounter: [
     // v2: explored fog per character; nobody knows who saw what before, so
     // every player character and vision source keeps the shared set.
     exploredPerCharacter,
+    // v3: encounter folders with fog bitsets as PNG masks.
+    LAYOUT,
   ],
   settings: [
     // v2: the never-used lastCampaignId became lastEncounter.
@@ -56,7 +68,6 @@ const MIGRATIONS: Record<SchemaName, Migration[]> = {
       playerLinks: defaultPlayerLinks(),
     }),
   ],
-  portraits: [],
 };
 
 function exploredPerCharacter(doc: Record<string, unknown>): Record<string, unknown> {
@@ -73,7 +84,8 @@ export class MigrationError extends Error {
   }
 }
 
-export function migrate(schema: SchemaName, raw: unknown): Record<string, unknown> {
+/** Upgrades a document to `target` (default: current) with the pure steps; layout steps throw. */
+export function migrate(schema: SchemaName, raw: unknown, target = CURRENT_VERSION[schema]): Record<string, unknown> {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new MigrationError(`Expected a ${schema} document object`);
   }
@@ -86,8 +98,12 @@ export function migrate(schema: SchemaName, raw: unknown): Record<string, unknow
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1 || version > current) {
     throw new MigrationError(`Unsupported ${schema} version ${String(version)} (current ${current})`);
   }
-  for (let v = version; v < current; v++) {
-    doc = { ...MIGRATIONS[schema][v - 1]!(doc), version: v + 1 };
+  for (let v = version; v < target; v++) {
+    const step = MIGRATIONS[schema][v - 1]!;
+    if (step === LAYOUT) {
+      throw new MigrationError(`${schema} version ${v} uses the old file layout and was not converted`);
+    }
+    doc = { ...step(doc), version: v + 1 };
   }
   return doc;
 }

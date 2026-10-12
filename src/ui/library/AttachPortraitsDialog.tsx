@@ -1,8 +1,7 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { useMemo, useState } from 'react';
 import { matchPortraits } from '@/core/import/portraitMatch';
-import type { Portraits } from '@/core/model';
-import { creatureAssetRef, type LibraryEntry } from '@/data/repository';
+import { creaturePictureRef, type LibraryEntry } from '@/data/repository';
 import { importFile, listFolder } from '@/data/tauriStorage';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
@@ -28,31 +27,23 @@ export async function attachPortraitsFromFolder(): Promise<void> {
   }
 }
 
-// Shipped creatures stay read-only: their pictures go to the portrait index;
-// user creatures get the image in their own document.
+// The copy's file name attaches it, also to shipped creatures, whose text
+// files stay untouched.
 async function attach(folder: string, plan: PlannedPortrait[]): Promise<void> {
   const { repository } = useAppStore.getState();
-  const library = useLibraryStore.getState();
-  const portraits: Portraits = { ...library.portraits };
   const base = folder.replace(/[\\/]+$/, '');
   for (const { fileName, entry } of plan) {
-    const image = creatureAssetRef(entry.ref.id, 'image', fileName);
+    const image = creaturePictureRef('data', entry.ref.id, 'image', fileName.slice(fileName.lastIndexOf('.') + 1));
     await importFile(`${base}/${fileName}`, image.path);
-    if (entry.ref.area === 'content') {
-      portraits[entry.ref.id] = { image, token: portraits[entry.ref.id]?.token ?? null };
-    } else {
-      await repository.save('creature', { ...entry.doc, image });
-    }
+    await repository.storeCreaturePictures(entry.ref.id, { image, token: entry.doc.token });
   }
-  await library.savePortraits(portraits);
-  await library.refresh('creature');
+  await useLibraryStore.getState().refresh('creature');
   useAppStore.getState().notify(`Attached ${plan.length} portraits`);
 }
 
 export function AttachPortraitsDialog({ folder, files }: { folder: string; files: string[] }) {
   const reportError = useAppStore((s) => s.reportError);
   const entries = useLibraryStore((s) => s.listings.creature.entries);
-  const portraits = useLibraryStore((s) => s.portraits);
   const [replace, setReplace] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -68,11 +59,9 @@ export function AttachPortraitsDialog({ folder, files }: { folder: string; files
     () =>
       matching.matches.flatMap(({ fileName, creatureId }) => {
         const entry = entries.find((e) => e.ref.id === creatureId);
-        const current =
-          entry && (entry.doc.image ?? (entry.ref.area === 'content' ? portraits[creatureId]?.image : null));
-        return entry ? [{ fileName, entry, replaces: Boolean(current) }] : [];
+        return entry ? [{ fileName, entry, replaces: entry.doc.image !== null }] : [];
       }),
-    [matching, entries, portraits],
+    [matching, entries],
   );
   const existing = planned.filter((p) => p.replaces).length;
   const plan = planned.filter((p) => replace || !p.replaces);

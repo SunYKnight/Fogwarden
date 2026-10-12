@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BitSet, bytesToBase64 } from '../src/core/binary';
-import { creatureSchema, mapSchema } from '../src/core/model';
+import { parseCreatureFile } from '../src/core/import/creatureFile';
+import { mapSchema } from '../src/core/model';
 import { HeightField } from '../src/core/terrain/heightfield';
 import { exploreBySource, fogSize, viewFog, type FogSources } from '../src/core/vision/fog';
 import { computeVisibility, type VisionState } from '../src/core/vision/visibility';
@@ -17,8 +18,9 @@ import { CONTENT_ROOT } from './cli';
 const RUNS = 200;
 
 const map = mapSchema.parse(JSON.parse(readFileSync(join(CONTENT_ROOT, 'maps', SAMPLE_MAP.id, 'map.json'), 'utf8')));
-const goblin = creatureSchema.parse(
-  JSON.parse(readFileSync(join(CONTENT_ROOT, 'creatures', `${SAMPLE_GOBLIN.id}.json`), 'utf8')),
+const goblin = parseCreatureFile(
+  readFileSync(join(CONTENT_ROOT, 'creatures', `${SAMPLE_GOBLIN.id}.txt`), 'utf8'),
+  SAMPLE_GOBLIN.id,
 );
 const encounter = createSampleEncounter(map, goblin);
 const terrain = HeightField.fromMap(map);

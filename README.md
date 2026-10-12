@@ -90,18 +90,74 @@ pnpm tsx tools/import-statblocks.ts <folder> [--data-root <path>] [--source <nam
 
 Imports write into your data folder, never into the repo. Monster Manual text is copyrighted and stays out of git.
 
+## Your data
+
+Everything the app stores is plain files you can read and edit with a text editor and an image viewer. The app
+reads them when a page lists them and overwrites a document when it saves it, so edit documents that are not open in
+the app. Settings > Data shows and changes the folder.
+
+| What              | File                                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| Creatures         | `library/creatures/<id>.txt`: a stat block as printed in the books, after a short header              |
+| Creature pictures | `library/creatures/<id>.png` (or `.jpg`, `.jpeg`, `.webp`), token picture `<id>.token.png`            |
+| Area templates    | `library/markers/<id>.json`                                                                           |
+| Maps              | `library/maps/<id>/`: `map.json`, `terrain.png` (heights), `assets/` (image, 3D models)               |
+| Campaigns         | `campaigns/<id>/campaign.json`, `notes.md`                                                            |
+| Encounters        | `campaigns/<id>/encounters/<id>/encounter.json`, `fog/` (explored areas as black/white PNG)           |
+| Settings          | `settings.json`                                                                                       |
+| Object models     | `library/dungeon-alchemist-objects.json` (model per object kind), `library/dungeon-alchemist-models/` |
+
+- File names are the ids. A new `.txt` stat block in `library/creatures/` shows up in the Compendium; a picture named
+  after a creature id pictures it, shipped ones too (`srd-goblin.jpg` for the SRD goblin).
+- `terrain.png` is a 16-bit grayscale heightmap: height in feet = `baseFt + value * feetPerUnit` from `map.json`.
+- Fog masks have one pixel per fog cell: white = explored (or revealed/hidden by you in `revealed.png`/`hidden.png`).
+- `settings.json` holds secrets: the relay DM key and the player link secret. Don't share it.
+
+Data folders of older versions are converted on first start; a file that cannot be converted safely stays as it
+was and is listed as a load problem. Format details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#data-formats).
+
+## Battlemaps from map makers
+
+Besides plain images (PNG, JPEG, WebP), the New map wizard, the Home drop zone and the Maps page take exports that
+bring the grid, walls, doors, windows and lights along:
+
+| Format                                                      | Made by                                                           | What comes along                                          |
+| ----------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
+| Universal VTT (`.dd2vtt`, `.df2vtt`, `.uvtt`)               | Dungeon Alchemist, Dungeondraft, DungeonFog, Arkenforge, MapForge | image, grid, walls, doors, windows, lights, ambient light |
+| Foundry export folder (`<map>_NN.json` + picture per floor) | Dungeon Alchemist                                                 | one map per floor with walls, doors, lights               |
+| Project file (`.dam`, with one of the above)                | Dungeon Alchemist                                                 | ground heights, object positions                          |
+
+- **Dungeon Alchemist**: _Export_ > format _Universal VTT_ gives a `.dd2vtt`. Drop it on Home or Maps (together with
+  the saved `.dam` project for hills and objects) or pick it in _New map_. For several floors, export with format
+  _Foundry VTT_ into an empty folder and use **Maps > Import Dungeon Alchemist folder…** (desktop app); a copy of the
+  `.dam` in that folder whose name starts the export's adds terrain and objects to the lowest floor.
+- **Dungeondraft**: _File > Export_, export mode _Universal VTT_, gives a `.dd2vtt`. Portals with _Block light_ off
+  arrive as windows.
+- **DungeonFog**: export with file type _Universal VTT_ (`.df2vtt`).
+
+The grid comes from the file, so the wizard skips the grid step; _Check grid_ shows it over the image first. Walls are
+10 ft high, sight-blocking objects 6 ft; lights reach their full range, half of it bright. When the export says the
+lighting is baked into the picture, the ambient light is set one level brighter and the map notes say so.
+
+Dungeon Alchemist's own 3D models stay in Dungeon Alchemist. On import with a `.dam`, every object kind is listed once
+with its count; pick a stand-in per kind: a shipped CC0 model, your own `.glb`/`.gltf`, a file from a folder (for
+example the custom models you added under `Dungeon Alchemist_Data/StreamingAssets/Models/`), or _Skip_. The choices
+are kept for later imports.
+
 ## Creature pictures and standees
 
 Tokens show the creature picture: a disc in the top view, an upright standee in the 3D view (Settings > Rules
 switches standees off for you and your players). To give the shipped SRD creatures pictures, use **Compendium >
 Attach portraits from folder…** and pick a folder of PNG/JPEG/WebP files named after the creatures (`goblin.jpg`,
 `Adult Red Dragon.png`, `legacy--werewolf.jpg`; case, accents, punctuation and `legacy--` prefixes don't matter). The
-preview lists matched and unmatched files before anything is copied into your data folder; existing pictures are
-only replaced when you tick the box. One picture per creature also works in the creature editor's Image/Token
-fields; for shipped creatures that keeps the creature shipped and stores only the picture.
+preview lists matched and unmatched files before anything is copied into your data folder under the creatures' ids;
+existing pictures are only replaced when you tick the box. One picture per creature also works in the creature
+editor's Image/Token fields (the file is copied at once); for shipped creatures that keeps the creature shipped.
 
 ## License of shipped content
 
 `content/` contains material from the System Reference Document 5.1 under CC-BY-4.0; see
 [`content/LICENSE-SRD.md`](content/LICENSE-SRD.md). The sample map `content/maps/sample-chapel` is generated by
-`tools/build-sample.ts` and released under CC0; see [`content/LICENSE-SAMPLE.md`](content/LICENSE-SAMPLE.md).
+`tools/build-sample.ts` and released under CC0; see [`content/LICENSE-SAMPLE.md`](content/LICENSE-SAMPLE.md). The
+stand-in models in `content/models/cc0/` are Kenney's (CC0); sources in
+[`content/models/cc0/LICENSE.md`](content/models/cc0/LICENSE.md).

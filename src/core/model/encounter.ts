@@ -3,8 +3,8 @@ import { assetRefSchema, docHeader, docRefSchema, idSchema, mapPointSchema, time
 import { conditionSchema, sensesSchema, sizeSchema } from './creature';
 import { areaMarkerSchema } from './marker';
 
-export const ENCOUNTER_SCHEMA_VERSION = 2;
-export const CAMPAIGN_SCHEMA_VERSION = 1;
+export const ENCOUNTER_SCHEMA_VERSION = 3;
+export const CAMPAIGN_SCHEMA_VERSION = 2;
 
 export const sideSchema = z.enum(['player', 'ally', 'enemy', 'neutral']);
 export type Side = z.infer<typeof sideSchema>;
@@ -50,7 +50,8 @@ export const fogSchema = z.object({
   cellsPerSquare: z.number().int().min(1).max(8),
   /**
    * Base64 bitsets, one bit per fog cell, row-major (south rows, east columns). Explored cells are kept per
-   * vision source by combatant id; the party remembers their union.
+   * vision source by combatant id; the party remembers their union. Files keep each set as a black-and-white
+   * PNG mask in the encounter's `fog` folder (`encounterFileSchema`).
    */
   exploredBy: z.record(idSchema, z.string()),
   revealedByDm: z.string(),
@@ -79,3 +80,11 @@ export const campaignSchema = z.object({
   notes: z.string(),
 });
 export type Campaign = z.infer<typeof campaignSchema>;
+
+/** `encounter.json` in an encounter folder; the fog bitsets live in its `fog` folder as PNG masks. */
+export const encounterFileSchema = encounterSchema.extend({ fog: fogSchema.pick({ cellsPerSquare: true }) });
+export type EncounterFile = z.infer<typeof encounterFileSchema>;
+
+/** `campaign.json` in a campaign folder; the notes live next to it in `notes.md`. */
+export const campaignFileSchema = campaignSchema.omit({ notes: true });
+export type CampaignFile = z.infer<typeof campaignFileSchema>;

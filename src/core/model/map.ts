@@ -10,7 +10,7 @@ import {
   worldVec3Schema,
 } from './common';
 
-export const MAP_SCHEMA_VERSION = 1;
+export const MAP_SCHEMA_VERSION = 2;
 
 export const SIDE_MATERIALS = ['projected', 'stone', 'brick', 'wood', 'plaster', 'hedge', 'rock', 'metal'] as const;
 export const sideMaterialSchema = z.enum(SIDE_MATERIALS);
@@ -40,7 +40,10 @@ export type Grid = z.infer<typeof gridSchema>;
 export const terrainSchema = z.object({
   /** Height samples per grid square edge; the field has (squaresX*n+1) x (squaresY*n+1) samples. */
   samplesPerSquare: z.number().int().min(1).max(8),
-  /** Base64 little-endian Float32 heights in feet, row-major: row = south index, column = east index. */
+  /**
+   * Base64 little-endian Float32 heights in feet, row-major: row = south index, column = east index.
+   * In memory and over the sync channel only; files keep them in `terrain.png` (`terrainFileSchema`).
+   */
   heights: z.string(),
   /** Ground color where no battlemap image covers the terrain. */
   baseColor: colorSchema,
@@ -161,3 +164,17 @@ export const mapSchema = z.object({
   props: z.array(propSchema),
 });
 export type BattleMap = z.infer<typeof mapSchema>;
+
+/** Maps `terrain.png` (16-bit grayscale) pixel values to feet: height = baseFt + value * feetPerUnit. */
+export const heightmapSchema = z.object({
+  file: z.literal('terrain.png'),
+  baseFt: z.number(),
+  feetPerUnit: z.number().positive(),
+});
+export type HeightmapRef = z.infer<typeof heightmapSchema>;
+
+export const terrainFileSchema = terrainSchema.omit({ heights: true }).extend({ heightmap: heightmapSchema });
+
+/** `map.json` in a map folder: the map with its heights in the folder's heightmap picture. */
+export const mapFileSchema = mapSchema.extend({ terrain: terrainFileSchema });
+export type MapFile = z.infer<typeof mapFileSchema>;

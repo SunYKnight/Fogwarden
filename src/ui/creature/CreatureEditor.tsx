@@ -16,7 +16,6 @@ import {
 } from '@/core/model';
 import { abilityModifier, formatCr, formatModifier, proficiencyBonusForCr, xpForCr } from '@/core/rules/abilities';
 import { averageDice } from '@/core/rules/dice';
-import { creatureAssetRef, type Repository } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { AssetImage } from '../components/AssetImage';
 import { CheckboxField, Field, NumberField, SelectField, TextField } from '../components/fields';
@@ -34,17 +33,6 @@ function setEntry<K extends string>(record: Partial<Record<K, number>>, key: K, 
   } else {
     record[key] = value;
   }
-}
-
-async function importCreatureAsset(
-  repository: Repository,
-  creatureId: string,
-  kind: 'image' | 'token',
-  file: File,
-): Promise<AssetRef> {
-  const ref = creatureAssetRef(creatureId, kind, file.name);
-  await repository.storage.writeBytes(ref.path, new Uint8Array(await file.arrayBuffer()));
-  return ref;
 }
 
 function ImageField(props: {
@@ -73,7 +61,14 @@ function ImageField(props: {
           hidden
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) importCreatureAsset(repository, creature.id, kind, file).then(onChange, reportError);
+            // The file's name makes it the creature's picture, so it applies
+            // at once, before the stat block is saved.
+            if (file) {
+              file
+                .arrayBuffer()
+                .then((bytes) => repository.importCreaturePicture(creature.id, kind, file.name, new Uint8Array(bytes)))
+                .then(onChange, reportError);
+            }
             e.target.value = '';
           }}
         />

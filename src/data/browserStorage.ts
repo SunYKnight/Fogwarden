@@ -67,6 +67,14 @@ export class BrowserStorage implements Storage {
     return text;
   }
 
+  async readBytes(area: StorageArea, path: string): Promise<Uint8Array> {
+    const bytes =
+      area === 'content'
+        ? new Uint8Array(await (await this.fetchContent(path)).arrayBuffer())
+        : await this.get(path).then((v) => (typeof v === 'string' ? new TextEncoder().encode(v) : v));
+    return bytes;
+  }
+
   async writeText(path: string, text: string): Promise<void> {
     await request((await this.store('readwrite')).put(text, path));
   }

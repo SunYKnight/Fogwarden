@@ -19,6 +19,10 @@ export class TauriStorage implements Storage {
     return invoke<string>('storage_read_text', { area, path });
   }
 
+  async readBytes(area: StorageArea, path: string): Promise<Uint8Array> {
+    return new Uint8Array(await invoke<ArrayBuffer>('storage_read_bytes', { area, path }));
+  }
+
   writeText(path: string, text: string): Promise<void> {
     return invoke<void>('storage_write_text', { path, text });
   }
@@ -68,4 +72,9 @@ export function listFolder(absolutePath: string): Promise<DirEntry[]> {
 /** Copies the picked file `absolutePath` into the data area at `to` (desktop only). */
 export function importFile(absolutePath: string, to: string): Promise<void> {
   return invoke<void>('storage_import_file', { from: absolutePath, to });
+}
+
+/** Text of the picked file `absolutePath` (desktop only). */
+export function readFileText(absolutePath: string): Promise<string> {
+  return invoke<string>('storage_read_file_text', { path: absolutePath });
 }

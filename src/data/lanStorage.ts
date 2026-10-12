@@ -30,6 +30,10 @@ export class LanStorage implements Storage {
     return unavailable(path);
   }
 
+  readBytes(_area: StorageArea, path: string): Promise<Uint8Array> {
+    return unavailable(path);
+  }
+
   writeText(path: string): Promise<void> {
     return unavailable(path);
   }

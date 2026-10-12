@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use tauri::ipc::{InvokeBody, Request};
+use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::{AppHandle, Manager, State};
 
 const BOOTSTRAP_FILE: &str = "bootstrap.json";
@@ -225,6 +225,12 @@ pub fn storage_read_text(state: State<'_, StorageState>, area: Area, path: Strin
     Ok(fs::read_to_string(resolve(&state.root(area)?, &path)?)?)
 }
 
+// A raw response keeps PNG bytes out of JSON number arrays.
+#[tauri::command]
+pub fn storage_read_bytes(state: State<'_, StorageState>, area: Area, path: String) -> Result<Response, StorageError> {
+    Ok(Response::new(fs::read(resolve(&state.root(area)?, &path)?)?))
+}
+
 #[tauri::command]
 pub fn storage_write_text(state: State<'_, StorageState>, path: String, text: String) -> Result<(), StorageError> {
     write_atomic(&resolve(&state.root(Area::Data)?, &path)?, text.as_bytes())
@@ -288,6 +294,17 @@ fn import_file(root: &Path, from: &Path, to: &str) -> Result<(), StorageError> {
 #[tauri::command]
 pub fn storage_import_file(state: State<'_, StorageState>, from: String, to: String) -> Result<(), StorageError> {
     import_file(&state.root(Area::Data)?, Path::new(&from), &to)
+}
+
+/// Text of a file the user picked (absolute path) outside the storage roots.
+#[tauri::command]
+pub fn storage_read_file_text(path: String) -> Result<String, StorageError> {
+    let file = PathBuf::from(&path);
+    if file.is_absolute() && file.is_file() {
+        Ok(fs::read_to_string(&file)?)
+    } else {
+        Err(StorageError(format!("not a file: {path}")))
+    }
 }
 
 #[tauri::command]

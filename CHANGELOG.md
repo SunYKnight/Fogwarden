@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Map maker imports: Universal VTT files (`.dd2vtt`, `.df2vtt`, `.uvtt` from Dungeon Alchemist, Dungeondraft,
+  DungeonFog, Arkenforge, MapForge) become calibrated maps with walls (joined across doors, closed loops kept),
+  doors, windows, lights and ambient light, from the New map wizard (grid step skipped, "Check grid" optional,
+  summary of what came along), the Home drop zone and the Maps page. Dungeon Alchemist's Foundry export imports
+  per folder (Maps > Import Dungeon Alchemist folder…, desktop) as one map per floor. A Dungeon Alchemist project
+  (`.dam`, version 11) adds its ground heights as terrain and places its objects as props with a model the DM picks
+  per object kind (shipped CC0 stand-ins from Kenney in `content/models/cc0/`, own `.glb`/`.gltf`, or a model
+  folder; kept in `library/dungeon-alchemist-objects.json`); Dungeon Alchemist's own models are never read. Errors
+  name the file and the field. New desktop command `storage_read_file_text` for picked files.
+- Open data formats: creatures are stat block text files (`library/creatures/<id>.txt`, a short header plus the
+  stat block; any pasted stat block loads), pictures are files named after the creature id (`<id>.png`,
+  `<id>.token.png`), also for shipped creatures; the portrait index `library/portraits.json` is gone. Maps keep
+  their heights in a 16-bit grayscale `terrain.png` (scale in `map.json`, map schema v2), encounters live in
+  folders with explored/revealed/hidden fog as black-and-white PNG masks (encounter schema v3), campaign notes in
+  `notes.md` (campaign schema v2); no base64 left in the data root. Existing data folders are converted on start:
+  every document is written anew, read back and compared before the old file goes; a document that fails keeps its
+  old file and shows as a load problem. Shipped SRD creatures and the sample map are regenerated in the new
+  formats. PNG encoder/decoder `src/core/png.ts` (no dependency) shared by app and tools. The LAN server no longer
+  serves PNGs inside campaign folders or `terrain.png`.
 - Player views per character: every player screen shows either one player character's sight or the party's
   (union of all vision sources). Each vision source keeps its own explored fog (encounter schema v2; the shared
   explored area of older encounters goes to every player character and vision source); the Fog menu's "Reset

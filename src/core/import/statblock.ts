@@ -38,9 +38,12 @@ export class StatBlockError extends Error {
   }
 }
 
+/** `text` is trimmed and normalised for matching; `raw` keeps the written characters for exact free text. */
 interface Line {
   text: string;
+  raw: string;
   number: number;
+  indented: boolean;
 }
 
 type Section = 'traits' | 'actions' | 'bonusActions' | 'reactions' | 'legendary';
@@ -97,17 +100,24 @@ function fail(message: string, line: Line): never {
   throw new StatBlockError(message, line.text, line.number);
 }
 
-function toLines(text: string): Line[] {
-  const normalised = text.replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\u00a0/g, ' ');
-  return normalised.split(/\r?\n/).flatMap((raw, i) => {
-    const line = raw.trim();
-    const glued = GLUED_HEADER.exec(line);
+// Pasted pages use typographic dashes and minus signs and non-breaking spaces.
+function normalise(text: string): string {
+  return text.replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\u00a0/g, ' ');
+}
+
+/** Exact text keeps "...Actions" endings whole; pasted pages glue section headers to the line above. */
+function toLines(text: string, exact: boolean): Line[] {
+  return text.split(/\r?\n/).flatMap((original, i) => {
+    const raw = original.trim();
+    const line = normalise(raw);
+    const glued = exact ? null : GLUED_HEADER.exec(line);
+    const base = { number: i + 1, indented: /^\s/.test(original) };
     return glued
       ? [
-          { text: glued[1]!.trim(), number: i + 1 },
-          { text: glued[2]!, number: i + 1 },
+          { ...base, text: glued[1]!.trim(), raw: raw.slice(0, glued[1]!.length).trim() },
+          { ...base, text: glued[2]!, raw: glued[2]! },
         ]
-      : [{ text: line, number: i + 1 }];
+      : [{ ...base, text: line, raw }];
   });
 }
 
@@ -226,9 +236,10 @@ function parseDamageList(text: string): string[] {
     .filter((part) => part !== '' && part !== '-');
 }
 
+/** Conditions in the order the line lists them. */
 function parseConditions(text: string, line: Line): Creature['conditionImmunities'] {
   const lower = text.toLowerCase();
-  const found = CONDITIONS.filter((c) => lower.includes(c));
+  const found = CONDITIONS.filter((c) => lower.includes(c)).sort((a, b) => lower.indexOf(a) - lower.indexOf(b));
   if (found.length === 0 && lower.replace(/[-\s]/g, '') !== '') {
     fail('Unknown condition', line);
   }
@@ -455,18 +466,22 @@ function parseDamage(hit: string, line: Line): DamageRoll[] {
 }
 
 /** Attack roll of an action; only the first damage alternative before "or" counts, later riders stay in text. */
-export function parseAttack(description: string, line: Line = { text: description, number: 0 }): AttackRoll | null {
-  const header = ATTACK_HEADER.exec(description);
+export function parseAttack(
+  description: string,
+  line: Line = { text: description, raw: description, number: 0, indented: false },
+): AttackRoll | null {
+  const text = normalise(description);
+  const header = ATTACK_HEADER.exec(text);
   let attack: AttackRoll | null = null;
   if (header) {
-    const toHit = /([+-]\d+)\s+to hit/i.exec(description);
+    const toHit = /([+-]\d+)\s+to hit/i.exec(text);
     if (!toHit) {
       fail('Attack without "to hit" bonus', line);
     }
-    const reach = /reach (\d+)\s*ft/i.exec(description);
-    const range = /range (\d+)(?:\/(\d+))?\s*ft/i.exec(description);
-    const targets = /ft\.?,\s*([^.]*?)\.\s*Hit:/i.exec(description);
-    const hit = /Hit:\s*([^.]*)/i.exec(description);
+    const reach = /reach (\d+)\s*ft/i.exec(text);
+    const range = /range (\d+)(?:\/(\d+))?\s*ft/i.exec(text);
+    const targets = /ft\.?,\s*([^.]*?)\.\s*Hit:/i.exec(text);
+    const hit = /Hit:\s*([^.]*)/i.exec(text);
     const reachOrRange = header[1]!.toLowerCase();
     const kind = / (or|and) /.test(reachOrRange) ? 'melee-or-ranged' : `${reachOrRange}-${header[2]!.toLowerCase()}`;
     attack = {
@@ -481,13 +496,25 @@ export function parseAttack(description: string, line: Line = { text: descriptio
   return attack;
 }
 
+interface SectionEntry {
+  entry: Trait;
+  line: Line;
+  /** Exact text only: the "[... Attack: ...]" line holding attack data the description does not. */
+  attack?: Line;
+}
+
 interface Sections {
-  traits: { entry: Trait; line: Line }[];
-  actions: { entry: Trait; line: Line }[];
-  bonusActions: { entry: Trait; line: Line }[];
-  reactions: { entry: Trait; line: Line }[];
-  legendary: { entry: Trait; line: Line }[];
+  traits: SectionEntry[];
+  actions: SectionEntry[];
+  bonusActions: SectionEntry[];
+  reactions: SectionEntry[];
+  legendary: SectionEntry[];
   legendaryDescription: string;
+}
+
+/** A legendary section's first line is its intro if it mentions legendary actions or is no action name. */
+function isLegendaryIntro(text: string, name: string | undefined): boolean {
+  return /legendary action/i.test(text) || name === undefined || !isNameLike(name);
 }
 
 function readSections(lines: Line[]): Sections {
@@ -508,7 +535,7 @@ function readSections(lines: Line[]): Sections {
     if (header) {
       current = header;
       last = null;
-    } else if (legendaryIntro && (entries === null || /legendary action/i.test(line.text))) {
+    } else if (legendaryIntro && isLegendaryIntro(line.text, entries?.[0]!.name)) {
       sections.legendaryDescription = line.text;
     } else if (entries) {
       sections[current].push(...entries.map((entry) => ({ entry, line })));
@@ -522,14 +549,98 @@ function readSections(lines: Line[]): Sections {
   return sections;
 }
 
+/** A description written as a JSON string carries text plain lines cannot (line feeds, edge whitespace). */
+function exactDescription(text: string): string {
+  let description = text;
+  if (/^".*"$/s.test(text)) {
+    try {
+      description = String(JSON.parse(text));
+    } catch (error) {
+      // Quoted prose that is not JSON stays as written.
+      if (!(error instanceof SyntaxError)) {
+        throw error;
+      }
+    }
+  }
+  return description;
+}
+
+function exactEntry(text: string): Trait {
+  const end = nameEnd(text);
+  return end === -1
+    ? { name: text, description: '' }
+    : { name: text.slice(0, end).trim(), description: exactDescription(text.slice(end + 1).trim()) };
+}
+
+const ATTACK_LINE = /^\[(.*)\]$/;
+
+/**
+ * Sections of exact text (creature files): every unindented line starts an entry and keeps its characters,
+ * indented lines continue the entry or legendary intro above with the blank lines between them, and a
+ * "[Melee Weapon Attack: ...]" line after an action holds attack data its description does not show.
+ */
+function readExactSections(lines: Line[]): Sections {
+  const sections: Sections = {
+    traits: [],
+    actions: [],
+    bonusActions: [],
+    reactions: [],
+    legendary: [],
+    legendaryDescription: '',
+  };
+  let current: Section = 'traits';
+  let open: Trait | null = null;
+  let intro: Trait | null = null;
+  let blanks = 0;
+  for (const line of lines) {
+    const header = line.indented ? undefined : SECTION_HEADERS[line.text.toLowerCase()];
+    const entries = sections[current];
+    const last = entries[entries.length - 1];
+    const attack = ATTACK_LINE.exec(line.text);
+    const isAction = current === 'actions' || current === 'bonusActions';
+    if (line.text === '') {
+      blanks += 1;
+    } else if (line.indented) {
+      if (open === null) {
+        fail('Indented line without an entry above', line);
+      }
+      open.description =
+        open.description === '' ? line.raw : `${open.description}${'\n'.repeat(blanks + 1)}${line.raw}`;
+    } else if (header) {
+      current = header;
+      open = null;
+    } else if (attack && isAction && ATTACK_HEADER.test(attack[1]!)) {
+      if (!last || last.attack) {
+        fail('Attack line without an action above', line);
+      }
+      last.attack = line;
+    } else {
+      const entry = exactEntry(line.raw);
+      if (current === 'legendary' && !last && intro === null && isLegendaryIntro(line.text, entry.name)) {
+        intro = { name: '', description: line.raw };
+        open = intro;
+      } else {
+        entries.push({ entry, line });
+        open = entry;
+      }
+    }
+    blanks = line.text === '' ? blanks : 0;
+  }
+  sections.legendaryDescription = intro?.description ?? '';
+  return sections;
+}
+
 function formatSpellcasting(trait: Trait): Trait {
   return /spellcasting/i.test(trait.name)
     ? { ...trait, description: trait.description.replace(SPELL_LEVEL, '\n$1').trim() }
     : trait;
 }
 
-function toAction({ entry, line }: { entry: Trait; line: Line }): CreatureAction {
-  return { ...entry, attack: parseAttack(entry.description, line) };
+function toAction({ entry, line, attack }: SectionEntry): CreatureAction {
+  return {
+    ...entry,
+    attack: attack ? parseAttack(attack.text.slice(1, -1), attack) : parseAttack(entry.description, line),
+  };
 }
 
 /** Splits the "(Costs N Actions)" suffix off a legendary action name. */
@@ -556,10 +667,16 @@ function requireHeader(header: Header, nameLine: Line): void {
 /**
  * Parses a 5e stat block in the layout of the legacy raw files (name, optional "[ translation ]" line,
  * "<size> <type>, <alignment>", properties, abilities, traits, then Actions / Bonus Actions / Reactions /
- * Legendary Actions sections, optional source footer).
+ * Legendary Actions sections, optional source footer). `exact` reads text written by the creature file
+ * formatter: free text keeps its characters, entries follow `readExactSections`, no footer.
  */
-export function parseStatBlock(text: string, meta: { source?: string; license?: string } = {}): Creature {
-  const { body, flavor, source } = splitFooter(toLines(text));
+export function parseStatBlock(
+  text: string,
+  meta: { source?: string; license?: string; exact?: boolean } = {},
+): Creature {
+  const exact = meta.exact === true;
+  const all = toLines(text, exact);
+  const { body, flavor, source } = exact ? { body: all, flavor: '', source: '' } : splitFooter(all);
   const lines = body.filter((l) => l.text !== '');
   const nameLine = lines[0];
   if (!nameLine) {
@@ -568,10 +685,14 @@ export function parseStatBlock(text: string, meta: { source?: string; license?: 
   const typeIndex = /^\[.*\]$/.test(lines[1]?.text ?? '') ? 2 : 1;
   const typeLine = lines[typeIndex] ?? fail('Missing size/type line', nameLine);
   const { alignment, ...kind } = parseTypeLine(typeLine);
-  const header: Header = { creature: createCreature(nameLine.text), abilities: {}, passive: null, seen: new Set() };
+  const name = exact ? nameLine.raw : nameLine.text;
+  const header: Header = { creature: createCreature(name), abilities: {}, passive: null, seen: new Set() };
   const bodyStart = readHeader(lines, typeIndex + 1, header);
   requireHeader(header, nameLine);
-  const sections = readSections(lines.slice(bodyStart));
+  const firstEntry = lines[bodyStart]?.number ?? Infinity;
+  const sections = exact
+    ? readExactSections(body.filter((l) => l.number >= firstEntry))
+    : readSections(lines.slice(bodyStart));
   const creature = header.creature;
   const abilities = header.abilities as Creature['abilities'];
   return {
@@ -583,7 +704,7 @@ export function parseStatBlock(text: string, meta: { source?: string; license?: 
     alignmentWeights: parseAlignmentWeights(alignment, typeLine),
     abilities,
     passivePerception: header.passive ?? 10 + (creature.skills.perception ?? abilityModifier(abilities.wis)),
-    traits: sections.traits.map(({ entry }) => formatSpellcasting(entry)),
+    traits: sections.traits.map(({ entry }) => (exact ? entry : formatSpellcasting(entry))),
     actions: sections.actions.map(toAction),
     bonusActions: sections.bonusActions.map(toAction),
     reactions: sections.reactions.map(({ entry }) => entry),

@@ -31,24 +31,116 @@ between modules.
 ## Documents and storage
 
 - Schemas: `src/core/model/*` (zod). Every document has `{schema, version, id, name, createdAt, updatedAt}`.
-  Bumping a schema version requires one migration step in `src/data/migrations.ts`.
+  Bumping a schema version requires one migration step in `src/data/migrations.ts`: a pure function, or `LAYOUT`
+  when data moved into other files (`src/data/layoutMigration.ts` converts those once per data root).
+  In-memory documents keep terrain heights and fog bitsets as base64 (`mapSchema`, `encounterSchema`, also the
+  sync payload); the files hold them as PNGs (`mapFileSchema`, `encounterFileSchema`, `campaignFileSchema`).
 - Factories: `src/core/model/factories.ts` (`createMap`, `createCreature`, `createEncounter`, ...).
-- `Repository` (`src/data/repository.ts`): `list(kind)`, `load(kind, ref)`, `save(kind, doc)` (always data area),
-  `remove`, `duplicateMap`, `importMapAsset`, campaigns/encounters, settings. Content documents with the same id as a
-  user document are shadowed by it.
+- `Repository` (`src/data/repository.ts`): `list(kind)`, `load(kind, ref)`, `save(kind, doc)` (always data area,
+  stamps `updatedAt`), `store*` (write as given; migration), `remove`, `duplicateMap`, `importMapAsset`,
+  `importCreaturePicture`, `storeCreaturePictures`, campaigns/encounters, settings. Content documents with the same
+  id as a user document are shadowed by it. File formats: see "Data formats" below.
 - `Storage` (`src/data/storage.ts`): area `'data'` (user data root) or `'content'` (shipped). Implementations:
   `TauriStorage` (desktop), `BrowserStorage` (IndexedDB, dev in a browser), `MemoryStorage` (tests),
   `NodeStorage` (`tools/nodeStorage.ts`, CLI tools; same path rules and atomic writes as the Rust side).
-- Data root layout: `library/{creatures,markers}/<id>.json`, `library/creatures/assets/` (creature images,
-  `creatureAssetRef`), `library/portraits.json` (portrait index), `library/maps/<id>/{map.json,assets/}`,
-  `campaigns/<id>/{campaign.json,encounters/<id>.json}`, `settings.json`.
-- Portrait index (`src/core/model/portraits.ts`, `repository.loadPortraits`/`savePortraits`, held in
-  `useLibraryStore.portraits`): creature id → `{image, token}` for creatures whose document stays untouched (shipped
-  ones). Token picture precedence `resolveTokenAsset`: combatant token > creature token > creature image > index
-  (token, then image); `creaturePortrait` (compendium) prefers images. `combatantToken`/`useCombatantToken`
-  (`libraryStore.ts`) resolve live, so new portraits reach running encounters. Desktop-only file access outside the
-  roots: `listFolder(path)`, `importFile(path, to)` (`tauriStorage.ts`, Rust `storage_list_folder`/`_import_file`).
+  `readBytes` (Rust `storage_read_bytes`, raw IPC response) reads PNG blobs.
+- Creature pictures are files named after the creature id next to its text file (`<id>.<png|jpg|jpeg|webp>`,
+  `<id>.token.<ext>`); a picture in the data root's `library/creatures/` beats one in content, so shipped creatures
+  get pictures without a user copy. Token picture precedence `resolveTokenAsset`: combatant token > creature token >
+  creature image; `creaturePortrait` (compendium) prefers the image. `combatantToken`/`useCombatantToken`
+  (`libraryStore.ts`) resolve live, so new pictures reach running encounters. Desktop-only file access outside the
+  roots: `listFolder(path)`, `importFile(path, to)`, `readFileText(path)` (`tauriStorage.ts`, Rust
+  `storage_list_folder`/`_import_file`/`_read_file_text`; absolute paths the user picked, files or folders only).
 - Assets are `AssetRef {area, path}`; display them with `repository.storage.assetUrl(ref)` or `<AssetImage>`.
+- PNG: `src/core/png.ts` (`encodePng`/`decodePng`/`readPngSize`, dependency-free, `CompressionStream` deflate,
+  every color type and bit depth, Adam7), `src/core/terrain/heightmap.ts`, `src/core/vision/fogMask.ts`.
+
+## Data formats
+
+Every file in a data root is meant to be read and edited with a text editor or an image viewer. JSON is
+pretty-printed (2 spaces, schema key order, trailing newline), so an unchanged document saves byte for byte the same.
+Content (`content/`) uses the same formats without the `library/` prefix and is read-only.
+
+```text
+<data root>/
+  settings.json
+  library/
+    creatures/<id>.txt                 stat block text with a header
+    creatures/<id>.png|jpg|jpeg|webp   picture (also for shipped creatures)
+    creatures/<id>.token.<ext>         token picture
+    markers/<id>.json                  area template
+    maps/<id>/map.json                 map without heights
+    maps/<id>/terrain.png              16-bit grayscale heightmap
+    maps/<id>/assets/                  battlemap image, .glb/.gltf props and their files
+    dungeon-alchemist-objects.json     model per Dungeon Alchemist object kind
+    dungeon-alchemist-models/<model>/  models picked for those kinds, with their files
+  campaigns/<id>/
+    campaign.json
+    notes.md                           campaign notes (Markdown)
+    encounters/<id>/encounter.json
+    encounters/<id>/fog/explored/<combatant id>.png   what that character has explored
+    encounters/<id>/fog/revealed.png   cells the DM revealed
+    encounters/<id>/fog/hidden.png     cells the DM hid
+```
+
+- File names are ids: renaming `goblin-boss.txt` renames the creature's id (encounters and overrides refer to ids).
+- **Creature** (`src/core/import/creatureFile.ts`: `formatCreatureFile`, `parseCreatureFile`, `formatStatBlock`):
+  an optional header between `---` lines, then the stat block in the layout `parseStatBlock` reads. Header lines
+  are `key: value` with creature field names (case-insensitive): text plain (a multi-line value such as `notes`
+  as an indented block under `notes:`), `tags` as a comma list, other values as JSON. The header holds `createdAt`
+  and `updatedAt` plus only what the stat block cannot carry (`kind`, `source`, `license`, `tags`, `notes`, values
+  the block would read back differently); header values win over the block. Unknown or duplicate keys are errors
+  naming the line. With a header the block is read exactly (indented lines continue an entry, a bracketed line
+  under an action holds attack data its text does not imply); without one, any pasted stat block loads tolerantly
+  as a monster. `parseCreatureFile(formatCreatureFile(c))` reproduces every shipped creature exactly and the text
+  byte for byte (`creatureFile.test.ts`).
+
+  ```text
+  ---
+  source: SRD 5.1
+  license: CC-BY-4.0
+  createdAt: 2023-01-27T00:00:00.000Z
+  updatedAt: 2023-01-27T00:00:00.000Z
+  ---
+  Goblin
+  Small humanoid (goblinoid), neutral evil
+
+  Armor Class 15 (leather armor, shield)
+  Hit Points 7 (2d6)
+  Speed 30 ft.
+  ...
+  ```
+
+- **Area template** (`library/markers/<id>.json`): `{schema: "marker", version, id, name, createdAt, updatedAt,
+shape, sizeFt, widthFt, heightFt, color, opacity, notes}`.
+- **Map** (`map.json`, schema `map` v2): the map document with `terrain.heightmap` instead of the heights:
+  `"heightmap": { "file": "terrain.png", "baseFt": -3, "feetPerUnit": 0.0078125 }`. Pixel value `v` (0..65535) of
+  `terrain.png` is the height `baseFt + v * feetPerUnit` feet; the image has `squaresX * samplesPerSquare + 1`
+  columns (east) and `squaresY * samplesPerSquare + 1` rows (south), north-west corner first. `feetPerUnit` is the
+  coarsest power of two the heights lie on, at most 2^-16 ft for small ranges, so saving moves a height by at most
+  half a step (whole and half feet stay exact) and a reloaded map saves the same image again. 8-bit and RGB edits load
+  too (8-bit value × 257, first channel).
+- **Campaign** (`campaign.json`, schema `campaign` v2): `{schema, version, id, name, createdAt, updatedAt}`;
+  notes in `notes.md` (missing file = no notes).
+- **Encounter** (`encounter.json`, schema `encounter` v3): combatants, markers, door states, log, notes and
+  `fog.cellsPerSquare`. Fog masks are 1-bit grayscale PNGs with one pixel per fog cell (`squaresX *
+cellsPerSquare` × `squaresY * cellsPerSquare`), white = set. Paint white into `fog/revealed.png` to reveal cells.
+  Masks of another size than the map's fog grid (map resized) read as empty.
+- **Settings** (`settings.json`, schema `settings` v6): UI and server preferences. Secrets, keep the file private:
+  `remote.dmKey` (authenticates the app at the internet relay as DM) and `playerLinks.secret` (all player links are
+  derived from it; changing it invalidates every link).
+- **Dungeon Alchemist object choices** (`library/dungeon-alchemist-objects.json`, `damObjectChoicesSchema`):
+  `{schema: "dungeon-alchemist-objects", version: 1, modelFolder, objects: {<block id>: {name, model, unitFt,
+rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet per model unit (5 for models made
+  for Dungeon Alchemist, where one unit is one square), `rotationDeg` is added clockwise.
+- **Migration** (`migrateDataRoot`, run by `appStore.init` on every start and data root switch, a no-op once
+  converted): creature `.json` → `.txt` plus pictures from `library/creatures/assets/` and `library/portraits.json`
+  (portrait index, removed) under the convention names; map heights → `terrain.png`; encounter `.json` → encounter
+  folder with fog masks (combatant tokens pointing at moved pictures follow them); campaign notes → `notes.md`. Each
+  document is written in the new layout, read back and compared with the old one (heights within half a heightmap
+  step); only then is the old file replaced or deleted. A failing document keeps its old file and is listed as
+  "Kept in the old format: …" in the load problems; old pictures and the portrait index stay until all documents
+  converted.
 
 ## Rules and imports
 
@@ -61,12 +153,48 @@ between modules.
 - `src/core/import/portraitMatch.ts`: `matchPortraits(fileNames, creatures)` pairs picture files with creatures by
   `portraitKey` (slug without extension and `source--` prefixes): id beats name beats family name ("Werewolf, Human
   Form" → "werewolf"); a file fits all creatures sharing the key, the first sorted file wins per creature.
-  UI: `AttachPortraitsDialog` (Compendium header) previews, then copies into `library/creatures/assets/`.
+  UI: `AttachPortraitsDialog` (Compendium header) previews, then copies each file to `library/creatures/<id>.<ext>`.
+- Map imports (`src/core/import`, all positions end in feet from the map's north-west corner):
+  - `uvtt.ts` `parseUvtt(text, fileName)`: Universal VTT (`.dd2vtt`/`.df2vtt`/`.uvtt`). Squares minus
+    `map_origin` × 5 ft; `pixels_per_grid` is the calibration; the base64 picture is sniffed (`sniffImage`: PNG,
+    JPEG, WebP; Dungeon Alchemist writes JPEG). `line_of_sight` → full walls (10 ft, `FULL_WALL`),
+    `objects_line_of_sight` → 6 ft sight-blocking walls (`SIGHT_OBJECT`, above medium eye height), portals →
+    doors, not `closed` ones → windows (Dungeondraft's light-passing portals), lights: `range` squares is the full
+    reach, half bright and half dim, ARGB colors. Ambient tint luminance → level (`lightLevelOfColor`);
+    `baked_lighting` makes it one level lighter with a map note (`bakedLighting`).
+  - `dungeonAlchemist.ts`: Foundry export folders. `collectDaMaps(fileNames)` pairs `<name>[_NN|-_NN].json` with
+    the picture of the same name (webp > png > jpg), groups floors by name (" - Foundry_Export" dropped) and finds
+    the `.dam` whose name starts the export's. `parseDaFloor(text, fileName)`: wall segments in scene pixels minus
+    Foundry padding (`ceil(size * padding / grid) * grid`); `door` 1/2 = door/secret door with `ds` state;
+    `sense` 1 → 10 ft wall, 2 (limited) → 3 ft sight-blocking wall, 0 → 3 ft railing; `move` 0 → passable;
+    light radii in grid units (`dim` includes `bright`); `shiftX/Y` → grid offset; scene darkness → ambient,
+    always treated as baked lighting. One map per floor (`daFloorName`: "<name> – Floor N").
+  - `mapStructures.ts` `buildStructures(walls, portals)`: joins polylines of the same `WallProfile` where exactly
+    two ends meet (closed when a chain returns to its start), drops colinear vertices (0.05 ft), turns portals whose
+    ends lie on a source wall into openings there and every other portal into a wall piece that joins the walls at
+    its ends (a door between two runs gives one wall); freestanding portals keep their own wall.
+  - `damProject.ts` `parseDamProject(text, fileName)`: Dungeon Alchemist project files, readers per `Version`
+    (`READERS`, 11 so far; others throw). One unit is one tile = one square = 5 ft (Dungeon Alchemist's custom
+    model guide: 1 Blender meter is one square). `terrainLayers[0].terrain` is base64: int32 header `-1, 0, cols,
+rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8 samples per tile
+    (`decodeDamTerrain`; the second layer repeats the first 0.1 tiles lower). `buildingBlockInstances` give
+    object kind (`blockId`), center (tiles, y from the south), base `height`, `scale`, `rotation` (clockwise).
+    Exports add the same border around the project (4 squares in the default), so `damMargin` derives it from
+    the map size; `damTerrainField` resamples onto the map's height grid, the border repeats the nearest edge.
+    Dungeon Alchemist's meshes are never read.
+  - `damObjects.ts`: `damObjectKinds`, `damProps` (props at the object positions, Y turn negated because three.js
+    turns counter-clockwise, `unitFt × scale`, no sight or movement blocking; the export's walls do that).
+  - UI: `mapImport.ts` `saveImportedMap` (content, terrain, `props(mapId, grid)`; terrain fit is checked before any
+    file is written), `daObjects.ts` (choices file, library models, `CC0_MODELS` from `content/models/cc0`,
+    `damPropsFor` copies each chosen model with its glTF side files to `assets/models/<folder>/`),
+    `DamObjectsPanel` (one row per kind: CC0 stand-in, own file, a file from a picked folder such as Dungeon
+    Alchemist's custom models, or Skip), `DaFolderImport.tsx` (Maps page, desktop: reads every floor up front;
+    terrain and objects go to the lowest floor).
 - CLI (`pnpm tsx tools/<script>.ts`, default data root = the desktop app's, override with `--data-root`):
   `import-statblocks.ts <folder> [--source <name>]`, `import-legacy.ts <240722_DnD_DMTool_Data folder>`,
   `build-srd.ts [--input <5e-SRD-Monsters.json>]` regenerates `content/creatures` and `content/markers`
   (SRD 5.1, attribution in `content/LICENSE-SRD.md`), `build-sample.ts` regenerates the sample map
-  `content/maps/sample-chapel` (procedural drawing, own PNG encoder `tools/png.ts`, `content/LICENSE-SAMPLE.md`).
+  `content/maps/sample-chapel` (procedural drawing, PNG encoder `src/core/png.ts`, `content/LICENSE-SAMPLE.md`).
 
 ## Map rendering
 
@@ -199,7 +327,7 @@ between modules.
 - DM side, started in `DmApp`: `startFogTracker()` (`src/sync/fogTracker.ts`) runs visibility in
   `src/workers/visibility.worker.ts` (latest request wins), adds each source's cells to its own explored set, puts
   the party's fog into `useFogViewStore.fog` and the per-source parts into `useFogViewStore.sources`, and persists
-  `encounter.fog.exploredBy` (base64 bitset per combatant id, encounter schema v2) at most once per second.
+  `encounter.fog.exploredBy` (base64 bitset per combatant id, on disk one PNG mask each) at most once per second.
   `startDmPublisher(transports)` computes only views some transport has receivers for; a character's fog is
   composed from `sources` once per tracker result. It sends the map to all watched views, each view's encounter and
   fog on change, the full state of the requested views to one transport on its resend request. Cost
@@ -217,7 +345,8 @@ between modules.
   generates a DM token (in `dmUrl`, accepted from loopback only); player tokens are the links' keys.
 - Routes: `/player.html?token=` (sets an `/asset`-scoped cookie with that token so relative `.gltf` resources load),
   `/assets/*` (Vite bundle, public), `/asset/{area}/{path}?token=` (images and models only, path stays inside the
-  storage root via `storage::resolve`; documents are never served), `/ws?token=` (relay). The DM socket speaks the
+  storage root via `storage::resolve`; documents are never served, nor the PNGs inside campaign folders (fog masks)
+  or `terrain.png`), `/ws?token=` (relay). The DM socket speaks the
   internet relay's view frames and status frames (see below); a player gets only frames of its link's view, and
   only a rebuilt `hello` passes from players; any other player message closes its socket. Changed links close the
   sockets of withdrawn tokens with `RELAY_LINK_REVOKED` and of reassigned ones with 1013.
@@ -285,9 +414,12 @@ setup)`, `deploy_host_key(host, port)` (`SHA256:` fingerprint, confirmed and sto
   encounters, `FirstSteps` (progress in `settings.onboarding`, `completeOnboardingStep(step)`), drop zone.
   `openSampleEncounter()` (`onboarding.ts`) creates campaign `sample-campaign` / encounter `sample-goblin-ambush`
   once from `sampleContent.ts` and opens it.
-- New map wizard: `openNewMapWizard(file?)` (`src/ui/library/NewMapWizard.tsx`, host in `DmApp`); image → grid
+- New map wizard: `openNewMapWizard(files?)` (`src/ui/library/NewMapWizard.tsx`, host in `DmApp`); image → grid
   (`calibrateFromSquare` from a drag or two clicks, SVG overlay in image pixels) → `createCalibratedMap`
-  (`mapImport.ts`) saves the map already calibrated. File drops use `useFileDrop` (`src/ui/library/fileDrop.ts`).
+  (`mapImport.ts`) saves the map already calibrated. A Universal VTT file skips the grid ("Check grid" opens it with
+  the file's calibration), takes an optional `.dam` (picked or dropped with it), shows the Objects step when the
+  project has objects and summarises walls, doors, windows and lights. File drops use `useFileDrop`
+  (`src/ui/library/fileDrop.ts`, `isMapSourceFile`, `isDamFile`).
 - Form fields: `src/ui/components/fields.tsx` (`NumberField`, `TextField`, `SelectField`, `CheckboxField`,
   `SliderField`, `ColorField`, `Field`); errors: `useAppStore.getState().reportError(error)`.
 

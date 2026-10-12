@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { bytesToBase64 } from '@/core/binary';
+import { parseDamProject } from '@/core/import/damProject';
+import { HeightField } from '@/core/terrain/heightfield';
 import { MemoryStorage } from '@/data/memoryStorage';
 import { Repository } from '@/data/repository';
 import {
@@ -8,6 +11,7 @@ import {
   guessCalibration,
   mapNameFromFileName,
   roundCalibration,
+  saveImportedMap,
 } from './mapImport';
 
 describe('map import helpers', () => {
@@ -15,6 +19,7 @@ describe('map import helpers', () => {
     expect(gridFromFileName('52x49_tavern.jpg')).toEqual({ squaresX: 52, squaresY: 49 });
     expect(gridFromFileName('tavern.jpg')).toBeNull();
     expect(mapNameFromFileName('52x49_old__tavern.jpg')).toBe('52x49 old tavern');
+    expect(mapNameFromFileName('Crypt UniversalVTT.dd2vtt')).toBe('Crypt');
   });
 
   it('guesses the square size from the name, else 70 px', () => {
@@ -68,5 +73,58 @@ describe('createCalibratedMap', () => {
     });
     expect(storage.files.data.get(map.image!.asset.path)).toEqual(new Uint8Array([1, 2, 3]));
     expect((await repository.load('map', { area: 'data', id: map.id })).grid).toEqual(map.grid);
+  });
+});
+
+describe('saveImportedMap', () => {
+  const content = {
+    walls: [],
+    openings: [],
+    lights: [],
+    ambientLight: 'dim' as const,
+    notes: 'Lighting is baked into the battlemap image.',
+  };
+  // One tile of Dungeon Alchemist terrain, 1 tile (5 ft) high everywhere.
+  const terrain = new ArrayBuffer(20 + 81 * 4);
+  new Int32Array(terrain, 0, 5).set([-1, 0, 9, 9, 81]);
+  new Float32Array(terrain, 20).fill(1);
+  const project = parseDamProject(
+    JSON.stringify({
+      Version: 11,
+      width: 1,
+      height: 1,
+      terrainLayers: [{ terrain: bytesToBase64(new Uint8Array(terrain)) }],
+    }),
+    'cellar.dam',
+  );
+
+  it('saves export content and the project terrain with the map', async () => {
+    const storage = new MemoryStorage();
+    const repository = new Repository(storage);
+    const map = await saveImportedMap(repository, {
+      name: 'Cellar',
+      image: { widthPx: 300, heightPx: 300 },
+      calibration: { pxPerSquare: 100, rotationDeg: 0, offsetPx: { x: 0, y: 0 } },
+      content,
+      project,
+      writeImage: (mapId) => repository.importMapAsset(mapId, 'cellar.jpg', new Uint8Array([1])),
+    });
+    const loaded = await repository.load('map', { area: 'data', id: map.id });
+    expect(loaded).toMatchObject({ ambientLight: 'dim', notes: content.notes });
+    expect(HeightField.fromMap(loaded).sample(7.5, 7.5)).toBe(5);
+  });
+
+  it('refuses a project that does not fit before writing any file', async () => {
+    const storage = new MemoryStorage();
+    const repository = new Repository(storage);
+    const save = saveImportedMap(repository, {
+      name: 'Tiny',
+      image: { widthPx: 50, heightPx: 50 },
+      calibration: { pxPerSquare: 100, rotationDeg: 0, offsetPx: { x: 0, y: 0 } },
+      project: { ...project, width: 4 },
+      writeImage: (mapId) => repository.importMapAsset(mapId, 'tiny.jpg', new Uint8Array([1])),
+    });
+    await expect(save).rejects.toThrow(/"cellar.dam" is 4 × 1 squares, larger than the map/);
+    expect(storage.files.data.size).toBe(0);
   });
 });

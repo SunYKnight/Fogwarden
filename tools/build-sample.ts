@@ -1,9 +1,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMap, MAP_SCHEMA_VERSION, mapSchema, type BattleMap, type Vec2 } from '../src/core/model';
+import { encodePng } from '../src/core/png';
 import { HeightField } from '../src/core/terrain/heightfield';
+import { MemoryStorage } from '../src/data/memoryStorage';
+import { Repository } from '../src/data/repository';
 import { CONTENT_ROOT } from './cli';
-import { encodePng } from './png';
 
 /**
  * Builds the shipped sample map `content/maps/sample-chapel`: a ruined chapel in a forest clearing,
@@ -305,7 +307,7 @@ function canopy(color: Color, x: number, y: number, nearby: Circle[]): Color {
   return result;
 }
 
-function drawImage(): Uint8Array {
+async function drawImage(): Promise<Uint8Array> {
   const random = mulberry32(SEED);
   const trees = placeTrees(random);
   const stones = placeRubble(random);
@@ -328,7 +330,7 @@ function drawImage(): Uint8Array {
       rgb[offset + 2] = Math.round(Math.min(255, color[2]));
     }
   }
-  return encodePng(width, height, rgb);
+  return encodePng({ width, height, channels: 3, bitDepth: 8, samples: Uint16Array.from(rgb) });
 }
 
 /** Forest floor rises a few feet around the clearing so the sample shows terrain relief. */
@@ -482,7 +484,10 @@ function buildMap(): BattleMap {
 
 const dir = join(CONTENT_ROOT, 'maps', MAP_ID);
 mkdirSync(join(dir, 'assets'), { recursive: true });
-const png = drawImage();
+const png = await drawImage();
 writeFileSync(join(dir, 'assets', IMAGE_NAME), png);
-writeFileSync(join(dir, 'map.json'), `${JSON.stringify(buildMap(), null, 2)}\n`);
+// The repository's own encoder keeps shipped maps in the app's file format.
+const files = await new Repository(new MemoryStorage()).mapFiles(buildMap());
+writeFileSync(join(dir, 'terrain.png'), files.terrain);
+writeFileSync(join(dir, 'map.json'), files.json);
 console.log(`Wrote ${dir} (image ${(png.length / 1024 / 1024).toFixed(1)} MiB)`);

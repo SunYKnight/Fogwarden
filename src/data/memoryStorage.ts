@@ -21,6 +21,13 @@ export class MemoryStorage implements Storage {
       : Promise.resolve(typeof value === 'string' ? value : new TextDecoder().decode(value));
   }
 
+  readBytes(area: StorageArea, path: string): Promise<Uint8Array> {
+    const value = this.files[area].get(path);
+    return value === undefined
+      ? Promise.reject(new StorageError('File not found', path))
+      : Promise.resolve(typeof value === 'string' ? new TextEncoder().encode(value) : value);
+  }
+
   writeText(path: string, text: string): Promise<void> {
     this.files.data.set(path, text);
     return Promise.resolve();

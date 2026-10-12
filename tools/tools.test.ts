@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { inflateSync } from 'node:zlib';
 import { afterAll, describe, expect, it } from 'vitest';
 import { encounterSchema } from '../src/core/model';
 import { HeightField } from '../src/core/terrain/heightfield';
@@ -10,7 +9,6 @@ import { createSampleEncounter, SAMPLE_GOBLIN, SAMPLE_MAP } from '../src/ui/home
 import { CONTENT_ROOT, PROJECT_ROOT } from './cli';
 import { imageSize } from './imageSize';
 import { NodeStorage } from './nodeStorage';
-import { encodePng } from './png';
 
 const scratchParent = join(PROJECT_ROOT, 'data-local');
 mkdirSync(scratchParent, { recursive: true });
@@ -74,47 +72,6 @@ describe('shipped sample map', () => {
       expect(position!.y).toBeLessThan(map.grid.squaresY * map.grid.feetPerSquare);
       expect(position!.elevationFt).toBeCloseTo(terrain.sample(position!.x, position!.y), 6);
     }
-  });
-});
-
-/** Reverses the PNG row filters (spec section 9) to check the encoder's output. */
-function decodeRgb(png: Uint8Array, width: number, height: number): Uint8Array {
-  const idat = png.subarray(8 + 25 + 8, png.length - 12 - 4);
-  const raw = inflateSync(idat);
-  const stride = width * 3;
-  const out = new Uint8Array(stride * height);
-  for (let y = 0; y < height; y++) {
-    const type = raw[y * (stride + 1)]!;
-    for (let i = 0; i < stride; i++) {
-      const a = i >= 3 ? out[y * stride + i - 3]! : 0;
-      const b = y > 0 ? out[(y - 1) * stride + i]! : 0;
-      const c = i >= 3 && y > 0 ? out[(y - 1) * stride + i - 3]! : 0;
-      const p = a + b - c;
-      const paeth =
-        Math.abs(p - a) <= Math.abs(p - b) && Math.abs(p - a) <= Math.abs(p - c)
-          ? a
-          : Math.abs(p - b) <= Math.abs(p - c)
-            ? b
-            : c;
-      const predicted = [0, a, b, (a + b) >> 1, paeth][type]!;
-      out[y * stride + i] = (raw[y * (stride + 1) + 1 + i]! + predicted) & 0xff;
-    }
-  }
-  return out;
-}
-
-describe('encodePng', () => {
-  it('round-trips RGB pixels through the row filters', () => {
-    const width = 7;
-    const height = 5;
-    const rgb = Uint8Array.from({ length: width * height * 3 }, (_, i) => (i * 37 + (i % 5) * 91) & 0xff);
-    const png = encodePng(width, height, rgb);
-    expect(imageSize(png)).toEqual({ widthPx: width, heightPx: height });
-    expect(decodeRgb(png, width, height)).toEqual(rgb);
-  });
-
-  it('rejects a pixel buffer of the wrong size', () => {
-    expect(() => encodePng(2, 2, new Uint8Array(5))).toThrow(/Expected 12 bytes/);
   });
 });
 

@@ -1,4 +1,5 @@
 import { useState, type DragEvent } from 'react';
+import { isUvttFileName } from '@/core/import/uvtt';
 
 const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
 
@@ -32,4 +33,13 @@ export function useFileDrop(onFiles: (files: File[]) => void) {
 
 export function isImageFile(file: File): boolean {
   return /^image\/(png|jpeg|webp)$/.test(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name);
+}
+
+/** Files a new map can start from: a battlemap image or a Universal VTT export. */
+export function isMapSourceFile(file: File): boolean {
+  return isImageFile(file) || isUvttFileName(file.name);
+}
+
+export function isDamFile(file: File): boolean {
+  return /\.dam$/i.test(file.name);
 }

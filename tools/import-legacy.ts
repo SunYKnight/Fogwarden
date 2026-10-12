@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { basename, dirname, extname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { z } from 'zod';
 import {
@@ -69,8 +69,7 @@ for (const [folder, kind] of CREATURE_FOLDERS) {
       const imagePath = findImage(legacy.ImagePath ?? '', [folder, 'MonsterRawData/images', 'MonsterRawData/HotD']);
       let image: AssetRef | null = null;
       if (imagePath) {
-        image = { area: 'data', path: `library/creatures/assets/${doc.id}${extname(imagePath).toLowerCase()}` };
-        await repository.storage.writeBytes(image.path, readFileSync(imagePath));
+        image = await repository.importCreaturePicture(doc.id, 'image', imagePath, readFileSync(imagePath));
       } else if (legacy.ImagePath) {
         warnings.push(`image not found: ${legacy.ImagePath}`);
       }
