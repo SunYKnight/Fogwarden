@@ -62,7 +62,10 @@ function EditorToolbar() {
 
   return (
     <div className="topbar toolbar">
-      <button onClick={() => flushMap().then(() => navigate({ page: 'library' }), reportError)}>← Library</button>
+      <button className="crumb" onClick={() => flushMap().then(() => navigate({ page: 'maps' }), reportError)}>
+        Maps
+      </button>
+      <span className="muted">›</span>
       <strong>{map?.name}</strong>
       <span className="muted">{dirty ? 'saving…' : 'saved'}</span>
       <button disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)">

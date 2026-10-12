@@ -8,6 +8,7 @@ import { useLibraryStore } from '@/state/libraryStore';
 import { CreatureEditor } from '../creature/CreatureEditor';
 import { StatBlock } from '../creature/StatBlock';
 import { TextField } from '../components/fields';
+import { confirmDialog } from '../kit';
 
 type SortKey = 'name' | 'cr' | 'type';
 
@@ -180,10 +181,21 @@ export function CreatureLibrary() {
   };
 
   const remove = async (ref: DocRef, creature: Creature, overridesContent: boolean) => {
-    const question = overridesContent
-      ? `Discard your edits of "${creature.name}" and restore the shipped version?`
-      : `Delete creature "${creature.name}"?`;
-    if (window.confirm(question)) {
+    const ok = await confirmDialog(
+      overridesContent
+        ? {
+            title: 'Restore shipped creature',
+            message: `Your edits of "${creature.name}" are discarded and the shipped version comes back.`,
+            confirmLabel: 'Restore',
+          }
+        : {
+            title: 'Delete creature',
+            message: `"${creature.name}" is removed from your compendium.`,
+            confirmLabel: 'Delete creature',
+            danger: true,
+          },
+    );
+    if (ok) {
       await repository.remove('creature', ref.id);
       await refresh('creature');
     }

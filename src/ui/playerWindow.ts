@@ -1,12 +1,29 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { availableMonitors, type Monitor } from '@tauri-apps/api/window';
+import { create } from 'zustand';
 import type { Settings } from '@/core/model';
 
 const PLAYER_LABEL = 'player';
 
+/** Whether the desktop player window exists, for status displays. */
+export const usePlayerWindowStore = create<{ open: boolean }>(() => ({ open: false }));
+
 export async function listMonitors(): Promise<Monitor[]> {
   return isTauri() ? availableMonitors() : [];
+}
+
+function track(window: WebviewWindow): void {
+  usePlayerWindowStore.setState({ open: true });
+  void window.once('tauri://destroyed', () => usePlayerWindowStore.setState({ open: false }));
+}
+
+/** Picks up a player window that outlived a reload of the DM window. */
+export async function refreshPlayerWindowState(): Promise<void> {
+  const existing = isTauri() ? await WebviewWindow.getByLabel(PLAYER_LABEL) : null;
+  if (existing) {
+    track(existing);
+  }
 }
 
 async function openDesktopWindow(settings: Settings): Promise<void> {
@@ -31,6 +48,7 @@ async function openDesktopWindow(settings: Settings): Promise<void> {
     void created.once('tauri://created', () => resolve());
     void created.once<string>('tauri://error', (e) => reject(new Error(`Player window failed: ${e.payload}`)));
     await promise;
+    track(created);
   }
 }
 
@@ -41,4 +59,9 @@ export async function openPlayerWindow(settings: Settings): Promise<void> {
   } else {
     window.open('/player.html', 'dm-tool-player');
   }
+}
+
+export async function closePlayerWindow(): Promise<void> {
+  const existing = isTauri() ? await WebviewWindow.getByLabel(PLAYER_LABEL) : null;
+  await existing?.close();
 }

@@ -21,6 +21,7 @@ import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { AssetImage } from '../components/AssetImage';
 import { CheckboxField, Field, NumberField, SelectField, TextField } from '../components/fields';
+import { confirmDialog } from '../kit';
 import { ListField, OptionalNumberField } from './creatureFields';
 import { ActionListEditor, LegendaryListEditor, TraitListEditor } from './EntryEditors';
 import { StatBlock, titleCase } from './StatBlock';
@@ -342,7 +343,16 @@ export function CreatureEditor({ creature, onClose }: { creature: Creature; onCl
   };
 
   const close = () => {
-    if (!dirty || window.confirm('Discard unsaved changes?')) onClose();
+    if (dirty) {
+      void confirmDialog({
+        title: 'Discard changes',
+        message: 'Your unsaved changes to this creature are lost.',
+        confirmLabel: 'Discard',
+        danger: true,
+      }).then((ok) => ok && onClose());
+    } else {
+      onClose();
+    }
   };
 
   return (

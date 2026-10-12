@@ -3,6 +3,7 @@ import type { DocRef } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { AssetImage } from '../components/AssetImage';
+import { confirmDialog } from '../kit';
 import { createMapFromImage } from './mapImport';
 
 export function MapLibrary() {
@@ -34,7 +35,13 @@ export function MapLibrary() {
   };
 
   const remove = async (id: string, name: string) => {
-    if (window.confirm(`Delete map "${name}" and its images and models?`)) {
+    const ok = await confirmDialog({
+      title: 'Delete map',
+      message: `"${name}" is deleted with its images and models. Encounters using it will have no map.`,
+      confirmLabel: 'Delete map',
+      danger: true,
+    });
+    if (ok) {
       await repository.remove('map', id);
       await refresh('map');
     }

@@ -3,6 +3,7 @@ import { AREA_SHAPES, createMarkerTemplate, type MarkerTemplate } from '@/core/m
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { ColorField, NumberField, SelectField, TextField } from '../components/fields';
+import { confirmDialog } from '../kit';
 
 /** Which dimension fields a shape uses (see `areaDimensionsSchema`). */
 const SIZE_LABEL: Record<MarkerTemplate['shape'], string> = {
@@ -75,8 +76,16 @@ export function MarkerLibrary() {
   };
 
   const remove = async (id: string, name: string, overridesContent: boolean) => {
-    const question = overridesContent ? `Restore the shipped "${name}"?` : `Delete marker template "${name}"?`;
-    if (window.confirm(question)) {
+    const ok = await confirmDialog(
+      overridesContent
+        ? {
+            title: 'Restore shipped template',
+            message: `Your edits of "${name}" are discarded.`,
+            confirmLabel: 'Restore',
+          }
+        : { title: 'Delete template', message: `"${name}" is deleted.`, confirmLabel: 'Delete', danger: true },
+    );
+    if (ok) {
       await repository.remove('marker', id);
       await refresh('marker');
     }

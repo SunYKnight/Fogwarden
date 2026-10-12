@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Encounter } from '@/core/model';
 import { addLog } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
+import { confirmDialog } from '../kit';
 
 const MAX_SHOWN = 200;
 
@@ -31,7 +32,12 @@ export function LogPanel({ encounter }: { encounter: Encounter }) {
         <button
           disabled={encounter.log.length === 0}
           onClick={() => {
-            if (window.confirm('Clear the whole log?')) update((d) => void (d.log = []));
+            void confirmDialog({
+              title: 'Clear log',
+              message: 'All log entries of this encounter are deleted.',
+              confirmLabel: 'Clear log',
+              danger: true,
+            }).then((ok) => ok && update((d) => void (d.log = [])));
           }}
         >
           Clear

@@ -1,19 +1,26 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { create } from 'zustand';
-import type { DocRef, Settings } from '@/core/model';
+import type { DocRef, EncounterLocator, Settings } from '@/core/model';
 import { BrowserStorage } from '@/data/browserStorage';
 import { Repository } from '@/data/repository';
 import type { StorageRoots } from '@/data/storage';
 import { TauriStorage } from '@/data/tauriStorage';
 
-export type Route =
-  | { page: 'library' }
-  | { page: 'map-editor'; map: DocRef }
-  | { page: 'settings' }
-  | { page: 'encounter'; campaignId: string; encounterId: string };
+export type CompendiumTab = 'creatures' | 'markers';
 
-export interface AppError {
+export type Route =
+  | { page: 'maps' }
+  | { page: 'map-editor'; map: DocRef }
+  | { page: 'compendium'; tab: CompendiumTab }
+  | { page: 'campaigns'; campaignId: string | null }
+  | { page: 'play' }
+  | { page: 'settings' };
+
+export type NoticeKind = 'error' | 'success' | 'info';
+
+export interface Notice {
   id: number;
+  kind: NoticeKind;
   message: string;
 }
 
@@ -22,29 +29,60 @@ interface AppState {
   roots: StorageRoots | null;
   settings: Settings | null;
   route: Route;
-  errors: AppError[];
+  notices: Notice[];
   navigate(route: Route): void;
+  /** Makes the encounter the one on the Play screen and shows it. */
+  openEncounter(locator: EncounterLocator): Promise<void>;
+  /** Clears the Play screen when its encounter was deleted (by campaign or by encounter id). */
+  forgetEncounter(match: { campaignId: string; encounterId?: string }): Promise<void>;
   reportError(error: unknown): void;
-  dismissError(id: number): void;
+  notify(message: string, kind?: NoticeKind): void;
+  dismissNotice(id: number): void;
   setSettings(settings: Settings): Promise<void>;
   init(): Promise<void>;
 }
 
-let nextErrorId = 1;
+let nextNoticeId = 1;
+// Errors stay until dismissed; confirmations fade on their own.
+const NOTICE_MS = 4000;
 
 export const useAppStore = create<AppState>((set, get) => ({
   repository: new Repository(isTauri() ? new TauriStorage() : new BrowserStorage()),
   roots: null,
   settings: null,
-  route: { page: 'library' },
-  errors: [],
+  route: { page: 'maps' },
+  notices: [],
   navigate: (route) => set({ route }),
+  openEncounter: async (locator) => {
+    const settings = get().settings;
+    if (!settings) {
+      throw new Error('Settings are not loaded yet');
+    }
+    await get().setSettings({ ...settings, lastEncounter: locator });
+    set({ route: { page: 'play' } });
+  },
+  forgetEncounter: async (match) => {
+    const settings = get().settings;
+    const active = settings?.lastEncounter;
+    const hit =
+      active &&
+      active.campaignId === match.campaignId &&
+      (!match.encounterId || active.encounterId === match.encounterId);
+    if (settings && hit) {
+      await get().setSettings({ ...settings, lastEncounter: null });
+    }
+  },
   reportError: (error) => {
     console.error(error);
     const message = error instanceof Error ? error.message : String(error);
-    set((s) => ({ errors: [...s.errors, { id: nextErrorId++, message }] }));
+    set((s) => ({ notices: [...s.notices, { id: nextNoticeId++, kind: 'error', message }] }));
   },
-  dismissError: (id) => set((s) => ({ errors: s.errors.filter((e) => e.id !== id) })),
+  notify: (message, kind = 'success') => {
+    const id = nextNoticeId++;
+    set((s) => ({ notices: [...s.notices, { id, kind, message }] }));
+    window.setTimeout(() => get().dismissNotice(id), NOTICE_MS);
+  },
+  dismissNotice: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
   setSettings: async (settings) => {
     set({ settings: await get().repository.saveSettings(settings) });
   },

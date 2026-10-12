@@ -13,6 +13,7 @@ import {
   sortByInitiative,
 } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
+import { confirmDialog } from '../kit';
 import { OptionalNumberInput } from '../creature/creatureFields';
 import { dexScore } from './creatureLookup';
 
@@ -140,7 +141,12 @@ export function InitiativeTracker({ encounter }: { encounter: Encounter }) {
               title="Remove from encounter"
               onClick={(e) => {
                 e.stopPropagation();
-                if (window.confirm(`Remove ${c.name}?`)) update((d) => removeCombatant(d, c.id));
+                void confirmDialog({
+                  title: 'Remove combatant',
+                  message: `${c.name} leaves the encounter with its HP, conditions and notes.`,
+                  confirmLabel: 'Remove',
+                  danger: true,
+                }).then((ok) => ok && update((d) => removeCombatant(d, c.id)));
               }}
             >
               ✕

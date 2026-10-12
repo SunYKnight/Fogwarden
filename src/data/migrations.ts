@@ -30,7 +30,8 @@ const MIGRATIONS: Record<SchemaName, Migration[]> = {
   marker: [],
   campaign: [],
   encounter: [],
-  settings: [],
+  // v2: the never-used lastCampaignId became lastEncounter.
+  settings: [({ lastCampaignId: _unused, ...rest }) => ({ ...rest, lastEncounter: null })],
 };
 
 export class MigrationError extends Error {

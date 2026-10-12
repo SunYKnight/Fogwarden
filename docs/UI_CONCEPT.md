@@ -6,10 +6,11 @@ Status: **draft for review** · Applies to the DM window, the map editor and the
 
 A DM opens the app before or during a session and finds the next step without reading a manual:
 prepare a map, prepare an encounter, run it, show it to the players. Every screen answers three questions at a glance:
-*Where am I? What can I do here? What happens if I click?*
+_Where am I? What can I do here? What happens if I click?_
 
 ### Principles
-1. **Workflow over features.** The UI follows the DM's order of work: *Prepare → Play → Show*, not the code's modules.
+
+1. **Workflow over features.** The UI follows the DM's order of work: _Prepare → Play → Show_, not the code's modules.
 2. **The map is the stage.** Map screens give the canvas the most space; panels are narrow, collapsible and contextual.
 3. **One place per thing.** Each setting or action lives in exactly one obvious place (no "Player view" button in three
    spots, no map settings under the tool options).
@@ -20,17 +21,17 @@ prepare a map, prepare an encounter, run it, show it to the players. Every scree
 
 ## 2. What is unintuitive today (from the smoke run)
 
-| Area | Observation |
-|---|---|
-| Navigation | Only *Library / Settings* on top; editor and encounter replace the whole window with a "← Library" button. Encounters are only reachable via *Library → Campaigns → click campaign → Open*. |
-| Editor tools | 15 icon-only buttons with glyphs (`▲ ▼ ≈ ▬ ⟋ ≡ ∿ ▥ ⊓ ⌂ ⬡ ✶ ◈`); meaning only via hover tooltip. No grouping visible. |
-| Editor side panel | Tool options, selection inspector and *Map* properties stacked in one scrolling column; the panel grows to 3+ screens. |
-| Calibration | A tool among sculpt brushes, although every new map needs it first; a new map opens uncalibrated (grid guessed at 70 px). |
-| Encounter page | Three dense columns; right column stacks combatant, dice, area markers, log, player view, LAN (~4 screens of scrolling). Add-combatant form permanently occupies half the left column. |
-| Player view | Open/LAN/fog controls hidden at the bottom of the encounter's right column; no visible status whether players are connected or what they see. |
-| Feedback | `window.confirm` for deletes (7 places), errors as toasts only, no success feedback for saves/imports, no shortcut overview. |
-| Settings | Data folder must be typed as a path; monitor list without preview or test. |
-| First run | Empty library with one button; no hint to import old data, set the data folder or try a sample map. |
+| Area              | Observation                                                                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation        | Only _Library / Settings_ on top; editor and encounter replace the whole window with a "← Library" button. Encounters are only reachable via _Library → Campaigns → click campaign → Open_. |
+| Editor tools      | 15 icon-only buttons with glyphs (`▲ ▼ ≈ ▬ ⟋ ≡ ∿ ▥ ⊓ ⌂ ⬡ ✶ ◈`); meaning only via hover tooltip. No grouping visible.                                                                        |
+| Editor side panel | Tool options, selection inspector and _Map_ properties stacked in one scrolling column; the panel grows to 3+ screens.                                                                      |
+| Calibration       | A tool among sculpt brushes, although every new map needs it first; a new map opens uncalibrated (grid guessed at 70 px).                                                                   |
+| Encounter page    | Three dense columns; right column stacks combatant, dice, area markers, log, player view, LAN (~4 screens of scrolling). Add-combatant form permanently occupies half the left column.      |
+| Player view       | Open/LAN/fog controls hidden at the bottom of the encounter's right column; no visible status whether players are connected or what they see.                                               |
+| Feedback          | `window.confirm` for deletes (7 places), errors as toasts only, no success feedback for saves/imports, no shortcut overview.                                                                |
+| Settings          | Data folder must be typed as a path; monitor list without preview or test.                                                                                                                  |
+| First run         | Empty library with one button; no hint to import old data, set the data folder or try a sample map.                                                                                         |
 
 ## 3. Information architecture
 
@@ -59,22 +60,26 @@ work in progress is never hidden behind "back".
 ## 4. Screens
 
 ### 4.1 Home
-- **Continue** card: last encounter (map thumbnail, round, whose turn) → *Resume*.
+
+- **Continue** card: last encounter (map thumbnail, round, whose turn) → _Resume_.
 - **Recent**: last 6 maps / encounters.
-- **First steps** (shown until done, dismissible): *Choose data folder* · *Import from the old WPF tool* ·
-  *Create a map from an image* · *Open the sample encounter* (shipped SRD content + a sample map).
+- **First steps** (shown until done, dismissible): _Choose data folder_ · _Import from the old WPF tool_ ·
+  _Create a map from an image_ · _Open the sample encounter_ (shipped SRD content + a sample map).
 - Big drop zone: dropping an image creates a map (→ 4.2 wizard); dropping a `.txt` stat block opens the creature import.
 
 ### 4.2 New map wizard (instead of "uncalibrated map + find the tool")
-Three steps in a dialog over the image:
-1. **Image** – drop or pick; name from file name; grid guess from "52x49" in the name.
-2. **Grid** – image shown with live grid overlay; *drag a square* or *click two corners*; sliders for size/offset;
-   squares count follows; "Looks right" checklist (lines on walls/tiles). Skip possible.
-3. **Done** – *Open in editor* or *Use in a new encounter*.
 
-The calibration tool remains in the editor for later corrections, but under *Map settings → Grid*.
+Three steps in a dialog over the image:
+
+1. **Image** – drop or pick; name from file name; grid guess from "52x49" in the name.
+2. **Grid** – image shown with live grid overlay; _drag a square_ or _click two corners_; sliders for size/offset;
+   squares count follows; "Looks right" checklist (lines on walls/tiles). Skip possible.
+3. **Done** – _Open in editor_ or _Use in a new encounter_.
+
+The calibration tool remains in the editor for later corrections, but under _Map settings → Grid_.
 
 ### 4.3 Map editor
+
 ```
 ┌──┬──────────────────────────────────────────────────────────┬──────────────┐
 │  │ Tavern › editor   ① Ground ② Walls ③ Areas ④ Light & objects │ ↶ ↷  Saved ✓ │
@@ -89,20 +94,22 @@ The calibration tool remains in the editor for later corrections, but under *Map
 │  │ Drag to raise terrain · Alt+click picks height · x 32 ft y 14 ft h 3.5 ft │
 └──┴──────────────────────────────────────────────────────────┴──────────────┘
 ```
+
 - **Steps instead of a flat palette.** Tools are grouped into four labelled steps that match the work order:
-  ① *Ground* (sculpt brushes), ② *Walls* (wall, door/window), ③ *Areas* (room, region), ④ *Light & objects*
+  ① _Ground_ (sculpt brushes), ② _Walls_ (wall, door/window), ③ _Areas_ (room, region), ④ _Light & objects_
   (light, prop). The active step shows its tools **with icon + text label** in a horizontal tool bar; steps can be
-  visited in any order (they are tabs, not a forced wizard). *Select* is always available (V / Esc).
+  visited in any order (they are tabs, not a forced wizard). _Select_ is always available (V / Esc).
 - **Tool options in the tool bar**, directly under the tools (radius, strength, presets) – not in the side panel.
 - **Inspector** (right) shows only the selection (wall, door, light …) or, with nothing selected, a short
-  "what to do in this step" card. *Map settings* (name, grid, ambient light, ground color, cliff material) move to a
-  dialog opened from the header; *Layers* become a collapsible section.
+  "what to do in this step" card. _Map settings_ (name, grid, ambient light, ground color, cliff material) move to a
+  dialog opened from the header; _Layers_ become a collapsible section.
 - **Status bar** (bottom): active tool hint, cursor position and terrain height, snapping state, save state.
 - **Direct manipulation:** hover highlights the object that a click would select; selected walls show vertex handles;
   Del deletes the selection; drag-and-drop of `.glb` onto the canvas places a prop.
 - **Preview as player** becomes an eye toggle on the canvas (shows player lighting/fog look).
 
 ### 4.4 Play (encounter)
+
 ```
 ┌──┬────────────────────────────────────────────────────────────┬────────────┐
 │  │ Campaigns › Dragon Heist › Ambush       Round 2 · Goblin 1 ▶ │ Players: 2 │
@@ -119,12 +126,13 @@ The calibration tool remains in the editor for later corrections, but under *Map
 │  │ Log: Goblin 1 hits Thorin for 5 …                (▲ expand)  │ Dice · Log │
 └──┴────────────────────────────────────────────────────────────┴────────────┘
 ```
-- **Initiative strip** (left, narrow): the turn order only; *+ Add* opens a dialog/drawer with library search,
+
+- **Initiative strip** (left, narrow): the turn order only; _+ Add_ opens a dialog/drawer with library search,
   count, HP mode and the PC form – not a permanently open form.
 - **Turn bar** (bottom): the current combatant's actions as big buttons (roll to-hit + damage in one click; result
-  appears inline and in the log), *Next turn* always in the same place (also Space).
-- **Inspector tabs** (right): *Creature* (selected combatant: HP −/+, conditions, notes, stat block),
-  *Dice* (roller), *Log*, *Areas* (templates + placed markers). One tab visible at a time – no 4-screen scroll.
+  appears inline and in the log), _Next turn_ always in the same place (also Space).
+- **Inspector tabs** (right): _Creature_ (selected combatant: HP −/+, conditions, notes, stat block),
+  _Dice_ (roller), _Log_, _Areas_ (templates + placed markers). One tab visible at a time – no 4-screen scroll.
 - **Canvas toolbar**: Select · Measure · Area template picker · camera · fog brush (reveal/hide) – everything that
   is a pointer mode lives on the canvas, where the pointer is.
 - **On-map interaction:** click token = select (inspector + highlight in strip), drag = move with distance label,
@@ -132,43 +140,48 @@ The calibration tool remains in the editor for later corrections, but under *Map
 - **Unplaced combatants** appear as a tray chip "3 not on map" → click to place one after another.
 
 ### 4.5 Compendium
-- Two tabs: *Creatures*, *Area templates*. List left (search, filters: type, CR range, source, "mine only"),
+
+- Two tabs: _Creatures_, _Area templates_. List left (search, filters: type, CR range, source, "mine only"),
   stat block preview right. Edit opens the full editor (as page, not modal over a modal); the stat block preview
   updates live beside the form.
-- Shipped entries show a lock badge; editing one creates "your copy" with an explicit hint and a *Revert* action.
+- Shipped entries show a lock badge; editing one creates "your copy" with an explicit hint and a _Revert_ action.
 
 ### 4.6 Campaigns
+
 - Campaign cards → campaign page with encounter list (status: not started / round n / finished, map thumbnail,
-  last played) and notes. *New encounter* asks for name + map (thumbnail picker) and opens Play directly.
+  last played) and notes. _New encounter_ asks for name + map (thumbnail picker) and opens Play directly.
 
 ### 4.7 Settings
-- Sections: *Data* (folder picker dialog, "open folder", "copy my data to new folder"), *Player view* (monitor
-  thumbnails with "identify" flash and "test window"), *LAN* (port), *Rules* (diagonals), *About* (version, revision,
+
+- Sections: _Data_ (folder picker dialog, "open folder", "copy my data to new folder"), _Player view_ (monitor
+  thumbnails with "identify" flash and "test window"), _LAN_ (port), _Rules_ (diagonals), _About_ (version, revision,
   licenses).
 
 ### 4.8 Player window
+
 - Unchanged principle (shows only what the DM sends) plus: a small unobtrusive status corner when disconnected or
   waiting; a big readable initiative ribbon optional (DM toggle); no DM controls ever.
 
 ## 5. Interaction model (all map views)
 
-| Input | Meaning |
-|---|---|
-| Left click / drag | Use the active tool; in Select: select / move |
-| Right drag | Pan · Right click (no drag): context menu of the object under the cursor |
-| Middle drag / Alt+left drag | Rotate (3D) |
-| Wheel | Zoom to cursor |
-| Esc | Cancel current drawing, then deselect, then back to Select |
-| Del / Backspace | Delete selection (undoable) |
-| Ctrl+Z / Ctrl+Y | Undo / redo (editor and play) |
-| Space | Next turn (Play) |
-| ? | Shortcut overlay for the current screen |
-| 1–4 | Editor step; letter keys: tools shown on their buttons |
+| Input                       | Meaning                                                                  |
+| --------------------------- | ------------------------------------------------------------------------ |
+| Left click / drag           | Use the active tool; in Select: select / move                            |
+| Right drag                  | Pan · Right click (no drag): context menu of the object under the cursor |
+| Middle drag / Alt+left drag | Rotate (3D)                                                              |
+| Wheel                       | Zoom to cursor                                                           |
+| Esc                         | Cancel current drawing, then deselect, then back to Select               |
+| Del / Backspace             | Delete selection (undoable)                                              |
+| Ctrl+Z / Ctrl+Y             | Undo / redo (editor and play)                                            |
+| Space                       | Next turn (Play)                                                         |
+| ?                           | Shortcut overlay for the current screen                                  |
+| 1–4                         | Editor step; letter keys: tools shown on their buttons                   |
 
 Pointer feedback: cursor shape per tool (crosshair, brush ring, move), hover outline for clickable objects,
 ghost preview before every placement, snapping indicator (dot on the snapped point).
 
 ## 6. Visual language and components
+
 - **Icons:** one consistent outline icon set with text labels (`lucide-react`, ISC license) instead of Unicode glyphs.
 - **Color semantics:** accent = primary action / active; red = destructive / enemy; blue = players; green = allies /
   healthy; yellow = current turn. Same colors on tokens, initiative strip and log.
@@ -182,30 +195,31 @@ ghost preview before every placement, snapping indicator (dot on the snapped poi
 
 ## 7. Key flows (target click counts)
 
-| Flow | Today | Target |
-|---|---|---|
-| Image → calibrated map in editor | import, open, find calibrate tool, click corners (5+ steps, discoverability low) | drop image → wizard (3 steps) |
-| Start an encounter on a map | Library → Campaigns → campaign → name + map → create → Open | Campaign → *New encounter* (name + map) → Play |
-| Add 3 goblins | type search, click, set count, find "Add 3 × Goblin" in a long column | *+ Add* → search → count → Add |
-| Roll a goblin attack | select → scroll to stat block → dice icon | select → turn bar button |
-| Show players the map | find panel at the bottom of the right column | Players chip → *Open window* / *Start LAN* |
-| Return to the running fight from the Compendium | Library → Campaigns → … → Open | Play in the rail |
+| Flow                                            | Today                                                                            | Target                                         |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Image → calibrated map in editor                | import, open, find calibrate tool, click corners (5+ steps, discoverability low) | drop image → wizard (3 steps)                  |
+| Start an encounter on a map                     | Library → Campaigns → campaign → name + map → create → Open                      | Campaign → _New encounter_ (name + map) → Play |
+| Add 3 goblins                                   | type search, click, set count, find "Add 3 × Goblin" in a long column            | _+ Add_ → search → count → Add                 |
+| Roll a goblin attack                            | select → scroll to stat block → dice icon                                        | select → turn bar button                       |
+| Show players the map                            | find panel at the bottom of the right column                                     | Players chip → _Open window_ / _Start LAN_     |
+| Return to the running fight from the Compendium | Library → Campaigns → … → Open                                                   | Play in the rail                               |
 
 ## 8. Implementation phases
 
-| # | Phase | Acceptance |
-|---|---|---|
-| U1 | **Foundation**: navigation rail + header/breadcrumb, component kit (Panel/Section, Tabs, Toolbar/ToolButton, Dialog, ConfirmDialog, Popover, ContextMenu, Toast incl. success, EmptyState, StatusBar), icon set, shortcut overlay, replace all `window.confirm` | Every screen reachable from the rail; no browser dialogs left; `?` lists shortcuts |
-| U2 | **Editor**: step tabs with labelled tools, tool options bar, inspector-only side panel, map settings dialog, status bar, hover highlight, Del, drop `.glb` | New user finds sculpt/wall/door tools without tooltips; side panel never longer than one screen for a selection |
-| U3 | **New map wizard + Home**: drop zone, grid step with live overlay, first-steps card, sample encounter | Image → calibrated map in ≤ 3 steps; first run shows next actions |
-| U4 | **Play**: initiative strip, add dialog, turn bar with attack buttons, inspector tabs, canvas toolbar, token context menu, unplaced tray chip | A full round needs no scrolling at 1600×900 |
-| U5 | **Players + Settings**: global players popover (window, monitor, LAN + QR, push camera, status), settings sections with folder picker and monitor test | Player status visible on every screen; data folder changed without typing a path |
-| U6 | **Polish**: cursors, snapping indicator, success toasts, focus/aria pass, contrast check | Keyboard-only path through Play; contrast ≥ 4.5:1 |
+| #   | Phase                                                                                                                                                                                                                                                           | Acceptance                                                                                                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| U1  | **Foundation**: navigation rail + header/breadcrumb, component kit (Panel/Section, Tabs, Toolbar/ToolButton, Dialog, ConfirmDialog, Popover, ContextMenu, Toast incl. success, EmptyState, StatusBar), icon set, shortcut overlay, replace all `window.confirm` | Every screen reachable from the rail; no browser dialogs left; `?` lists shortcuts                              |
+| U2  | **Editor**: step tabs with labelled tools, tool options bar, inspector-only side panel, map settings dialog, status bar, hover highlight, Del, drop `.glb`                                                                                                      | New user finds sculpt/wall/door tools without tooltips; side panel never longer than one screen for a selection |
+| U3  | **New map wizard + Home**: drop zone, grid step with live overlay, first-steps card, sample encounter                                                                                                                                                           | Image → calibrated map in ≤ 3 steps; first run shows next actions                                               |
+| U4  | **Play**: initiative strip, add dialog, turn bar with attack buttons, inspector tabs, canvas toolbar, token context menu, unplaced tray chip                                                                                                                    | A full round needs no scrolling at 1600×900                                                                     |
+| U5  | **Players + Settings**: global players popover (window, monitor, LAN + QR, push camera, status), settings sections with folder picker and monitor test                                                                                                          | Player status visible on every screen; data folder changed without typing a path                                |
+| U6  | **Polish**: cursors, snapping indicator, success toasts, focus/aria pass, contrast check                                                                                                                                                                        | Keyboard-only path through Play; contrast ≥ 4.5:1                                                               |
 
 Verification per phase: GUI smoke in the running app over the WebView2 DevTools port with screenshots of each screen at
 1600×900 and 1280×720, plus the flows in §7 timed by click count.
 
 ## 9. Decisions for review
+
 - **Icon set:** add `lucide-react` (ISC, tree-shaken) vs. hand-drawn SVG icons in the repo.
 - **Native folder picker:** add `tauri-plugin-dialog` (folder dialog for the data root) vs. keep typing paths.
 - **Sample content:** ship one CC0/own sample battlemap for the first-run sample encounter (needs a license-clean

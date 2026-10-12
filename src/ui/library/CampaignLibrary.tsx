@@ -4,6 +4,7 @@ import type { LoadProblem } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { TextField } from '../components/fields';
+import { confirmDialog } from '../kit';
 
 function Problems({ problems }: { problems: LoadProblem[] }) {
   return problems.map((p) => (
@@ -48,7 +49,7 @@ function NewEncounterForm({ campaignId, onCreated }: { campaignId: string; onCre
 function EncounterList({ campaign }: { campaign: Campaign }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
-  const navigate = useAppStore((s) => s.navigate);
+  const openEncounter = useAppStore((s) => s.openEncounter);
   const maps = useLibraryStore((s) => s.listings.map.entries);
   const [listing, setListing] = useState<{ encounters: Encounter[]; problems: LoadProblem[] } | null>(null);
 
@@ -61,11 +62,20 @@ function EncounterList({ campaign }: { campaign: Campaign }) {
   }, [load]);
 
   const remove = async (encounter: Encounter) => {
-    if (window.confirm(`Delete encounter "${encounter.name}"?`)) {
+    const ok = await confirmDialog({
+      title: 'Delete encounter',
+      message: `"${encounter.name}" with its combatants, log and fog will be deleted.`,
+      confirmLabel: 'Delete encounter',
+      danger: true,
+    });
+    if (ok) {
       await repository.removeEncounter(campaign.id, encounter.id);
+      await useAppStore.getState().forgetEncounter({ campaignId: campaign.id, encounterId: encounter.id });
       await load();
     }
   };
+  const open = (encounter: Encounter) =>
+    openEncounter({ campaignId: campaign.id, encounterId: encounter.id }).catch(reportError);
 
   return (
     <div className="col">
@@ -74,11 +84,7 @@ function EncounterList({ campaign }: { campaign: Campaign }) {
       <Problems problems={listing?.problems ?? []} />
       <div className="list">
         {listing?.encounters.map((e) => (
-          <div
-            key={e.id}
-            className="list-item"
-            onDoubleClick={() => navigate({ page: 'encounter', campaignId: campaign.id, encounterId: e.id })}
-          >
+          <div key={e.id} className="list-item" onDoubleClick={() => open(e)}>
             <span style={{ flex: 1 }}>
               <strong>{e.name}</strong>{' '}
               <span className="muted">
@@ -86,8 +92,8 @@ function EncounterList({ campaign }: { campaign: Campaign }) {
                 {e.combatants.length} combatants{e.round > 0 ? ` · round ${e.round}` : ''}
               </span>
             </span>
-            <button onClick={() => navigate({ page: 'encounter', campaignId: campaign.id, encounterId: e.id })}>
-              Open
+            <button className="primary" onClick={() => open(e)}>
+              Play
             </button>
             <button className="danger" onClick={() => remove(e).catch(reportError)}>
               Delete
@@ -100,13 +106,14 @@ function EncounterList({ campaign }: { campaign: Campaign }) {
   );
 }
 
-export function CampaignLibrary() {
+export function CampaignLibrary({ selectedId }: { selectedId: string | null }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
+  const navigate = useAppStore((s) => s.navigate);
   const [listing, setListing] = useState<{ campaigns: Campaign[]; problems: LoadProblem[] } | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const selected = listing?.campaigns.find((c) => c.id === selectedId) ?? null;
+  const setSelectedId = (campaignId: string | null) => navigate({ page: 'campaigns', campaignId });
 
   const load = useCallback(() => repository.listCampaigns().then(setListing, reportError), [repository, reportError]);
   useEffect(() => {
@@ -126,8 +133,15 @@ export function CampaignLibrary() {
   };
 
   const remove = async (campaign: Campaign) => {
-    if (window.confirm(`Delete campaign "${campaign.name}" with all its encounters?`)) {
+    const ok = await confirmDialog({
+      title: 'Delete campaign',
+      message: `"${campaign.name}" and all its encounters will be deleted.`,
+      confirmLabel: 'Delete campaign',
+      danger: true,
+    });
+    if (ok) {
       await repository.storage.remove(`campaigns/${campaign.id}`);
+      await useAppStore.getState().forgetEncounter({ campaignId: campaign.id });
       setSelectedId(null);
       await load();
     }

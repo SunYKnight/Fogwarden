@@ -12,7 +12,6 @@ import { flushEncounter } from '@/state/autosave';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { useDmCameraStore } from '@/sync/cameraStore';
-import { openPlayerWindow } from '../playerWindow';
 import { AddCombatants } from './AddCombatants';
 import { CombatantPanel } from './CombatantPanel';
 import { DiceRoller } from './DiceRoller';
@@ -67,13 +66,9 @@ function Toolbar({ hasMap }: { hasMap: boolean }) {
   const dirty = useEncounterStore((s) => s.revision !== s.savedRevision);
   const tool = useEncounterUi((s) => s.tool);
   const camera = useEncounterUi((s) => s.camera);
-  const navigate = useAppStore((s) => s.navigate);
-  const settings = useAppStore((s) => s.settings);
-  const reportError = useAppStore((s) => s.reportError);
   const setUi = useEncounterUi.setState;
   return (
     <div className="topbar toolbar">
-      <button onClick={() => flushEncounter().then(() => navigate({ page: 'library' }), reportError)}>← Library</button>
       <strong>{encounter?.name}</strong>
       <span className="muted">{dirty ? 'saving…' : 'saved'}</span>
       <div className="spacer" />
@@ -96,9 +91,6 @@ function Toolbar({ hasMap }: { hasMap: boolean }) {
           </button>
         </>
       )}
-      <button disabled={!settings} onClick={() => settings && openPlayerWindow(settings).catch(reportError)}>
-        Player view
-      </button>
     </div>
   );
 }
