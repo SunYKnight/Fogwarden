@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { BattleMap, DocRef, Encounter } from '@/core/model';
-import { libraryDocPath, type Repository } from '@/data/repository';
+import type { Encounter } from '@/core/model';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
 import { useAppStore } from '@/state/appStore';
-import { flushEncounter } from '@/state/autosave';
 import { currentCombatant } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
-import { useLibraryStore } from '@/state/libraryStore';
 import { Button, PageHeader, useShortcuts } from '../kit';
 import { AddCombatantsDialog } from './AddCombatants';
 import { removeFromMap, stepTurn } from './combatantCommands';
@@ -16,13 +13,6 @@ import { InitiativeStrip } from './InitiativeStrip';
 import { Inspector } from './Inspector';
 import { PlayViewport } from './PlayViewport';
 import { TurnBar } from './TurnBar';
-
-/** A shipped map edited after the encounter was created lives on as a user copy with the same id. */
-async function loadEncounterMap(repository: Repository, ref: DocRef): Promise<BattleMap> {
-  const edited =
-    ref.area === 'content' && (await repository.storage.exists('data', libraryDocPath('map', 'data', ref.id)));
-  return repository.load('map', edited ? { area: 'data', id: ref.id } : ref);
-}
 
 function historyStep(direction: 'undo' | 'redo'): void {
   const store = useEncounterStore.getState();
@@ -138,10 +128,10 @@ function PlayLayout({ campaignName }: { campaignName: string }) {
   );
 }
 
-// Mount counter: a late cleanup must not close a newer mount's encounter.
-let encounterSession = 0;
-
-/** Plays one encounter: initiative strip, battle map in DM mode, turn bar and inspector tabs. */
+/**
+ * Plays one encounter: initiative strip, battle map in DM mode, turn bar and inspector tabs. The encounter itself
+ * stays loaded by `useActiveEncounter` when the DM leaves this page.
+ */
 export function EncounterPage({ campaignId, encounterId }: { campaignId: string; encounterId: string }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
@@ -149,37 +139,20 @@ export function EncounterPage({ campaignId, encounterId }: { campaignId: string;
   const [campaignName, setCampaignName] = useState('Campaign');
 
   useEffect(() => {
-    const session = ++encounterSession;
-    // Stat blocks, spawning and marker templates read the library listings.
-    useLibraryStore.getState().refreshAll().catch(reportError);
-    const open = async () => {
-      const [encounter, { campaigns }] = await Promise.all([
-        repository.loadEncounter(campaignId, encounterId),
-        repository.listCampaigns(),
-      ]);
-      // A missing map is reported; the encounter still runs as a tracker.
-      const map = encounter.map
-        ? await loadEncounterMap(repository, encounter.map).catch((error: unknown) => {
-            reportError(error);
-            return null;
-          })
-        : null;
-      if (session === encounterSession) {
-        setCampaignName(campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign');
-        useEncounterStore.getState().open(encounter, map);
-      }
-    };
-    open().catch(reportError);
-    return () => {
+    repository
+      .listCampaigns()
+      .then(({ campaigns }) => setCampaignName(campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign'))
+      .catch(reportError);
+  }, [campaignId, repository, reportError]);
+
+  // Pointer modes and dialogs belong to this page, the encounter does not.
+  useEffect(
+    () => () => {
       cancelInteraction();
       useEncounterUi.setState({ addDialogOpen: false, hpPrompt: null });
-      flushEncounter()
-        .catch(reportError)
-        .finally(() => {
-          if (session === encounterSession) useEncounterStore.getState().close();
-        });
-    };
-  }, [campaignId, encounterId, repository, reportError]);
+    },
+    [],
+  );
 
   return loadedId === encounterId ? (
     <PlayLayout campaignName={campaignName} />

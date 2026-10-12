@@ -13,6 +13,7 @@ import { startViewLinks, useViewLinksStore } from '@/sync/views';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CreatureEditorPage } from './creature/CreatureEditorPage';
 import { MapEditorPage } from './editor/MapEditorPage';
+import { useActiveEncounter } from './encounter/useActiveEncounter';
 import { HomePage } from './home/HomePage';
 import { ConfirmHost, ContextMenuHost, ShortcutHost, ToastHost } from './kit';
 import { CompendiumDialogHost } from './library/CompendiumDialogHost';
@@ -74,6 +75,7 @@ export function DmApp() {
   // A character of another encounter falls back to the party.
   const windowView = useViewLinksStore((s) => (s.views.some((v) => v.id === chosenView) ? chosenView : PARTY_VIEW));
 
+  useActiveEncounter();
   useEffect(() => startFogTracker(), []);
   useEffect(() => startViewLinks(), []);
   // In the browser the window is a tab the app cannot track.
