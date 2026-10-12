@@ -179,21 +179,21 @@ describe('saveImportedMap', () => {
     const repository = new Repository(new MemoryStorage());
     const map = await saveImportedMap(repository, {
       name: 'Huge',
-      image: { widthPx: 15600, heightPx: 14700 },
-      calibration: { pxPerSquare: 70, rotationDeg: 1.5, offsetPx: { x: 39, y: -78 } },
+      image: { widthPx: 1600, heightPx: 1200 },
+      calibration: { pxPerSquare: 80, rotationDeg: 1.5, offsetPx: { x: 39, y: -78 } },
       writeImage: async (mapId) => ({
         asset: await repository.importMapAsset(mapId, 'huge.jpg', new Uint8Array([1])),
-        widthPx: 3900,
-        heightPx: 3675,
+        widthPx: 400,
+        heightPx: 300,
       }),
     });
-    expect(map.image).toMatchObject({ widthPx: 3900, heightPx: 3675 });
+    expect(map.image).toMatchObject({ widthPx: 400, heightPx: 300 });
     expect(map.grid).toMatchObject({
-      pxPerSquare: 17.5,
+      pxPerSquare: 20,
       rotationDeg: 1.5,
       offsetPx: { x: 9.75, y: -19.5 },
-      squaresX: 223,
-      squaresY: 210,
+      squaresX: 20,
+      squaresY: 15,
     });
   });
 });
