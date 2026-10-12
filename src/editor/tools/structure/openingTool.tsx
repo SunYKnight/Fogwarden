@@ -3,14 +3,16 @@ import { newId, type Opening } from '@/core/model';
 import { nearestWallSegment, type WallHit } from '@/core/geometry/wallEdit';
 import { distance2, lerp2, wallSegmentEnds } from '@/core/geometry/walls';
 import type { MapPointerEvent } from '@/render/mapRenderContext';
+import { useAppStore } from '@/state/appStore';
 import { useEditorStore } from '@/state/editorStore';
 import type { EditorTool } from '../../tool';
 import { addItem, editorMap } from './documentEdits';
 import { OverlayMarker, OverlayPath } from './drafting';
 import { OPENING_DEFAULTS, OpeningFields, type OpeningTemplate } from './propertyFields';
 
-// Clicks this close to a wall's centerline count as on the wall.
-const PICK_DISTANCE_FT = 2.5;
+// One grid square: zoomed out, a wall is only a few pixels wide and its
+// points snap to corners, so a tighter range makes doors hard to place.
+const PICK_DISTANCE_FT = 5;
 
 const useOpeningTemplate = create<OpeningTemplate>(() => ({
   kind: 'door',
@@ -29,17 +31,19 @@ function wallHitAt(event: MapPointerEvent): WallHit | null {
 
 function placeOpening(event: MapPointerEvent): void {
   const hit = wallHitAt(event);
-  if (!hit) {
-    throw new Error('Click on a wall to place the opening there');
+  if (hit) {
+    const opening: Opening = {
+      ...useOpeningTemplate.getState(),
+      id: newId(),
+      wallId: hit.wallId,
+      segment: hit.segment,
+      t: hit.t,
+    };
+    addItem('Add opening', (d) => d.openings, opening, 'opening');
+  } else {
+    // A miss is guidance, not a failure: the preview shows where it would go.
+    useAppStore.getState().notify('Click closer to a wall: the blue mark shows where the door goes', 'info');
   }
-  const opening: Opening = {
-    ...useOpeningTemplate.getState(),
-    id: newId(),
-    wallId: hit.wallId,
-    segment: hit.segment,
-    t: hit.t,
-  };
-  addItem('Add opening', (d) => d.openings, opening, 'opening');
 }
 
 function OpeningToolPanel() {
