@@ -18,7 +18,7 @@ icons, one primary action per screen, undo where possible, and a success or erro
 | Map settings                     | battlemap may be a video (MP4/WebM)                                                                              |
 | Maps page card menu              | Export as 3D model (GLB), Universal VTT, image                                                                   |
 | Player page (window, LAN, relay) | music and sounds, handouts, own sheet, dice, ping, turn notice, own token moves                                  |
-| Settings                         | Audio (output, volumes) · Data (history) · Language · About (updates)                                            |
+| Settings                         | Audio (output, volumes) · Data (history) · About (updates)                                                       |
 
 ## Items
 
@@ -90,4 +90,3 @@ icons, one primary action per screen, undo where possible, and a success or erro
 | --- | --------------- | ------ | ------------------------------------------------------------------ |
 | T1  | Version history | M      | Readable snapshots of changed files; restore from Settings > Data. |
 | T2  | Auto-update     | M      | Signed updates; check and install from Settings > About.           |
-| T3  | German UI       | M      | Language switch in Settings; all UI text translated.               |
