@@ -25,7 +25,8 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    watch: { ignored: ['**/src-tauri/**'] },
+    // data-local holds data roots and relay data the running app writes to.
+    watch: { ignored: ['**/src-tauri/**', '**/data-local/**'] },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_'],
   build: {
