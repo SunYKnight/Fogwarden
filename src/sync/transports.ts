@@ -16,7 +16,7 @@ export function isPlayerRequest(payload: SyncPayload): payload is PlayerRequest 
   return REQUESTS[payload.type as PlayerRequest['type']] === true;
 }
 
-const CHANNEL = 'dm-tool-sync';
+const CHANNEL = 'fogwarden-sync';
 
 export type Role = SyncMessage['from'];
 

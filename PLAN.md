@@ -1,4 +1,4 @@
-# DnD DM Tool — Plan
+# Fogwarden — Plan
 
 Status: **approved** · Successor of the WPF proof of concept `240722_DnD_DMTool` (left untouched).
 
@@ -77,7 +77,7 @@ Toolchain on this machine: Node 24, pnpm 10, Rust 1.95 (MSVC target), WebView2 1
   artifacts/               # installers
 ```
 
-**User data** never lives in the repo or next to the exe. Default location `%APPDATA%/DnD-DMTool/` (Tauri `appDataDir`), overridable in settings (e.g. a Dropbox folder):
+**User data** never lives in the repo or next to the exe. Default location `%APPDATA%/io.github.sunyknight.fogwarden/` (Tauri `appDataDir`), overridable in settings (e.g. a Dropbox folder):
 
 ```
 <data root>/

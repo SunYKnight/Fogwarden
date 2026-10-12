@@ -67,7 +67,7 @@ async function openDesktopWindow(settings: Settings): Promise<void> {
     const size = monitor?.size.toLogical(monitor.scaleFactor);
     const created = await createWindow(PLAYER_LABEL, {
       url: 'player.html',
-      title: 'DnD DM Tool — Players',
+      title: 'Fogwarden — Players',
       x: position?.x,
       y: position?.y,
       width: size?.width ?? 1280,
@@ -83,7 +83,7 @@ export async function openPlayerWindow(settings: Settings): Promise<void> {
   if (isTauri()) {
     await openDesktopWindow(settings);
   } else {
-    window.open('/player.html', 'dm-tool-player');
+    window.open('/player.html', 'fogwarden-player');
   }
 }
 

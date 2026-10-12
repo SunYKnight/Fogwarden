@@ -47,7 +47,7 @@ function RemoteSection({ remote }: { remote: RemoteSettings }) {
       <TextField
         label="Server URL"
         value={remote.url}
-        placeholder="https://dmtool.example.org"
+        placeholder="https://fogwarden.example.org"
         onChange={(url) => saveRemote((r) => ({ ...r, url })).catch(reportError)}
       />
       <TextField
@@ -114,7 +114,7 @@ function SetupSection({ remote }: { remote: RemoteSettings }) {
       <TextField
         label="Domain"
         value={setup.domain}
-        placeholder="dmtool.example.org"
+        placeholder="fogwarden.example.org"
         onChange={(domain) => saveSetup({ domain: domain.trim().toLowerCase() })}
       />
       <TextField

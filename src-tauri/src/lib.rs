@@ -40,5 +40,5 @@ pub fn run() {
             deploy::deploy_run,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running the DM tool");
+        .expect("error while running Fogwarden");
 }

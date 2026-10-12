@@ -71,9 +71,9 @@ describe('modelSideFiles', () => {
 
 describe('relayBaseUrl', () => {
   it('accepts https anywhere and plain http on this machine only', () => {
-    expect(relayBaseUrl(' https://dmtool.example.org/ ')).toBe('https://dmtool.example.org');
+    expect(relayBaseUrl(' https://fogwarden.example.org/ ')).toBe('https://fogwarden.example.org');
     expect(relayBaseUrl('http://127.0.0.1:7718/x')).toBe('http://127.0.0.1:7718');
-    expect(() => relayBaseUrl('http://dmtool.example.org')).toThrow('https://');
+    expect(() => relayBaseUrl('http://fogwarden.example.org')).toThrow('https://');
   });
 });
 
@@ -145,7 +145,7 @@ describe('RelayUploader against the relay', () => {
 
     await addPlayerLink();
     const served = await fetch(`${base}/asset/data/maps/house.bin`, {
-      headers: { cookie: `dmtool-relay=${PLAYER_TOKEN}` },
+      headers: { cookie: `fogwarden-relay=${PLAYER_TOKEN}` },
     });
     expect(new Uint8Array(await served.arrayBuffer())).toEqual(files['data/maps/house.bin']);
 

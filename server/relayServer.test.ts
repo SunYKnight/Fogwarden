@@ -252,7 +252,7 @@ describe('relay links', () => {
     await expect(player(TOKEN_A).opened).rejects.toThrow('HTTP 401');
     expect((await fetch(`${base}/?t=${TOKEN_A}`)).status).toBe(401);
     expect((await fetch(`${base}${asset}?token=${TOKEN_A}`)).status).toBe(401);
-    expect((await fetch(`${base}${asset}`, { headers: { cookie: `dmtool-relay=${TOKEN_A}` } })).status).toBe(401);
+    expect((await fetch(`${base}${asset}`, { headers: { cookie: `fogwarden-relay=${TOKEN_A}` } })).status).toBe(401);
   });
 
   it('moves a socket whose link changes view to a reconnect into the new view', async () => {
@@ -361,7 +361,7 @@ describe('relay player access', () => {
     expect(byQuery.status).toBe(200);
     expect(byQuery.headers.get('content-type')).toBe('image/png');
     expect(Buffer.from(await byQuery.arrayBuffer())).toEqual(PNG);
-    const byCookie = await fetch(`${base}${asset}`, { headers: { cookie: `dmtool-relay=${TOKEN_A}` } });
+    const byCookie = await fetch(`${base}${asset}`, { headers: { cookie: `fogwarden-relay=${TOKEN_A}` } });
     expect(byCookie.status).toBe(200);
     expect((await fetch(`${base}/asset/data/settings.json?token=${TOKEN_A}`)).status).toBe(403);
   });
@@ -395,7 +395,7 @@ describe('relay player access', () => {
     const page = await fetch(`${base}/?t=${TOKEN_B}`);
     expect(page.status).toBe(200);
     expect(await page.text()).toBe('<html></html>');
-    expect(page.headers.get('set-cookie')).toContain(`dmtool-relay=${TOKEN_B}; Path=/asset; HttpOnly`);
+    expect(page.headers.get('set-cookie')).toContain(`fogwarden-relay=${TOKEN_B}; Path=/asset; HttpOnly`);
     const script = await fetch(`${base}/assets/player-abc.js`);
     expect(script.headers.get('content-type')).toContain('text/javascript');
     expect(await script.text()).toBe('console.log(1)');

@@ -7,7 +7,7 @@ import { Icon } from '../kit';
 import { usePlayerStore } from './playerStore';
 
 // The player's own volume belongs to the device, not to the DM's data.
-const VOLUME_KEY = 'dmtool.playerVolume';
+const VOLUME_KEY = 'fogwarden.playerVolume';
 
 function storedVolume(): number {
   const stored = Number(window.localStorage.getItem(VOLUME_KEY) ?? '1');

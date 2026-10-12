@@ -13,7 +13,7 @@ const RELAY_SCRIPT = 'relay.mjs';
  */
 export function relayBundle(relayScript: string): Plugin {
   return {
-    name: 'dm-tool-relay-bundle',
+    name: 'fogwarden-relay-bundle',
     apply: 'build',
     generateBundle() {
       if (!existsSync(relayScript)) {

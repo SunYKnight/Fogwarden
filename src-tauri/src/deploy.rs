@@ -19,13 +19,13 @@ use tauri::AppHandle;
 use crate::frontend;
 
 const INSTALL_TEMPLATE: &str = include_str!("deploy/install.sh");
-const NGINX_TEMPLATE: &str = include_str!("deploy/dmtool-relay.nginx.conf");
+const NGINX_TEMPLATE: &str = include_str!("deploy/fogwarden-relay.nginx.conf");
 const RELAY_FILE: &str = "relay.mjs";
 const INSTALL_FILE: &str = "install.sh";
-const NGINX_FILE: &str = "dmtool-relay.nginx.conf";
+const NGINX_FILE: &str = "fogwarden-relay.nginx.conf";
 // A shell word, not a path: the remote shell expands $HOME.
-const REMOTE_DIR: &str = "\"$HOME/dmtool-relay-setup\"";
-const DM_KEY_PREFIX: &str = "DMTOOL_DM_KEY=";
+const REMOTE_DIR: &str = "\"$HOME/fogwarden-relay-setup\"";
+const DM_KEY_PREFIX: &str = "FOGWARDEN_DM_KEY=";
 const DM_KEY_LENGTH: usize = 64;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 const AUTH_TIMEOUT: Duration = Duration::from_secs(20);
@@ -1158,13 +1158,13 @@ exit {exit_code}
             .err()
             .unwrap()
             .0
-            .contains("did not print a valid DMTOOL_DM_KEY= line"));
+            .contains("did not print a valid FOGWARDEN_DM_KEY= line"));
         let (result, _) = run_fake(&fixture, password(), &fake_install(&format!("{DM_KEY_PREFIX}xyz"), 0)).await;
         assert!(result
             .err()
             .unwrap()
             .0
-            .contains("did not print a valid DMTOOL_DM_KEY= line"));
+            .contains("did not print a valid FOGWARDEN_DM_KEY= line"));
         let (result, _) = run_fake(&fixture, password(), &fake_install("no key", 4)).await;
         let error = result.err().unwrap();
         assert!(error.0.contains("install.sh failed with exit code 4"), "{error}");

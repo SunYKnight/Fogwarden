@@ -6,13 +6,13 @@ import { z } from 'zod';
  */
 
 /** WebSocket subprotocol naming the DM; the DM key travels as a second subprotocol, never in a logged URL. */
-export const RELAY_DM_PROTOCOL = 'dmtool-dm';
+export const RELAY_DM_PROTOCOL = 'fogwarden-dm';
 /** Upload limit per file, room for video battlemaps; the generated nginx site allows the same body size. */
 export const RELAY_MAX_UPLOAD_BYTES = 1024 * 1024 * 1024;
 /** Lowercase hex SHA-256 of the request body, required on every upload. */
 export const RELAY_HASH_HEADER = 'x-content-sha256';
 /** Cookie scoped to `/asset` so glTF side files, requested without the query, still carry the token. */
-export const RELAY_TOKEN_COOKIE = 'dmtool-relay';
+export const RELAY_TOKEN_COOKIE = 'fogwarden-relay';
 /** Player page query parameter; short because players type the link. */
 export const RELAY_LINK_PARAM = 't';
 

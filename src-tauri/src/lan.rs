@@ -39,7 +39,7 @@ use crate::storage::{self, Area, StorageError, StorageState};
 
 const PLAYER_PAGE: &str = "player.html";
 const BUNDLE_DIR: &str = "assets";
-const TOKEN_COOKIE: &str = "dmtool-lan";
+const TOKEN_COOKIE: &str = "fogwarden-lan";
 // Player messages are a hello, a roll, a ping or a move; anything bigger is
 // not a valid message.
 const PLAYER_MESSAGE_LIMIT: usize = 1024;

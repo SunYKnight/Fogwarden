@@ -565,11 +565,11 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   relay → DM carries a player's rebuilt message under its view. Status frames `{relay: {players, views}}` (players per
   view) go to the DM on connect and whenever players or links change.
 - Relay (`server/`, Node 20+, `ws`): `createRelay({dmKey, dataDir})` (`relayServer.ts`), entry `relay.ts` (env
-  `DMTOOL_DM_KEY`, `DMTOOL_RELAY_PORT`, `DMTOOL_RELAY_HOST`, `DMTOOL_RELAY_DATA`), bundled by `pnpm build:server`
+  `FOGWARDEN_DM_KEY`, `FOGWARDEN_RELAY_PORT`, `FOGWARDEN_RELAY_HOST`, `FOGWARDEN_RELAY_DATA`), bundled by `pnpm build:server`
   (`tools/build-server.ts`, esbuild) into `dist-server/relay.mjs`. Routes: `/health`; `/?t=<token>` and
   `/player.html` (uploaded player page, sets the `/asset` token cookie); `/assets/*` (uploaded bundle, public);
   `/asset/{area}/{path}?token=` (uploaded assets); `/ws` (players with `?token=`, the DM with the subprotocols
-  `dmtool-dm` + DM key, never in a logged URL). Player tokens are the keys of the links table. DM API with
+  `fogwarden-dm` + DM key, never in a logged URL). Player tokens are the keys of the links table. DM API with
   `Authorization: Bearer <key>`: `GET /api/session` (`{api, players}`), `PUT /api/links` (replaces the token → view
   table, kept in `dataDir/links.json` across restarts; withdrawn tokens' sockets close with `RELAY_LINK_REVOKED`,
   reassigned ones with 1013), `POST /api/missing` (which upload targets differ by SHA-256), `PUT
@@ -587,12 +587,12 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   `collectAssetRefs` finds anywhere in the payload). `DmApp` adds the transport to `startDmPublisher`. Plain
   `http://` URLs are refused except for loopback (the DM key would travel unencrypted).
 - Setup (`src-tauri/src/deploy.rs`, `russh` with `ring`): templates `src-tauri/src/deploy/install.sh` and
-  `dmtool-relay.nginx.conf` filled with the validated domain, email and port; commands `deploy_write_files(folder,
+  `fogwarden-relay.nginx.conf` filled with the validated domain, email and port; commands `deploy_write_files(folder,
 setup)`, `deploy_host_key(host, port)` (`SHA256:` fingerprint, confirmed and stored in
-  `settings.remote.knownHosts` by the UI), `deploy_run(request, events)` (uploads to `~/dmtool-relay-setup/` with
+  `settings.remote.knownHosts` by the UI), `deploy_run(request, events)` (uploads to `~/fogwarden-relay-setup/` with
   `cat` over exec, runs the script as root, directly or via `sudo`, streams lines to a `Channel`, returns the DM key
-  from the `DMTOOL_DM_KEY=` line, which never reaches the log). The script installs Node 22 (NodeSource) when
-  needed, user and systemd unit `dmtool-relay`, `/etc/dmtool-relay/relay.env` with the DM key (kept on re-runs),
+  from the `FOGWARDEN_DM_KEY=` line, which never reaches the log). The script installs Node 22 (NodeSource) when
+  needed, user and systemd unit `fogwarden-relay`, `/etc/fogwarden-relay/relay.env` with the DM key (kept on re-runs),
   the nginx site (WebSocket upgrade on `/ws`) and, given an email, a certbot certificate.
 - UI: `src/ui/server/ServerPage.tsx` (rail entry Server): Local network (`LanControls`), Remote server (URL, DM key,
   connect, connection test via `/health` + `/api/session`, link + QR), Set up a server (`DeployDialog`). Settings

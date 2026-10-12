@@ -1012,25 +1012,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dnd-dm-tool"
-version = "0.1.0"
-dependencies = [
- "axum",
- "futures-util",
- "getrandom 0.3.4",
- "if-addrs",
- "russh",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tokio",
- "tokio-tungstenite",
- "tokio-util",
-]
-
-[[package]]
 name = "dom_query"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1266,6 +1247,25 @@ name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
+
+[[package]]
+name = "fogwarden"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "futures-util",
+ "getrandom 0.3.4",
+ "if-addrs",
+ "russh",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tokio",
+ "tokio-tungstenite",
+ "tokio-util",
+]
 
 [[package]]
 name = "foldhash"

@@ -1,12 +1,14 @@
 [package]
-name = "dnd-dm-tool"
+name = "fogwarden"
 version = "0.1.0"
-description = "DnD DM Tool"
+description = "Fogwarden"
 edition = "2021"
 rust-version = "1.89"
+license = "MIT"
+repository = "https://github.com/SunYKnight/Fogwarden"
 
 [lib]
-name = "dnd_dm_tool_lib"
+name = "fogwarden_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

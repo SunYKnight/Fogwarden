@@ -4,23 +4,14 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '@/state/appStore';
 import { Field } from '../components/fields';
 import { Button, Dialog, Section } from '../kit';
-import creatureIconLicense from '../creatureTypes/icons/LICENSE.md?raw';
+import appLicense from '../../../LICENSE?raw';
+import thirdPartyNotices from '../../../THIRD_PARTY_NOTICES.md?raw';
 
-const LICENSE_FILES = ['packs/srd/LICENSE.md', 'packs/sample-map/LICENSE.md', 'packs/cc0-models/LICENSE.md'];
-
-/** Attribution of the shipped content (read from the content folder) and of the bundled creature type icons. */
+/** The app's own license and the notices for shipped content and dependencies, bundled at build time. */
 function LicenseDialog({ onClose }: { onClose: () => void }) {
-  const repository = useAppStore((s) => s.repository);
-  const reportError = useAppStore((s) => s.reportError);
-  const [text, setText] = useState<string | null>(null);
-  useEffect(() => {
-    Promise.all(LICENSE_FILES.map((file) => repository.storage.readText('content', file)))
-      .then((texts) => setText([...texts, creatureIconLicense].join('\n\n')))
-      .catch(reportError);
-  }, [repository, reportError]);
   return (
     <Dialog title="Licenses" onClose={onClose} width={720}>
-      {text === null ? <p className="muted">Loading…</p> : <pre className="license-text">{text}</pre>}
+      <pre className="license-text">{`${appLicense}\n${thirdPartyNotices}`}</pre>
     </Dialog>
   );
 }
@@ -38,6 +29,9 @@ export function AboutSection() {
   return (
     <Section title="About">
       <div className="col">
+        <p>
+          Fogwarden, released under the MIT License. Source: <code>https://github.com/SunYKnight/Fogwarden</code>
+        </p>
         <Field label="Version">
           <span>{isTauri() ? (version ?? '…') : 'Browser build (version shown in the desktop app)'}</span>
         </Field>

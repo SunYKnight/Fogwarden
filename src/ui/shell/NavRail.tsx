@@ -12,8 +12,8 @@ export function NavRail() {
 
   return (
     <nav className="rail" aria-label="Main">
-      <div className="rail-brand" title="DnD DM Tool">
-        DM
+      <div className="rail-brand" title="Fogwarden">
+        FW
       </div>
       {NAV_ITEMS.map((item) => {
         const active = item.matches(route);

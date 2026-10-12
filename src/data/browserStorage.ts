@@ -1,7 +1,7 @@
 import type { AssetRef, StorageArea } from '@/core/model';
 import { childEntries, StorageError, type DirEntry, type Storage, type StorageRoots } from './storage';
 
-const DB_NAME = 'dnd-dm-tool';
+const DB_NAME = 'fogwarden';
 const STORE = 'files';
 
 type StoredValue = string | Uint8Array;

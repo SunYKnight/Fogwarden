@@ -495,7 +495,7 @@ writeFileSync(
     id: PACK_ID,
     name: 'Sample map',
     version: '1',
-    author: 'DnD DM Tool',
+    author: 'Fogwarden',
     license: 'CC0-1.0',
     description: 'A ruined chapel in a forest clearing; the map of the sample encounter.',
     url: '',

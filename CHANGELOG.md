@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Renamed to Fogwarden (package `fogwarden`, app id `io.github.sunyknight.fogwarden`, so the default data folder
+  is now `%APPDATA%/io.github.sunyknight.fogwarden/`; relay service `fogwarden-relay` with `FOGWARDEN_*` variables,
+  a relay set up before needs the setup run again). Licensed under MIT (`LICENSE`); `THIRD_PARTY_NOTICES.md` lists
+  shipped content and dependency licenses and is shown under Settings > About > Licenses.
 - Content packs (settings schema v7): a pack is a folder or `.zip` with `pack.json` (id, name, version, author,
   license, description, url) and the library folders. Compendium tab **Packs** lists My content and every pack with
   its counts and "overridden by …", switches packs on and off, reorders them by drag (or Alt+Up/Down), exports any

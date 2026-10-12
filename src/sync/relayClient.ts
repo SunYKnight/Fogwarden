@@ -81,7 +81,7 @@ export async function testRelay(url: string, dmKey: string): Promise<RelaySessio
   const baseUrl = relayBaseUrl(url);
   const health = await fetch(`${baseUrl}/health`);
   if (!health.ok) {
-    throw new Error(`${baseUrl} answers, but is no DM tool relay (health check: HTTP ${health.status})`);
+    throw new Error(`${baseUrl} answers, but is no Fogwarden relay (health check: HTTP ${health.status})`);
   }
   return fetchRelaySession(baseUrl, dmKey);
 }

@@ -134,7 +134,7 @@ export function exportManifest(pack: { source: LibrarySource; manifest: PackMani
     ? packManifestSchema.parse({
         id: `my-content-${date}`,
         name: `My content ${date}`,
-        description: 'Creatures, maps and templates exported from the DM tool.',
+        description: 'Creatures, maps and templates exported from Fogwarden.',
       })
     : pack.manifest;
 }

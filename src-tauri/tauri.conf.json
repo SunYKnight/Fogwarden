@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DnD DM Tool",
+  "productName": "Fogwarden",
   "version": "0.1.0",
-  "identifier": "de.dnddmtool.desktop",
+  "identifier": "io.github.sunyknight.fogwarden",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "dm",
-        "title": "DnD DM Tool",
+        "title": "Fogwarden",
         "url": "index.html",
         "width": 1600,
         "height": 950,

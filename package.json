@@ -1,5 +1,11 @@
 {
-  "name": "dnd-dm-tool",
+  "name": "fogwarden",
+  "description": "Desktop app for a 5e Dungeon Master: 3D battlemaps, encounters and a fog-of-war player view.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SunYKnight/Fogwarden.git"
+  },
   "private": true,
   "version": "0.1.0",
   "type": "module",

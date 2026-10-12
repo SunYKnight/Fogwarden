@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Repository } from '../src/data/repository';
 import { NodeStorage } from './nodeStorage';
 
-const APP_IDENTIFIER = 'de.dnddmtool.desktop';
+const APP_IDENTIFIER = 'io.github.sunyknight.fogwarden';
 export const PROJECT_ROOT = resolve(import.meta.dirname, '..');
 export const CONTENT_ROOT = join(PROJECT_ROOT, 'content');
 

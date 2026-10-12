@@ -26,7 +26,7 @@ import {
 } from '@/sync/relayApi';
 import { containedPath, FileStore, HttpError } from './store';
 
-export const RELAY_SERVICE = 'dmtool-relay';
+export const RELAY_SERVICE = 'fogwarden-relay';
 /** Player messages are a hello, a roll, a ping or a move; anything bigger is not a valid message. */
 const PLAYER_MESSAGE_LIMIT = 1024;
 /** A player may send this many messages at once, then one per `PLAYER_REFILL_MS`; more are dropped. */

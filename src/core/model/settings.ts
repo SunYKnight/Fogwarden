@@ -29,7 +29,7 @@ export function defaultOnboarding(): Onboarding {
 }
 
 export const remoteSettingsSchema = z.object({
-  /** Relay base URL, e.g. `https://dmtool.example.org`; empty until set up. */
+  /** Relay base URL, e.g. `https://fogwarden.example.org`; empty until set up. */
   url: z.string(),
   /** Secret the install script created; authenticates this app as the DM. */
   dmKey: z.string(),

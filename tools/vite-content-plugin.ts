@@ -17,7 +17,7 @@ function resolveInside(root: string, relative: string): string {
 export function contentDevServer(contentRoot: string): Plugin {
   const root = normalize(contentRoot);
   return {
-    name: 'dm-tool-content-dev-server',
+    name: 'fogwarden-content-dev-server',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://localhost');
