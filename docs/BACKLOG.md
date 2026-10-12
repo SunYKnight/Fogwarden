@@ -4,6 +4,10 @@ Features agreed for implementation (effort S = hours, M = a day or two). Larger 
 Every feature follows `UI_CONCEPT.md`: it lives where the DM already looks for it, uses the kit components, labelled
 icons, one primary action per screen, undo where possible, and a success or error notice.
 
+**Status: all items below are implemented.** Content, sound, players, combat, campaign and maps landed in
+`c4449b7`; Aurora import, version history and auto-update in `2047818`; Dungeon Alchemist rooms (P7) in
+`1d5998e`. Follow-up work goes into new rows here; larger ideas into `IDEAS.md`.
+
 ## Where new features live
 
 | Place                            | New content                                                                                                      |
