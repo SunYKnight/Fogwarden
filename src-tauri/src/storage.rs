@@ -97,12 +97,13 @@ impl StorageState {
     }
 }
 
-// Debug builds read the repo's content folder so edits need no rebuild.
+// Debug builds read the repo's content folder so edits need no rebuild. The
+// path must not contain "..": the asset protocol scope rejects such paths.
 fn content_root(app: &AppHandle) -> Result<PathBuf, StorageError> {
-    let root = if cfg!(debug_assertions) {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("content")
-    } else {
-        app.path().resource_dir()?.join("content")
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = match manifest.parent() {
+        Some(repo) if cfg!(debug_assertions) => repo.join("content"),
+        _ => app.path().resource_dir()?.join("content"),
     };
     Ok(root)
 }
