@@ -1,0 +1,21 @@
+# build output
+dist/
+artifacts/
+src-tauri/target/
+src-tauri/gen/schemas/
+*.tsbuildinfo
+
+# dependencies
+node_modules/
+
+# local user data and copyrighted imports never belong in the repo
+data-local/
+*.local
+
+# editors / OS
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+Thumbs.db
+.DS_Store
