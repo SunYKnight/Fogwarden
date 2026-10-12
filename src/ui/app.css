@@ -1113,8 +1113,8 @@ button.crumb:hover {
   position: absolute;
   top: 2px;
   right: 3px;
-  font-size: 9px;
-  opacity: 0.6;
+  font-size: 10px;
+  opacity: 0.85;
   font-family: inherit;
   min-width: 0;
   padding: 0;
@@ -1188,9 +1188,16 @@ kbd {
   color: var(--fg-muted);
 }
 
+/* Underline only: the generic button.active fill would hide the tool bar's
+   active tool, which uses that fill. */
 .kit-tab.active {
   color: var(--fg);
+  background: transparent;
   border-bottom-color: var(--accent);
+}
+
+.kit-tab.active .icon {
+  color: var(--accent);
 }
 
 .badge {
@@ -1630,6 +1637,7 @@ kbd {
 .monitor.active {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-input));
+  color: var(--fg);
 }
 
 .monitor-number {

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 
 /** Local edit buffer that resets whenever the committed value changes from outside. */
 function useDraft<T>(value: T): [T, (next: T) => void] {
@@ -15,12 +15,14 @@ interface FieldProps {
   label: string;
   children: ReactNode;
   title?: string;
+  /** Id of the control the label names, so screen readers announce it. */
+  htmlFor?: string;
 }
 
-export function Field({ label, children, title }: FieldProps) {
+export function Field({ label, children, title, htmlFor }: FieldProps) {
   return (
     <div className="field" title={title}>
-      <label>{label}</label>
+      <label htmlFor={htmlFor}>{label}</label>
       {children}
     </div>
   );
@@ -40,6 +42,7 @@ interface NumberFieldProps {
 /** Commits on blur or Enter so half-typed values ("1.") never reach the document. */
 export function NumberField({ label, value, onChange, min, max, step, suffix, title }: NumberFieldProps) {
   const [text, setText] = useDraft(String(value));
+  const id = useId();
   const commit = () => {
     const parsed = Number(text);
     const valid = text.trim() !== '' && Number.isFinite(parsed);
@@ -50,9 +53,10 @@ export function NumberField({ label, value, onChange, min, max, step, suffix, ti
     }
   };
   return (
-    <Field label={label} title={title}>
+    <Field label={label} title={title} htmlFor={id}>
       <div className="row">
         <input
+          id={id}
           type="number"
           value={text}
           min={min}
@@ -81,15 +85,17 @@ interface TextFieldProps {
 
 export function TextField({ label, value, onChange, multiline, placeholder }: TextFieldProps) {
   const [text, setText] = useDraft(value);
+  const id = useId();
   const commit = () => {
     if (text !== value) {
       onChange(text);
     }
   };
   return (
-    <Field label={label}>
+    <Field label={label} htmlFor={id}>
       {multiline ? (
         <textarea
+          id={id}
           rows={4}
           value={text}
           placeholder={placeholder}
@@ -98,6 +104,7 @@ export function TextField({ label, value, onChange, multiline, placeholder }: Te
         />
       ) : (
         <input
+          id={id}
           value={text}
           placeholder={placeholder}
           onChange={(e) => setText(e.target.value)}
@@ -120,9 +127,10 @@ interface SelectFieldProps<T extends string> {
 }
 
 export function SelectField<T extends string>({ label, value, options, onChange, format }: SelectFieldProps<T>) {
+  const id = useId();
   return (
-    <Field label={label}>
-      <select value={value} onChange={(e) => onChange(e.target.value as T)}>
+    <Field label={label} htmlFor={id}>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value as T)}>
         {options.map((o) => (
           <option key={o} value={o}>
             {format ? format(o) : o}
@@ -140,9 +148,10 @@ interface CheckboxFieldProps {
 }
 
 export function CheckboxField({ label, value, onChange }: CheckboxFieldProps) {
+  const id = useId();
   return (
-    <Field label={label}>
-      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} />
+    <Field label={label} htmlFor={id}>
+      <input id={id} type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} />
     </Field>
   );
 }
@@ -158,10 +167,12 @@ interface SliderFieldProps {
 }
 
 export function SliderField({ label, value, min, max, step, onChange, suffix }: SliderFieldProps) {
+  const id = useId();
   return (
-    <Field label={label}>
+    <Field label={label} htmlFor={id}>
       <div className="row">
         <input
+          id={id}
           type="range"
           min={min}
           max={max}
@@ -188,9 +199,10 @@ export function ColorField({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const id = useId();
   return (
-    <Field label={label}>
-      <input type="color" value={value} onChange={(e) => onChange(e.target.value)} />
+    <Field label={label} htmlFor={id}>
+      <input id={id} type="color" value={value} onChange={(e) => onChange(e.target.value)} />
     </Field>
   );
 }

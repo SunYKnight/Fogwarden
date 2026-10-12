@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Field, TextField } from '../components/fields';
 
 interface OptionalNumberInputProps {
@@ -6,10 +6,11 @@ interface OptionalNumberInputProps {
   onChange: (value: number | undefined) => void;
   placeholder?: string;
   className?: string;
+  id?: string;
 }
 
 /** Integer input where an empty box means "no value"; commits on blur or Enter. */
-export function OptionalNumberInput({ value, onChange, placeholder, className }: OptionalNumberInputProps) {
+export function OptionalNumberInput({ value, onChange, placeholder, className, id }: OptionalNumberInputProps) {
   const committed = value === undefined ? '' : String(value);
   const [text, setText] = useState(committed);
   const [seen, setSeen] = useState(committed);
@@ -27,6 +28,7 @@ export function OptionalNumberInput({ value, onChange, placeholder, className }:
   };
   return (
     <input
+      id={id}
       type="number"
       className={className}
       value={text}
@@ -48,10 +50,11 @@ interface OptionalNumberFieldProps extends OptionalNumberInputProps {
 
 /** Labelled optional number for speeds, senses, saves and skills that may be absent. */
 export function OptionalNumberField({ label, suffix, ...input }: OptionalNumberFieldProps) {
+  const id = useId();
   return (
-    <Field label={label}>
+    <Field label={label} htmlFor={id}>
       <div className="row">
-        <OptionalNumberInput {...input} className="grow" />
+        <OptionalNumberInput {...input} id={id} className="grow" />
         {suffix && <span className="muted">{suffix}</span>}
       </div>
     </Field>

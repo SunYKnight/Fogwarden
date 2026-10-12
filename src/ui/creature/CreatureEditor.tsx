@@ -1,5 +1,5 @@
 import type { Draft } from 'immer';
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 import {
   ABILITIES,
   ALIGNMENTS,
@@ -130,6 +130,7 @@ function BasicsSection({ c, change }: { c: Creature; change: Change }) {
 
 function DefenseSection({ c, change }: { c: Creature; change: Change }) {
   const reportError = useAppStore((s) => s.reportError);
+  const formulaId = useId();
   const averageFromFormula = () => {
     try {
       const average = averageDice(c.hitPoints.formula);
@@ -148,9 +149,10 @@ function DefenseSection({ c, change }: { c: Creature; change: Change }) {
         value={c.hitPoints.average}
         onChange={(v) => change((d) => void (d.hitPoints.average = Math.round(v)))}
       />
-      <Field label="HP formula">
+      <Field label="HP formula" htmlFor={formulaId}>
         <div className="row">
           <input
+            id={formulaId}
             key={c.hitPoints.formula}
             defaultValue={c.hitPoints.formula}
             style={{ flex: 1 }}

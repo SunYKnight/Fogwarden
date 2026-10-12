@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { createCampaign, newId, nowIso, type Campaign, type Encounter } from '@/core/model';
 import type { LoadProblem } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
@@ -34,6 +34,7 @@ function NameDialog(props: {
   const { title, initial, confirmLabel, onSubmit, onClose } = props;
   const reportError = useAppStore((s) => s.reportError);
   const [name, setName] = useState(initial);
+  const id = useId();
   const valid = name.trim() !== '';
   const submit = () => onSubmit(name.trim()).then(onClose, reportError);
   return (
@@ -54,8 +55,8 @@ function NameDialog(props: {
           if (valid) submit();
         }}
       >
-        <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} />
+        <Field label="Name" htmlFor={id}>
+          <input id={id} value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
       </form>
     </Dialog>

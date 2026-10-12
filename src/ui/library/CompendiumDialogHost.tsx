@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { createCampaign, createEncounter, type Campaign, type Creature, type DocRef } from '@/core/model';
 import { parseStatBlock, StatBlockError } from '@/core/import/statblock';
 import { useAppStore } from '@/state/appStore';
@@ -97,6 +97,7 @@ function NewEncounterDialog({ campaignId, initialMap }: { campaignId: string | n
   const [name, setName] = useState('');
   const [map, setMap] = useState<DocRef | null>(initialMap);
   const [busy, setBusy] = useState(false);
+  const id = useId();
 
   useEffect(() => {
     if (campaignId === null) {
@@ -150,12 +151,17 @@ function NewEncounterDialog({ campaignId, initialMap }: { campaignId: string | n
           if (valid && !busy) create().catch(reportError);
         }}
       >
-        <Field label="Name">
-          <input value={name} placeholder="e.g. Ambush on the road" onChange={(e) => setName(e.target.value)} />
+        <Field label="Name" htmlFor={`${id}-name`}>
+          <input
+            id={`${id}-name`}
+            value={name}
+            placeholder="e.g. Ambush on the road"
+            onChange={(e) => setName(e.target.value)}
+          />
         </Field>
         {campaignId === null && (
-          <Field label="Campaign">
-            <select value={chosenCampaign} onChange={(e) => setChosenCampaign(e.target.value)}>
+          <Field label="Campaign" htmlFor={`${id}-campaign`}>
+            <select id={`${id}-campaign`} value={chosenCampaign} onChange={(e) => setChosenCampaign(e.target.value)}>
               {campaigns?.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -166,8 +172,8 @@ function NewEncounterDialog({ campaignId, initialMap }: { campaignId: string | n
           </Field>
         )}
         {campaignId === null && creatingCampaign && (
-          <Field label="Campaign name">
-            <input value={campaignName} onChange={(e) => setCampaignName(e.target.value)} />
+          <Field label="Campaign name" htmlFor={`${id}-new-campaign`}>
+            <input id={`${id}-new-campaign`} value={campaignName} onChange={(e) => setCampaignName(e.target.value)} />
           </Field>
         )}
         <span className="muted">Map</span>
