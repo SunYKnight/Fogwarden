@@ -12,7 +12,7 @@ import {
   type ImageExtension,
   type ImportedMap,
 } from './importedMap';
-import { buildStructures, FULL_WALL, type SourcePortal, type WallProfile } from './mapStructures';
+import { buildStructures, FULL_WALL, type SourcePortal, type SourceWall, type WallProfile } from './mapStructures';
 
 /** File extensions of the Universal VTT format (Dungeondraft, Dungeon Alchemist, DungeonFog, Arkenforge). */
 export const UVTT_EXTENSIONS = ['dd2vtt', 'df2vtt', 'uvtt'] as const;
@@ -92,13 +92,10 @@ export function parseUvtt(text: string, fileName: string): UvttMap {
     secret: false,
     profile: FULL_WALL,
   }));
-  const structures = buildStructures(
-    [
-      ...file.line_of_sight.map((line) => ({ points: line.map(toFeet), profile: FULL_WALL })),
-      ...file.objects_line_of_sight.map((line) => ({ points: line.map(toFeet), profile: SIGHT_OBJECT })),
-    ],
-    portals,
-  );
+  const walls: SourceWall[] = [
+    ...file.line_of_sight.map((line) => ({ points: line.map(toFeet), profile: FULL_WALL })),
+    ...file.objects_line_of_sight.map((line) => ({ points: line.map(toFeet), profile: SIGHT_OBJECT })),
+  ];
   const lights = file.lights.map((l, i): MapLight => ({
     id: newId(),
     name: `Light ${i + 1}`,
@@ -115,7 +112,8 @@ export function parseUvtt(text: string, fileName: string): UvttMap {
   const lighting = file.environment.baked_lighting ? bakedLighting(level) : { ambientLight: level, notes: '' };
   return {
     calibration: { pxPerSquare, rotationDeg: 0, offsetPx: { x: 0, y: 0 } },
-    content: { ...structures, lights, ...lighting },
+    content: { ...buildStructures(walls, portals), rooms: [], lights, ...lighting },
+    sources: { walls, portals },
     image: { bytes, extension },
   };
 }

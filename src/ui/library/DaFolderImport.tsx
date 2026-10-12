@@ -131,6 +131,7 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
             image: f.floor.image,
             calibration: f.floor.calibration,
             content: f.floor.content,
+            sources: f.floor.sources,
             project: ground,
             props: ground && choices ? damPropsFor(repository, ground, choices) : undefined,
             writeImage: async (mapId) =>

@@ -23,10 +23,14 @@ function project(extra: Record<string, unknown> = {}): string {
     origin: { x: 0.5, y: 0.5 },
     terrainLayers: [{ terrain: terrain(1, 1), waterMap: '9 9 ' }],
     buildingBlockInstances: [
-      { Version: 11, blockId: 'tree', center: { x: 0.25, y: 0.75 }, height: 0.5, scale: 1.2, rotation: 30 },
-      { Version: 11, blockId: 'rock', center: { x: 0.5, y: 0.5 }, height: 0, scale: 1, rotation: 0 },
-      { Version: 11, blockId: 'tree', center: { x: 0.75, y: 0.25 }, height: 0, scale: 1, rotation: 0 },
+      { Version: 11, id: 'i1', blockId: 'tree', center: { x: 0.25, y: 0.75 }, height: 0.5, scale: 1.2, rotation: 30 },
+      { Version: 11, id: 'i2', blockId: 'rock', center: { x: 0.5, y: 0.5 }, height: 0, scale: 1 },
+      { Version: 11, id: 'i3', blockId: 'tree', center: { x: 0.75, y: 0.25 }, height: 0, scale: 1, rotation: 0 },
+      // A wall's building block is no object.
+      { Version: 11, id: 'w1', blockId: 'wall', center: { x: 0, y: 0.5 }, height: 0, scale: 1, rotation: 90 },
     ],
+    objects: ['i1', 'i2', 'i3'].map((id) => ({ foundationId: 'ground', buildingBlockInstanceId: id })),
+    foundations: [{ id: 'ground', height: 0, baseFoundationId: 'ground' }],
     ...extra,
   });
 }

@@ -40,10 +40,11 @@ function project() {
       height: 1,
       terrainLayers: [{ terrain: bytesToBase64(new Uint8Array(terrain)) }],
       buildingBlockInstances: [
-        { blockId: 'chest', center: { x: 0.5, y: 0.5 }, height: 0, scale: 1, rotation: 90 },
-        { blockId: 'chest', center: { x: 0.2, y: 0.2 }, height: 0, scale: 1, rotation: 0 },
-        { blockId: 'statue', center: { x: 0.8, y: 0.8 }, height: 0, scale: 1, rotation: 0 },
+        { id: 'i1', blockId: 'chest', center: { x: 0.5, y: 0.5 }, height: 0, scale: 1, rotation: 90 },
+        { id: 'i2', blockId: 'chest', center: { x: 0.2, y: 0.2 }, height: 0, scale: 1 },
+        { id: 'i3', blockId: 'statue', center: { x: 0.8, y: 0.8 }, height: 0, scale: 1, rotation: 0 },
       ],
+      objects: ['i1', 'i2', 'i3'].map((id) => ({ foundationId: 'f', buildingBlockInstanceId: id })),
     }),
     'vault.dam',
   );

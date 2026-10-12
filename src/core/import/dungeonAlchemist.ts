@@ -165,7 +165,8 @@ export function parseDaFloor(text: string, fileName: string): DaFloor {
     // Subtracting from 0 keeps an unshifted grid at +0 rather than -0.
     calibration: { pxPerSquare: grid, rotationDeg: 0, offsetPx: { x: 0 - scene.shiftX, y: 0 - scene.shiftY } },
     // Dungeon Alchemist renders its lights into the picture.
-    content: { ...buildStructures(walls, portals), lights, ...bakedLighting(level) },
+    content: { ...buildStructures(walls, portals), rooms: [], lights, ...bakedLighting(level) },
+    sources: { walls, portals },
     image: { widthPx: scene.width, heightPx: scene.height },
   };
 }

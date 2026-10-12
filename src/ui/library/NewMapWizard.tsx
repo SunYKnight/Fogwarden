@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { create } from 'zustand';
 import { damMargin, parseDamProject, type DamProject } from '@/core/import/damProject';
 import type { DamObjectChoices } from '@/core/import/damObjects';
-import type { ImportedContent } from '@/core/import/importedMap';
+import type { ImportedContent, StructureSources } from '@/core/import/importedMap';
 import { isUvttFileName, parseUvtt } from '@/core/import/uvtt';
 import type { BattleMap, Vec2 } from '@/core/model';
 import { calibrateFromSquare, fitSquaresToImage, type GridCalibration } from '@/core/terrain/calibration';
@@ -59,6 +59,7 @@ export function NewMapWizardHost() {
 interface ExportInfo {
   fileName: string;
   content: ImportedContent;
+  sources: StructureSources;
   project: DamProject | null;
   objects: DamObjectChoices | null;
 }
@@ -92,7 +93,7 @@ async function readDraft(file: File): Promise<Draft> {
       type: `image/${extension === 'jpg' ? 'jpeg' : extension}`,
     });
     const image = await imageSize(picture);
-    const source = { fileName: file.name, content: uvtt.content, project: null, objects: null };
+    const source = { fileName: file.name, content: uvtt.content, sources: uvtt.sources, project: null, objects: null };
     const url = URL.createObjectURL(picture);
     draft = { file: picture, url, image, name, calibration: uvtt.calibration, guess: uvtt.calibration, source };
   } else if (isImageFile(file)) {
@@ -136,7 +137,9 @@ async function readFiles(files: File[], current: Draft | null): Promise<Draft> {
 function exportSummary(content: ImportedContent): string {
   const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const doors = content.openings.filter((o) => o.kind === 'door').length;
+  const rooms = content.rooms.length > 0 ? [count(content.rooms.length, 'room')] : [];
   return [
+    ...rooms,
     count(content.walls.length, 'wall'),
     count(doors, 'door'),
     count(content.openings.length - doors, 'window'),
@@ -151,8 +154,11 @@ function projectSummary(project: DamProject): string {
     min = Math.min(min, height);
     max = Math.max(max, height);
   }
+  const { structure } = project;
   const objects = project.objects.length > 0 ? `, ${project.objects.length} objects` : '';
-  return `ground heights ${min.toFixed(1)} to ${max.toFixed(1)} ft${objects}`;
+  const rooms = structure.rooms.length > 0 ? `, ${structure.rooms.length} rooms` : '';
+  const upper = structure.otherLevelParts > 0 ? '; upper floors are not imported yet' : '';
+  return `ground heights ${min.toFixed(1)} to ${max.toFixed(1)} ft${rooms}${objects}${upper}`;
 }
 
 type Step = 'image' | 'project' | 'grid' | 'objects' | 'done';
@@ -224,6 +230,7 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
         image: source.image,
         calibration,
         content: source.source?.content,
+        sources: source.source?.sources,
         project,
         props: project && objects ? damPropsFor(repository, project, objects) : undefined,
       });
@@ -390,7 +397,7 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
             <strong>{created.name}</strong> is ready: {created.grid.squaresX} × {created.grid.squaresY} squares with a
             calibrated grid.{' '}
             {draft?.source
-              ? `Imported ${exportSummary(draft.source.content)}${draft.source.project ? `, terrain${placed}` : ''}.`
+              ? `Imported ${exportSummary(created)}${draft.source.project ? `, terrain${placed}` : ''}.`
               : 'Walls, doors and terrain are added in the editor.'}
           </p>
           {reduced && (
@@ -504,7 +511,7 @@ function ProjectStep({ draft, onFiles, onRemove }: ProjectStepProps) {
       <h3>Dungeon Alchemist project (optional)</h3>
       <p className="muted">
         The .dd2vtt export holds the picture, walls and lights but no 3D objects or terrain. The matching .dam project
-        file adds ground heights and object positions.
+        file adds ground heights, buildings (rooms, wall heights, doors and windows) and object positions.
       </p>
       <div className={dragging ? 'drop-zone dragging' : 'drop-zone'} {...handlers}>
         {project ? (

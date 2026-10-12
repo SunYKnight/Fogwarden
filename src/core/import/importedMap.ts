@@ -2,13 +2,21 @@ import type { z } from 'zod';
 import type { LightLevel } from '../model/common';
 import type { BattleMap } from '../model/map';
 import type { GridCalibration } from '../terrain/calibration';
+import type { SourcePortal, SourceWall } from './mapStructures';
 
 /** What a map maker export adds to a new map besides the image and the grid. */
-export type ImportedContent = Pick<BattleMap, 'walls' | 'openings' | 'lights' | 'ambientLight' | 'notes'>;
+export type ImportedContent = Pick<BattleMap, 'walls' | 'openings' | 'rooms' | 'lights' | 'ambientLight' | 'notes'>;
+
+/** The export's wall lines and doors as drawn, before they were joined into walls. */
+export interface StructureSources {
+  walls: SourceWall[];
+  portals: SourcePortal[];
+}
 
 export interface ImportedMap {
   calibration: GridCalibration;
   content: ImportedContent;
+  sources: StructureSources;
 }
 
 export type ImageExtension = 'png' | 'jpg' | 'webp';
