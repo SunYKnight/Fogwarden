@@ -63,6 +63,7 @@ export function createCreature(name: string): Creature {
   return {
     ...header('creature', CREATURE_SCHEMA_VERSION, name),
     kind: 'monster',
+    level: null,
     source: 'Custom',
     license: '',
     tags: [],

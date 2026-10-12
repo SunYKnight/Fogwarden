@@ -3,7 +3,6 @@ import type { OnboardingStep } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import { Button, Icon, type IconName } from '../kit';
 import { openNewMapWizard } from '../library/NewMapWizard';
-import { LegacyImportDialog } from './LegacyImportDialog';
 import { completeOnboardingStep, dismissFirstSteps, openSampleEncounter } from './onboarding';
 
 interface StepSpec {
@@ -21,13 +20,6 @@ const STEPS: StepSpec[] = [
     title: 'Choose data folder',
     text: 'Where your maps, creatures and campaigns are stored; pick a synced folder to share them.',
     action: 'Open settings',
-  },
-  {
-    id: 'legacyImport',
-    icon: 'upload',
-    title: 'Import from the old WPF tool',
-    text: 'Bring over creatures, tile maps and area templates from the previous DM tool.',
-    action: 'Import…',
   },
   {
     id: 'mapFromImage',
@@ -49,7 +41,6 @@ const STEPS: StepSpec[] = [
 export function FirstSteps() {
   const onboarding = useAppStore((s) => s.settings?.onboarding);
   const reportError = useAppStore((s) => s.reportError);
-  const [legacyOpen, setLegacyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const actions: Record<OnboardingStep, () => Promise<void>> = {
@@ -57,7 +48,6 @@ export function FirstSteps() {
       await completeOnboardingStep('dataFolder');
       useAppStore.getState().navigate({ page: 'settings' });
     },
-    legacyImport: async () => setLegacyOpen(true),
     mapFromImage: async () => openNewMapWizard(),
     sampleEncounter: async () => {
       setBusy(true);
@@ -107,7 +97,6 @@ export function FirstSteps() {
           );
         })}
       </ol>
-      {legacyOpen && <LegacyImportDialog onClose={() => setLegacyOpen(false)} />}
     </section>
   ) : null;
 }

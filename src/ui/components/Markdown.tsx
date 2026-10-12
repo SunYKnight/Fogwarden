@@ -1,9 +1,9 @@
 import { createElement, type ReactNode } from 'react';
 
 /**
- * Preview of the Markdown the journal, people, places and quests are written in: headings, paragraphs, lists,
- * quotes, rules, code, bold, italic, links (shown, not followed). Rendered as React elements, so text from files
- * never becomes HTML.
+ * Preview of the Markdown the journal, people, places, quests, items and spells are written in: headings,
+ * paragraphs, lists, quotes, rules, code, tables (`| a | b |` rows, the second may be `| --- |`), bold,
+ * italic, links (shown, not followed). Rendered as React elements, so text from files never becomes HTML.
  */
 
 const INLINE = /(\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g;
@@ -13,6 +13,44 @@ const NUMBERED = /^\s*\d+[.)]\s+(.*)$/;
 const QUOTE = /^>\s?(.*)$/;
 const RULE = /^(-{3,}|\*{3,}|_{3,})$/;
 const FENCE = /^```/;
+const TABLE_ROW = /^(\s*\|.*\|\s*)$/;
+const TABLE_RULE = /^\s*\|[\s:|-]*-[\s:|-]*\|\s*$/;
+
+function cells(row: string): string[] {
+  return row
+    .trim()
+    .slice(1, -1)
+    .split('|')
+    .map((c) => c.trim());
+}
+
+function table(rows: string[], key: number): ReactNode {
+  const headed = rows.length > 1 && TABLE_RULE.test(rows[1]!);
+  const head = headed ? cells(rows[0]!) : null;
+  const body = (headed ? rows.slice(2) : rows).filter((r) => !TABLE_RULE.test(r)).map(cells);
+  return (
+    <table key={key}>
+      {head && (
+        <thead>
+          <tr>
+            {head.map((c, i) => (
+              <th key={i}>{inline(c)}</th>
+            ))}
+          </tr>
+        </thead>
+      )}
+      <tbody>
+        {body.map((row, i) => (
+          <tr key={i}>
+            {row.map((c, j) => (
+              <td key={j}>{inline(c)}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 function inline(text: string): ReactNode[] {
   return text.split(INLINE).map((part, i) => {
@@ -75,6 +113,10 @@ function blocks(text: string): ReactNode[] {
       const quoted = run(lines, i, QUOTE);
       out.push(<blockquote key={key}>{inline(quoted.join(' '))}</blockquote>);
       i += quoted.length;
+    } else if (TABLE_ROW.test(line)) {
+      const rows = run(lines, i, TABLE_ROW);
+      out.push(table(rows, key));
+      i += rows.length;
     } else if (BULLET.test(line) || NUMBERED.test(line)) {
       const ordered = !BULLET.test(line);
       const items = run(lines, i, ordered ? NUMBERED : BULLET);
@@ -84,7 +126,7 @@ function blocks(text: string): ReactNode[] {
     } else {
       const start = i;
       i += 1;
-      const blockStarts = [HEADING, BULLET, NUMBERED, QUOTE, RULE, FENCE];
+      const blockStarts = [HEADING, BULLET, NUMBERED, QUOTE, RULE, FENCE, TABLE_ROW];
       while (i < lines.length && lines[i]!.trim() !== '' && !blockStarts.some((p) => p.test(lines[i]!))) {
         i += 1;
       }

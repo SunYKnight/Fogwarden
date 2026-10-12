@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- Dungeon Alchemist buildings: a `.dam` project imported with its `.dd2vtt` (or Foundry folder) now brings the ground
+  level's rooms (floor, 12 ft storey ceiling, roof), storey-high walls on the true room outlines, doors and windows
+  (kind from the export's portals) and free-standing pillars; the export's lines of the same building are dropped
+  (they trace the perspective-shifted wall tops, about 2.6 ft outside at the map edge), other export lines stay.
+  Upper floors are listed as not imported in the summary and map notes. Fix: projects with unturned objects
+  (no `rotation`) failed to load, and wall, floor and pillar blocks were offered as objects.
+- Aurora Builder import (desktop): **Compendium > Packs > Import from Aurora Builder…** and **Add combatants >
+  Player character > From Aurora…** read Aurora's documents folder (the folder dialog starts in
+  `Documents/5e Character Builder`), preview the counts and import into the pack "Aurora Builder" in the data folder
+  (license "see source books"; the book content stays on this computer): characters (`.dnd5e`) as player character
+  creatures with level, AC, hit points, speed, ability scores, saves, skills, passive Perception, darkvision,
+  attacks, spell slots and portrait, computed from the build like Aurora does; items, magic items and spells as
+  readable Markdown files (`items/<id>.md`, `spells/<id>.md`); the portraits folder as a picture library.
+  Importing again replaces the pack, so level-ups arrive. New Compendium tabs **Items** (type and rarity filters)
+  and **Spells** (level, school, class); the Player character tab lists player characters from the library;
+  **Library…** picks a creature's image or token, or a typed-in player character's picture, from the picture
+  library; End combat suggests item names for loot and rolls a random item of a chosen rarity. Creature files may
+  carry `level` for player characters, which their combatants take.
+- Version history: before the desktop app changes or deletes a file in the data folder, it keeps the previous
+  version in `history/<YYYY-MM-DD>/<path>` (once per file and day, nothing for unchanged saves; identical contents
+  stored once and hard-linked). **Settings > Data > History** lists the days with the documents changed on them and
+  restores a document to how it was before a day's changes (confirmed; what it replaces is kept, so a restore can be
+  undone the same way), opens the history folder, shows its size and cleans up older days. 30 days and at most 2 GB
+  are kept, pruned on start. The history is never served over the LAN or uploaded to the relay. New Rust
+  dependencies: chrono, sha2, winapi-util (Windows).
 - Renamed to Fogwarden (package `fogwarden`, app id `io.github.sunyknight.fogwarden`, so the default data folder
   is now `%APPDATA%/io.github.sunyknight.fogwarden/`; relay service `fogwarden-relay` with `FOGWARDEN_*` variables,
   a relay set up before needs the setup run again). Licensed under MIT (`LICENSE`); `THIRD_PARTY_NOTICES.md` lists
@@ -13,9 +38,8 @@
   folder… in the desktop app). My content always wins, then the packs in the shown order. Switched-off packs vanish
   from the Compendium, Maps and the Add dialog; running encounters keep their combatants and the inspector names the
   switched-off pack holding a stat block. Shipped content now comes as packs in `content/packs/` (SRD 5.1, CC0
-  models, Sample map); the legacy import writes into the pack "Legacy DM Tool" and `import-statblocks.ts` takes
-  `--pack <id>`. On first start, legacy imports move from `library/` into that pack and references to shipped files
-  follow them (each file compared before the old one is deleted). ZIP support is built in (no new dependency).
+  models, Sample map) and `import-statblocks.ts` takes `--pack <id>`. On first start, references to shipped files
+  follow them into their packs. ZIP support is built in (no new dependency).
 - Compendium: the tab bar stays put on the left; each tab's actions follow it.
 - Sound and atmosphere (encounter schema v4, map schema v3, settings schema v8): Play canvas toolbar **Sound**
   plays music by mood (Exploration, Tavern, Combat, Boss and your own) with crossfades, Play/Pause and Next, adds
@@ -118,8 +142,8 @@
   places unplaced combatants one after another; undo/redo (Ctrl+Z/Ctrl+Y) for moves, HP, conditions, initiative,
   areas and doors.
 - Home page (start screen): Continue card for the last encounter, the 6 most recent maps and encounters, first
-  steps (data folder, legacy import, map from an image, sample encounter) and a drop zone for battlemap
-  images and `.txt` stat blocks.
+  steps (data folder, map from an image, sample encounter) and a drop zone for battlemap images and `.txt` stat
+  blocks.
 - New map wizard (image, grid, done): live grid overlay, drag one square or click two corners, sliders for size,
   offset and rotation; maps are saved calibrated. Opens from Home, the Maps page's "New map" and image drops.
 - Maps page: search, map cards with shipped/edited badges, Edit/Duplicate/Delete buttons and context menu.
@@ -143,7 +167,7 @@
   (creature editor Image/Token fields store there when nothing else changed); tokens pick them up live (combatant
   token > creature token > creature image > portrait index), also for combatants already in an encounter.
   Compendium action "Attach portraits from folder…" matches pictures to creatures by name or id (case, accents,
-  punctuation, `legacy--` prefixes ignored; `-hotd` suffixes stay distinct; "Werewolf" fits all werewolf forms),
+  punctuation, `source--` prefixes ignored; `-hotd` suffixes stay distinct; "Werewolf" fits all werewolf forms),
   previews matched and unmatched files, copies the pictures into the data root and replaces existing images only
   when ticked. The compendium shows portraits as list thumbnails and above the stat block.
 - Readable ids: new creatures, maps, area templates, campaigns and encounters (created, duplicated or imported)
@@ -160,11 +184,15 @@
   "Rotate". The folder import checks up front that each project fits its lowest floor.
 - Stat block import parses while typing (300 ms after the last key) and shows the stat block or the failing line
   live; the "Check" button is gone.
-- Import from the old WPF tool runs in the app (First steps "Import…", Settings > Data "Import from the old WPF
-  tool…", desktop): pick the `240722_DnD_DMTool_Data` folder, see the counts of creatures, maps, area templates and
-  pictures found plus what is skipped, then import with progress and a summary of skipped files and problems by
-  file name. A wrong folder says which folders are missing. Pictures are found regardless of case. App and
-  `tools/import-legacy.ts` share one importer (`src/data/legacyImport.ts`); the terminal instructions are gone.
+- Removed the import from the old WPF tool (First steps, Settings > Data, `tools/import-legacy.ts`; settings schema
+  v10 drops its first step). Documents imported earlier stay in My content or their pack and keep working.
+- Auto-update from GitHub Releases (settings schema v9): Settings > About shows the version, "Check for updates"
+  ("Up to date" or "Version x.y.z available" with the release notes and "Install and restart", which saves open
+  work first) and "Check on start (once a day)", on by default. The start check waits while combat runs in Play
+  and then shows a small notice; offline or before the first release it says so plainly. Browser builds say updates
+  are desktop-only. Installers are signed (`tauri-plugin-updater`, `tauri-plugin-process`); `pnpm package` writes
+  installer, `.sig` and `latest.json` to `artifacts/`, `pnpm set-version` bumps all three version fields; README
+  "Release" lists the steps and how to keep the signing key safe.
 
 ## 0.1.0
 

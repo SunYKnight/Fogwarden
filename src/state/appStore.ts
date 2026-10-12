@@ -6,9 +6,9 @@ import { migrateDataRoot } from '@/data/layoutMigration';
 import { migrateToPacks } from '@/data/packMigration';
 import { Repository } from '@/data/repository';
 import type { StorageRoots } from '@/data/storage';
-import { TauriStorage } from '@/data/tauriStorage';
+import { pruneHistory, TauriStorage } from '@/data/tauriStorage';
 
-export type CompendiumTab = 'creatures' | 'markers' | 'tables' | 'packs';
+export type CompendiumTab = 'creatures' | 'items' | 'spells' | 'markers' | 'tables' | 'packs';
 
 export type Route =
   | { page: 'home' }
@@ -116,6 +116,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   init: async () => {
     const repository = get().repository;
+    // A history that cannot be pruned (a file open elsewhere) must not keep
+    // the app from starting; the next start tries again.
+    if (repository.storage.kind === 'tauri') {
+      await pruneHistory().catch(get().reportError);
+    }
     // Packs move after the layout conversion, which works in the old places.
     const layoutProblems = await migrateDataRoot(repository);
     repository.layoutProblems = [...layoutProblems, ...(await migrateToPacks(repository))];

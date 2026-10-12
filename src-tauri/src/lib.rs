@@ -1,11 +1,14 @@
 mod deploy;
 mod frontend;
+mod history;
 mod lan;
 mod storage;
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(lan::LanState::default())
         .setup(|app| {
             storage::init(app.handle())?;
@@ -30,6 +33,11 @@ pub fn run() {
             storage::storage_read_file_text,
             storage::storage_read_file_bytes,
             storage::storage_write_file_bytes,
+            history::history_list,
+            history::history_prune,
+            history::history_clean,
+            history::history_restore,
+            history::history_open_folder,
             lan::lan_start,
             lan::lan_set_links,
             lan::lan_stop,

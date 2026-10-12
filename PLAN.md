@@ -57,7 +57,7 @@ Toolchain on this machine: Node 24, pnpm 10, Rust 1.95 (MSVC target), WebView2 1
     core/                  # pure domain logic, no DOM/Three imports (testable in node)
       model/               # zod schemas + types: creature, attack, map, encounter, marker
       rules/               # dice, modifiers, proficiency, CR/XP, area templates, vision rules
-      import/              # stat block text parser (port of TextToObjectGenerator), legacy JSON importer
+      import/              # stat block text parser (port of TextToObjectGenerator), map imports
     data/                  # storage abstraction: library (read-only), user store, migrations
     sync/                  # DM -> player protocol (snapshot + patches), transports
     render/                # Three.js scene: terrain, structures, props, tokens, markers, fog, shaders
@@ -68,7 +68,7 @@ Toolchain on this machine: Node 24, pnpm 10, Rust 1.95 (MSVC target), WebView2 1
   src-tauri/               # Rust shell (Tauri config, capabilities, later LAN server)
   content/                 # SHIPPED default content, versioned in git (SRD 5.1 only)
     creatures/  markers/  maps/  LICENSE-SRD.md
-  tools/                   # CLI scripts: legacy import, raw stat block import, content build
+  tools/                   # CLI scripts: raw stat block import, content build
   tests/                   # e2e smoke tests
   docs/
   # build output (all gitignored)
@@ -176,7 +176,7 @@ flowchart LR
 | `BeeingTypeClass`, `AttackTypeClass`, enums, dice helpers | `core/model/creature.ts`, `core/rules/*` (ported, bugs fixed: skills bonus, multi-term dice) |
 | `TextToObjectGenerator` (stat block parser) | `core/import/statblock.ts` (ported, unit-tested against `MonsterRawData` samples) |
 | `BeeingInstanceClass`, `ActiveData` | `Combatant`, `Encounter` |
-| `MapTypeClass` / `MapTileTypeClass` cuboids | layered map (section 5); legacy importer converts tile heights → heightfield, edge walls → wall segments |
+| `MapTypeClass` / `MapTileTypeClass` cuboids | layered map (section 5); the importer for old tile maps was dropped |
 | `MarkingTypeClass` / `MarkerGeneratorClass` | `AreaMarker` + `core/rules/templates.ts` + render layer |
 | `PlayerMapWindow` LOS + darkvision/truesight | `workers/visibility.ts` + fog shader |
 | `EditMonsterWindow`, `EditAttackWindow`, `EditMarkerWindow`, `EditMapWindow` | React editors |
@@ -189,7 +189,7 @@ Each milestone ends with a runnable app and the listed acceptance checks.
 | # | Milestone | Acceptance |
 |---|---|---|
 | M0 | **Scaffold**: Tauri 2 + Vite + React + TS, lint/format/test scripts, DM + player windows, data root resolution + settings, error boundary/logging | `pnpm tauri dev` opens DM window; button opens player window on chosen monitor; settings persisted in data root |
-| M1 | **Core + data**: zod schemas, rules (dice, modifiers, templates), storage with atomic writes/migrations, stat block parser port, legacy importer CLI (creatures/maps from old `bin/.../240722_DnD_DMTool_Data`), SRD content pack | Unit tests green; importer converts all legacy creature JSON + raw MM texts into the user data dir; library lists them |
+| M1 | **Core + data**: zod schemas, rules (dice, modifiers, templates), storage with atomic writes/migrations, stat block parser port, ~~legacy importer CLI~~ (dropped), SRD content pack | Unit tests green; importer converts raw MM texts into the user data dir; library lists them |
 | M2 | **Map editor I (prio 1)**: create map from image, grid calibration, terrain heightfield + brushes, projection shader, cliff material, top/perspective cameras, undo/redo, autosave | Import `Forest Way 1.jpg`, calibrate, sculpt a hill and a ravine; top-down view matches the 2D image; reload restores it |
 | M3 | **Map editor II**: walls with snapping, openings, rooms/roofs, regions, lights with shadows, `.glb` import + gizmo + projection option | Trace the `52x49_5_Tavern_Base` walls with doors, a dark cellar region and a torch; import a Blender building and project the map onto it |
 | M4 | **Encounter (DM)**: creature library browser + editor, encounter setup, tokens on the 3D map (place/move/measure/elevation), initiative tracker, HP/conditions/notes, stat block panel, attack + dice roller, area markers | Run a full round with 4 PCs and 5 goblins, place a fireball sphere, rolls logged |

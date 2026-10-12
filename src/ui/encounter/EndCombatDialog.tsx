@@ -11,12 +11,31 @@ import { useEncounterUi } from './encounterUiStore';
 // Module-level so the dialog's focus effect, keyed on `onClose`, runs once.
 const close = () => useEncounterUi.setState({ endCombatOpen: false });
 
+/** Item rarities in the order of their value; others (artifact variants, homebrew) follow by name. */
+const RARITY_ORDER = ['common', 'uncommon', 'rare', 'very rare', 'legendary', 'artifact'];
+
 function LootPicker({ onAdd }: { onAdd: (line: string) => void }) {
   const reportError = useAppStore((s) => s.reportError);
   const tables = useRandomTables();
+  const items = useLibraryStore((s) => s.listings.item.entries);
   const [text, setText] = useState('');
   const [tableId, setTableId] = useState('');
+  const [rarity, setRarity] = useState('');
   const chosen = tables.find((t) => t.id === tableId) ?? tables[0];
+  const rank = (r: string) => {
+    const index = RARITY_ORDER.indexOf(r.toLowerCase());
+    return index === -1 ? RARITY_ORDER.length : index;
+  };
+  const rarities = [...new Set(items.map((e) => e.doc.rarity).filter((r) => r !== ''))].sort(
+    (a, b) => rank(a) - rank(b) || a.localeCompare(b),
+  );
+  const rarityChosen = rarities.includes(rarity) ? rarity : rarities[0];
+
+  const rollItem = () => {
+    const pool = items.filter((e) => e.doc.rarity === rarityChosen);
+    const item = pool[Math.floor(Math.random() * pool.length)];
+    if (item) onAdd(`${item.doc.name} (${item.doc.rarity.toLowerCase()} item, rolled)`);
+  };
 
   const addText = () => {
     onAdd(text.trim());
@@ -40,12 +59,18 @@ function LootPicker({ onAdd }: { onAdd: (line: string) => void }) {
           className="grow"
           placeholder="50 gp, potion of healing…"
           aria-label="Loot"
+          list="loot-items"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && text.trim() !== '') addText();
           }}
         />
+        <datalist id="loot-items">
+          {items.map((e) => (
+            <option key={e.ref.id} value={e.doc.name} />
+          ))}
+        </datalist>
         <Button icon="plus" label="Add" disabled={text.trim() === ''} onClick={addText} />
       </div>
       {tables.length > 0 ? (
@@ -66,6 +91,23 @@ function LootPicker({ onAdd }: { onAdd: (line: string) => void }) {
         </div>
       ) : (
         <span className="muted small">Random tables from the Compendium can roll loot here.</span>
+      )}
+      {rarities.length > 0 && (
+        <div className="row">
+          <select
+            className="grow"
+            aria-label="Item rarity"
+            value={rarityChosen}
+            onChange={(e) => setRarity(e.target.value)}
+          >
+            {rarities.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+          <Button icon="dice" label="Roll item" onClick={rollItem} />
+        </div>
       )}
     </div>
   );

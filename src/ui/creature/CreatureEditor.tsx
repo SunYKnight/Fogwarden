@@ -1,5 +1,5 @@
 import type { Draft } from 'immer';
-import { useId, useRef } from 'react';
+import { useId, useRef, useState } from 'react';
 import {
   ABILITIES,
   ALIGNMENTS,
@@ -20,6 +20,7 @@ import { useAppStore } from '@/state/appStore';
 import { AssetImage } from '../components/AssetImage';
 import { CheckboxField, Field, NumberField, SelectField, TextField } from '../components/fields';
 import { Section } from '../kit';
+import { PictureLibraryDialog } from '../library/PictureLibraryDialog';
 import { ListField, OptionalNumberField } from './creatureFields';
 import { ActionListEditor, LegendaryListEditor, TraitListEditor } from './EntryEditors';
 import { titleCase } from './StatBlock';
@@ -45,15 +46,18 @@ function ImageField(props: {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const input = useRef<HTMLInputElement>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const asset = creature[kind];
   return (
     <Field label={label}>
       <div className="row">
         <AssetImage asset={asset} alt={label} className="creature-thumb" />
         <button onClick={() => input.current?.click()}>Import…</button>
+        <button onClick={() => setLibraryOpen(true)}>Library…</button>
         <button disabled={!asset} onClick={() => onChange(null)}>
           Clear
         </button>
+        {libraryOpen && <PictureLibraryDialog onPick={onChange} onClose={() => setLibraryOpen(false)} />}
         <input
           ref={input}
           type="file"
@@ -89,6 +93,15 @@ function BasicsSection({ c, change }: { c: Creature; change: Change }) {
         options={creatureKindSchema.options}
         onChange={(v) => change((d) => void (d.kind = v))}
       />
+      {c.kind === 'player' && (
+        <OptionalNumberField
+          label="Level"
+          value={c.level ?? undefined}
+          onChange={(v) =>
+            change((d) => void (d.level = v === undefined ? null : Math.min(20, Math.max(1, Math.round(v)))))
+          }
+        />
+      )}
       <SelectField label="Size" value={c.size} options={SIZES} onChange={(v) => change((d) => void (d.size = v))} />
       <SelectField
         label="Type"

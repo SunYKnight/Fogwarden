@@ -9,7 +9,7 @@ const SRD = [
 
 describe('portraitKey', () => {
   it('drops extensions, source prefixes, case, diacritics and punctuation', () => {
-    expect(portraitKey('legacy--goblin.jpg')).toBe('goblin');
+    expect(portraitKey('homebrew--goblin.jpg')).toBe('goblin');
     expect(portraitKey('Yuan_Ti  Pureblood.PNG')).toBe('yuan-ti-pureblood');
     expect(portraitKey('Écorché.webp')).toBe('ecorche');
     expect(portraitKey('monster-manual--adult-red-dragon')).toBe('adult-red-dragon');
@@ -19,12 +19,12 @@ describe('portraitKey', () => {
 describe('matchPortraits', () => {
   it('matches by name across prefixes and spelling and ignores non-image files', () => {
     const result = matchPortraits(
-      ['legacy--goblin.jpg', 'yuan_ti_pureblood.png', 'WILL-O-WISP.jpeg', 'notes.txt'],
+      ['homebrew--goblin.jpg', 'yuan_ti_pureblood.png', 'WILL-O-WISP.jpeg', 'notes.txt'],
       SRD,
     );
     expect(result.matches).toEqual([
       { fileName: 'WILL-O-WISP.jpeg', creatureId: 'srd-will-o-wisp' },
-      { fileName: 'legacy--goblin.jpg', creatureId: 'srd-goblin' },
+      { fileName: 'homebrew--goblin.jpg', creatureId: 'srd-goblin' },
       { fileName: 'yuan_ti_pureblood.png', creatureId: 'srd-yuan-ti-pureblood' },
     ]);
     expect(result.unmatched).toEqual([]);
@@ -32,12 +32,12 @@ describe('matchPortraits', () => {
   });
 
   it('keeps suffixed variants distinct from the base creature', () => {
-    const creatures = [...SRD, { id: 'legacy--goblin-boss-hotd', name: 'Goblin Boss (HotD)' }];
-    const result = matchPortraits(['legacy--goblin-hotd.jpg', 'legacy--goblin-boss-hotd.jpg'], creatures);
+    const creatures = [...SRD, { id: 'homebrew--goblin-boss-hotd', name: 'Goblin Boss (HotD)' }];
+    const result = matchPortraits(['homebrew--goblin-hotd.jpg', 'homebrew--goblin-boss-hotd.jpg'], creatures);
     expect(result.matches).toEqual([
-      { fileName: 'legacy--goblin-boss-hotd.jpg', creatureId: 'legacy--goblin-boss-hotd' },
+      { fileName: 'homebrew--goblin-boss-hotd.jpg', creatureId: 'homebrew--goblin-boss-hotd' },
     ]);
-    expect(result.unmatched).toEqual(['legacy--goblin-hotd.jpg']);
+    expect(result.unmatched).toEqual(['homebrew--goblin-hotd.jpg']);
   });
 
   it('gives a file to every creature of the same name and one file per creature', () => {
@@ -51,10 +51,10 @@ describe('matchPortraits', () => {
   });
 
   it('prefers a file named like the id over one named like the name', () => {
-    const creatures = [{ id: 'legacy--ambush-drake-hotd', name: 'Ambush Drake' }];
-    const result = matchPortraits(['ambush-drake.jpg', 'legacy--ambush-drake-hotd.jpg'], creatures);
+    const creatures = [{ id: 'homebrew--ambush-drake-hotd', name: 'Ambush Drake' }];
+    const result = matchPortraits(['ambush-drake.jpg', 'homebrew--ambush-drake-hotd.jpg'], creatures);
     expect(result.matches).toEqual([
-      { fileName: 'legacy--ambush-drake-hotd.jpg', creatureId: 'legacy--ambush-drake-hotd' },
+      { fileName: 'homebrew--ambush-drake-hotd.jpg', creatureId: 'homebrew--ambush-drake-hotd' },
     ]);
     expect(result.duplicates).toEqual(['ambush-drake.jpg']);
   });

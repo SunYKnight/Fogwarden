@@ -1,13 +1,17 @@
+import { isTauri } from '@tauri-apps/api/core';
 import { useState } from 'react';
-import { sideSchema, type Side } from '@/core/model';
+import { sideSchema, type AssetRef, type Side } from '@/core/model';
 import { formatCr } from '@/core/rules/abilities';
 import { useAppStore } from '@/state/appStore';
 import { createPc, spawnCombatant, type HpMode } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLibraryStore } from '@/state/libraryStore';
-import { CheckboxField, NumberField, SelectField, TextField } from '../components/fields';
+import { AssetImage } from '../components/AssetImage';
+import { CheckboxField, Field, NumberField, SelectField, TextField } from '../components/fields';
 import { CreatureThumb } from '../creatureTypes/CreatureThumb';
 import { Button, Dialog, Tabs, type TabSpec } from '../kit';
+import { openAuroraImport } from '../library/compendiumUi';
+import { PictureLibraryDialog } from '../library/PictureLibraryDialog';
 import { DifficultyBadge } from './EncounterDifficulty';
 import { useEncounterUi } from './encounterUiStore';
 
@@ -110,9 +114,9 @@ function FromLibrary() {
   );
 }
 
+/** A player character typed in at the table, with an optional picture from the picture library. */
 function PlayerCharacterForm() {
   const update = useEncounterStore((s) => s.update);
-  const combatants = useEncounterStore((s) => s.encounter)?.combatants ?? [];
   const notify = useAppStore((s) => s.notify);
   const [name, setName] = useState('');
   const [armorClass, setArmorClass] = useState(14);
@@ -120,10 +124,12 @@ function PlayerCharacterForm() {
   const [darkvision, setDarkvision] = useState(0);
   const [visionSource, setVisionSource] = useState(true);
   const [level, setLevel] = useState(1);
+  const [token, setToken] = useState<AssetRef | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const add = () => {
     const senses = darkvision > 0 ? { darkvision } : {};
-    const pc = createPc({ name: name.trim(), armorClass, maxHp, senses, visionSource, level });
+    const pc = createPc({ name: name.trim(), armorClass, maxHp, senses, visionSource, level, token });
     update((d) => void d.combatants.push(pc), `Add ${pc.name}`);
     notify(`Added ${pc.name}`);
     close();
@@ -137,8 +143,15 @@ function PlayerCharacterForm() {
       <NumberField label="Max HP" min={1} value={maxHp} onChange={(v) => setMaxHp(Math.round(v))} />
       <NumberField label="Darkvision" min={0} suffix="ft" value={darkvision} onChange={setDarkvision} />
       <CheckboxField label="Vision source" value={visionSource} onChange={setVisionSource} />
+      <Field label="Picture">
+        <div className="row">
+          <AssetImage asset={token} alt="Picture" className="creature-thumb" />
+          <Button icon="image" label="Library…" onClick={() => setLibraryOpen(true)} />
+          <Button label="Clear" disabled={!token} onClick={() => setToken(null)} />
+        </div>
+      </Field>
+      {libraryOpen && <PictureLibraryDialog onPick={setToken} onClose={() => setLibraryOpen(false)} />}
       <div className="dialog-actions">
-        <DifficultyBadge combatants={combatants} />
         <Button
           icon="plus"
           label="Add player character"
@@ -151,14 +164,88 @@ function PlayerCharacterForm() {
   );
 }
 
-/** "+ Add" of the initiative strip: creatures from the compendium or an ad-hoc player character. */
+/** Player characters of the library (Aurora imports, own ones) to pick, or one typed in by hand. */
+function PlayerCharacters() {
+  const all = useLibraryStore((s) => s.listings.creature.entries);
+  const combatants = useEncounterStore((s) => s.encounter)?.combatants ?? [];
+  const update = useEncounterStore((s) => s.update);
+  const notify = useAppStore((s) => s.notify);
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const characters = all.filter((e) => e.doc.kind === 'player');
+  const picked = characters.find((e) => e.ref.id === pickedId);
+  const inEncounter = new Set(combatants.map((c) => c.creature?.id));
+
+  const add = () => {
+    if (picked) {
+      update((d) => {
+        const takenNames = d.combatants.map((c) => c.name);
+        d.combatants.push(spawnCombatant(picked.doc, picked.ref, { hpMode: 'average', side: 'player', takenNames }));
+      }, `Add ${picked.doc.name}`);
+      notify(`Added ${picked.doc.name}`);
+      close();
+    }
+  };
+
+  return (
+    <div className="col">
+      <div className="row">
+        <span className="muted grow">Characters in your library and packs</span>
+        <Button
+          icon="upload"
+          label="From Aurora…"
+          disabled={!isTauri()}
+          title={isTauri() ? 'Import characters from Aurora Builder' : 'Needs the desktop app'}
+          onClick={openAuroraImport}
+        />
+      </div>
+      <div className="list add-matches">
+        {characters.map((e) => (
+          <div
+            key={e.ref.id}
+            className={e.ref.id === pickedId ? 'list-item selected' : 'list-item'}
+            onClick={() => setPickedId(e.ref.id)}
+          >
+            <CreatureThumb creature={e.doc} className="creature-row-thumb" />
+            <span className="grow">{e.doc.name}</span>
+            <span className="muted small">
+              {e.doc.level === null ? '' : `Level ${e.doc.level} · `}AC {e.doc.armorClass} · HP{' '}
+              {e.doc.hitPoints.average}
+              {inEncounter.has(e.ref.id) ? ' · in this encounter' : ''}
+            </span>
+          </div>
+        ))}
+        {characters.length === 0 && (
+          <span className="muted small">
+            No player characters yet: import them from Aurora Builder or create a creature of kind &quot;player&quot;.
+          </span>
+        )}
+      </div>
+      <div className="dialog-actions">
+        <DifficultyBadge combatants={combatants} />
+        <Button
+          icon="plus"
+          label={picked ? `Add ${picked.doc.name}` : 'Pick a character'}
+          variant="primary"
+          disabled={!picked}
+          onClick={add}
+        />
+      </div>
+      <details>
+        <summary>Enter by hand</summary>
+        <PlayerCharacterForm />
+      </details>
+    </div>
+  );
+}
+
+/** "+ Add" of the initiative strip: creatures from the compendium or a player character. */
 export function AddCombatantsDialog() {
   const [tab, setTab] = useState<AddTab>('library');
   return (
     <Dialog title="Add combatants" onClose={close} width={480}>
       <div className="col">
         <Tabs tabs={ADD_TABS} value={tab} onChange={setTab} label="Add from" />
-        {tab === 'library' ? <FromLibrary /> : <PlayerCharacterForm />}
+        {tab === 'library' ? <FromLibrary /> : <PlayerCharacters />}
       </div>
     </Dialog>
   );

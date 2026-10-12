@@ -81,6 +81,7 @@ describe('saveImportedMap', () => {
   const content = {
     walls: [],
     openings: [],
+    rooms: [],
     lights: [],
     ambientLight: 'dim' as const,
     notes: 'Lighting is baked into the battlemap image.',
@@ -117,6 +118,43 @@ describe('saveImportedMap', () => {
     const loaded = await repository.load('map', { area: 'data', id: map.id });
     expect(loaded).toMatchObject({ ambientLight: 'dim', notes: content.notes });
     expect(HeightField.fromMap(loaded).sample(7.5, 7.5)).toBe(5);
+  });
+
+  it('builds the project room with its walls when the export comes with its lines', async () => {
+    const repository = new Repository(new MemoryStorage());
+    const walls = [
+      ['0 0', '1 0'],
+      ['1 0', '1 1'],
+      ['1 1', '0 1'],
+      ['0 1', '0 0'],
+    ].map(([p1, p2]) => ({ Version: 3, foundationId: 'g', wall: { p1, p2 } }));
+    const house = parseDamProject(
+      JSON.stringify({
+        Version: 11,
+        width: 1,
+        height: 1,
+        terrainLayers: [{ terrain: bytesToBase64(new Uint8Array(terrain)) }],
+        rooms: [{ Version: 4, foundationId: 'g', parts: ['0 0'] }],
+        walls,
+      }),
+      'hut.dam',
+    );
+    const map = await saveImportedMap(repository, {
+      name: 'Hut',
+      image: { widthPx: 300, heightPx: 300 },
+      calibration: { pxPerSquare: 100, rotationDeg: 0, offsetPx: { x: 0, y: 0 } },
+      content,
+      sources: { walls: [], portals: [] },
+      project: house,
+      writeImage: async (mapId) => ({
+        asset: await repository.importMapAsset(mapId, 'hut.jpg', new Uint8Array([1])),
+        widthPx: 300,
+        heightPx: 300,
+      }),
+    });
+    const loaded = await repository.load('map', { area: 'data', id: map.id });
+    expect(loaded.rooms).toHaveLength(1);
+    expect(loaded.walls).toMatchObject([{ closed: true, heightFt: 12 }]);
   });
 
   it('refuses a project that does not fit before writing any file', async () => {

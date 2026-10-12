@@ -8,6 +8,7 @@ import { Field, TextField } from '../components/fields';
 import { StatBlock } from '../creature/StatBlock';
 import { Button, Dialog, Icon } from '../kit';
 import { AttachPortraitsDialog } from './AttachPortraitsDialog';
+import { AuroraImportDialog } from './AuroraImportDialog';
 import { closeCompendiumDialog, useCompendiumDialogStore } from './compendiumUi';
 
 // Long enough to wait out a burst of typing, short enough to feel live.
@@ -254,6 +255,8 @@ export function CompendiumDialogHost() {
     shown = <NewEncounterDialog campaignId={dialog.campaignId} initialMap={dialog.map} />;
   } else if (dialog?.kind === 'attach-portraits') {
     shown = <AttachPortraitsDialog folder={dialog.folder} files={dialog.files} />;
+  } else if (dialog?.kind === 'aurora-import') {
+    shown = <AuroraImportDialog onClose={closeCompendiumDialog} />;
   }
   return shown;
 }

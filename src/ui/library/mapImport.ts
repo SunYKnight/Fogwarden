@@ -1,5 +1,6 @@
 import { damTerrainField, type DamProject } from '@/core/import/damProject';
-import type { ImportedContent } from '@/core/import/importedMap';
+import { withDamStructures } from '@/core/import/damStructures';
+import type { ImportedContent, StructureSources } from '@/core/import/importedMap';
 import { createMap, type BattleMap, type Grid, type MapImage, type Prop, type Vec2 } from '@/core/model';
 import {
   fitSquaresToImage,
@@ -82,7 +83,9 @@ export interface ImportedMapOptions {
   calibration: GridCalibration;
   /** Walls, doors, lights and ambient light from a map maker export. */
   content?: ImportedContent;
-  /** Dungeon Alchemist project whose ground heights become the terrain. */
+  /** The export's lines and doors as drawn; a project's buildings replace the ones they match. */
+  sources?: StructureSources;
+  /** Dungeon Alchemist project: ground heights become the terrain, its buildings walls and rooms. */
   project?: DamProject | null;
   /** Stores the battlemap picture in the new map's asset folder; the size is the stored picture's. */
   writeImage: (mapId: string) => Promise<MapImage>;
@@ -95,19 +98,20 @@ export interface ImportedMapOptions {
  * stored smaller than `image` gets the grid scaled along; the squares stay those of `image`.
  */
 export async function saveImportedMap(repository: Repository, options: ImportedMapOptions): Promise<BattleMap> {
-  const { name, image, calibration, content, project } = options;
+  const { name, image, calibration, content, sources, project } = options;
   const squares = fitSquaresToImage(image, calibration.pxPerSquare);
   const id = await repository.newLibraryId('map', name);
   const map = { ...createMap({ name, image: null, ...squares, pxPerSquare: calibration.pxPerSquare }), id };
-  // Terrain first: a misfit project must fail before files are written.
+  // Terrain and buildings first: a misfit project must fail before files are written.
   const heights = project ? damTerrainField(project, map.grid, map.terrain.samplesPerSquare).encode() : null;
+  const structures = content && sources && project ? withDamStructures(content, sources, project, map.grid) : content;
   const stored = await options.writeImage(map.id);
   const scale = Math.max(stored.widthPx, stored.heightPx) / Math.max(image.widthPx, image.heightPx);
   const grid = { ...map.grid, ...scaleCalibration(calibration, scale) };
   const props = options.props ? await options.props(map.id, grid) : [];
   return repository.save('map', {
     ...map,
-    ...content,
+    ...structures,
     image: stored,
     grid,
     terrain: heights === null ? map.terrain : { ...map.terrain, heights },

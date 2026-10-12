@@ -35,6 +35,7 @@ use tokio::task::JoinHandle;
 use tokio_util::io::ReaderStream;
 
 use crate::frontend;
+use crate::history;
 use crate::storage::{self, Area, StorageError, StorageState};
 
 const PLAYER_PAGE: &str = "player.html";
@@ -479,12 +480,15 @@ fn asset_mime(extension: &str) -> Option<&'static str> {
 
 // Pictures inside document folders: campaign folders hold fog masks
 // (what each character explored), maps their terrain heightmap. A campaign's
-// handouts are there to be shown to players.
+// handouts are there to be shown to players. The version history holds old
+// copies of all of these.
 fn document_data(file: &Path) -> bool {
     let parts: Vec<_> = file.components().map(|c| c.as_os_str()).collect();
     let in_campaigns = parts.first().is_some_and(|c| *c == "campaigns");
     let handout = parts.len() > 3 && parts[2] == "handouts";
-    (in_campaigns && !handout) || file.file_name().is_some_and(|name| name == "terrain.png")
+    (in_campaigns && !handout)
+        || file.file_name().is_some_and(|name| name == "terrain.png")
+        || history::in_history(file)
 }
 
 // Images and models only: documents hold DM secrets (hidden monsters,
@@ -975,6 +979,11 @@ mod tests {
             StatusCode::FORBIDDEN
         );
         assert_eq!(asset_status(&root, "library/maps/m1/terrain.png"), StatusCode::FORBIDDEN);
+        let kept = "history/2026-10-12/library/maps/m1/assets/map.png";
+        std::fs::create_dir_all(root.join("history/2026-10-12/library/maps/m1/assets")).unwrap();
+        std::fs::write(root.join(kept), b"PNGDATA").unwrap();
+        assert_eq!(asset_status(&root, kept), StatusCode::FORBIDDEN);
+        assert_eq!(asset_status(&root, &kept.replace("history", "History")), StatusCode::FORBIDDEN);
         assert_eq!(asset_status(&root, "folder.png"), StatusCode::NOT_FOUND);
         assert_eq!(asset_status(&root, "missing.glb"), StatusCode::NOT_FOUND);
         std::fs::remove_dir_all(root).unwrap();

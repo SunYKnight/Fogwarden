@@ -41,9 +41,17 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "icon": ["icons/icon.ico"],
     "resources": {
       "../content/": "content/"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQzM0JGRkQ0RjQ4QzkwMzAKUldRd2tJejAxUDg3UTlRWis0Si9HNVV3SGUvTjZwbDB4YWw0ZjZnR0RuQWpVNDRxLzF5cVhaTzkK",
+      "endpoints": ["https://github.com/SunYKnight/Fogwarden/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
     }
   }
 }

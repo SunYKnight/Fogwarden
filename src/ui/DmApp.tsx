@@ -9,6 +9,7 @@ import { startJournalRecorder } from '@/state/journalRecorder';
 import { useLanStore } from '@/state/lanStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { useRelayStore } from '@/state/relayStore';
+import { startAutoUpdateCheck } from '@/state/updateStore';
 import { startAtmospherePublisher } from '@/sync/atmospherePublisher';
 import { startDmPublisher } from '@/sync/dmPublisher';
 import { startFogTracker } from '@/sync/fogTracker';
@@ -85,6 +86,8 @@ export function DmApp() {
   useEffect(() => startCalendarSync(), []);
   useEffect(() => startJournalRecorder(), []);
   useEffect(() => startDmSound(), []);
+  // Browser builds have no updater; they are served, not installed.
+  useEffect(() => (isTauri() ? startAutoUpdateCheck() : undefined), []);
   // In the browser the window is a tab the app cannot track.
   useEffect(() => local.setView(windowOpen || !isTauri() ? windowView : null), [local, windowOpen, windowView]);
   useEffect(() => startDmPublisher([local, ...(lan ? [lan] : []), ...(relay ? [relay] : [])]), [local, lan, relay]);

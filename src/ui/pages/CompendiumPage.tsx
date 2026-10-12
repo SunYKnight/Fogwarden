@@ -7,6 +7,7 @@ import { Button, PageHeader, Tabs, type TabSpec } from '../kit';
 import { attachPortraitsFromFolder } from '../library/AttachPortraitsDialog';
 import { openCreatureImport } from '../library/compendiumUi';
 import { CreatureLibrary } from '../library/CreatureLibrary';
+import { ItemLibrary, SpellLibrary } from '../library/ItemSpellLibrary';
 import { MarkerLibrary } from '../library/MarkerLibrary';
 import { PackActions, PackLibrary } from '../library/PackLibrary';
 import { TableActions, TableLibrary } from '../library/TableLibrary';
@@ -52,6 +53,8 @@ export const COMPENDIUM_TABS: CompendiumTabSpec[] = [
     Body: CreatureLibrary,
     Actions: CreatureActions,
   },
+  { id: 'items', label: 'Items', icon: 'shield', kinds: ['item'], Body: ItemLibrary },
+  { id: 'spells', label: 'Spells', icon: 'book', kinds: ['spell'], Body: SpellLibrary },
   { id: 'markers', label: 'Area templates', icon: 'area', kinds: ['marker'], Body: MarkerLibrary },
   { id: 'tables', label: 'Tables', icon: 'dice', kinds: ['table'], Body: TableLibrary, Actions: TableActions },
   { id: 'packs', label: 'Packs', icon: 'package', kinds: [], Body: PackLibrary, Actions: PackActions },

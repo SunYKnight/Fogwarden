@@ -1610,6 +1610,30 @@ kbd {
   word-break: break-all;
 }
 
+.history-title {
+  margin: 8px 0 0;
+}
+
+.history-days {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 480px;
+  overflow: auto;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+}
+
+.history-row:hover {
+  background: var(--bg-input);
+}
+
 .monitor-map {
   position: relative;
   margin: 4px 0;
@@ -1650,6 +1674,11 @@ kbd {
   white-space: pre-wrap;
   font-size: 12px;
   margin: 0;
+}
+
+.update-notes {
+  max-height: 240px;
+  overflow: auto;
 }
 
 .identify-screen {
@@ -1851,22 +1880,6 @@ kbd {
 .page-drop.dragging {
   outline: 2px dashed var(--accent);
   outline-offset: -6px;
-}
-
-.legacy-import progress {
-  width: 100%;
-}
-
-.legacy-import-counts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 2px 16px;
-  margin: 0;
-}
-
-.legacy-import-counts dd {
-  margin: 0;
-  font-weight: 600;
 }
 
 .home {
@@ -3106,4 +3119,80 @@ video.encounter-thumb,
 .recent-card video,
 .map-pick-thumb {
   object-fit: cover;
+}
+
+/* Aurora import, items and spells, picture library */
+.import-counts,
+.reference-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  margin: 0;
+}
+
+.import-counts div,
+.reference-facts div {
+  display: contents;
+}
+
+.import-counts dt,
+.reference-facts dt {
+  color: var(--fg-muted);
+}
+
+.import-counts dd,
+.reference-facts dd {
+  margin: 0;
+}
+
+.markdown table {
+  border-collapse: collapse;
+  margin: 6px 0;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  text-align: left;
+}
+
+.picture-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.picture-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.picture-tile:hover,
+.picture-tile:focus-visible {
+  border-color: var(--accent);
+}
+
+.picture-tile span {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picture-thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: var(--radius);
 }

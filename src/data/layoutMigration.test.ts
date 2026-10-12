@@ -18,15 +18,15 @@ import { MemoryStorage } from './memoryStorage';
 import { Repository } from './repository';
 
 const json = (doc: unknown) => JSON.stringify(doc);
-const ORC_ASSET: AssetRef = { area: 'data', path: 'library/creatures/assets/legacy--orc-image-orc.jpg' };
+const ORC_ASSET: AssetRef = { area: 'data', path: 'library/creatures/assets/homebrew--orc-image-orc.jpg' };
 const GOBLIN_ASSET: AssetRef = { area: 'data', path: 'library/creatures/assets/srd-goblin-image-goblin.png' };
 
 /** A data root as the app wrote it before creatures were text and blobs were pictures. */
 function oldDataRoot() {
   const storage = new MemoryStorage();
   const files = storage.files.data;
-  const orc = { ...createCreature('Orc'), id: 'legacy--orc', version: 1, image: ORC_ASSET, notes: 'Two\nlines' };
-  files.set('library/creatures/legacy--orc.json', json(orc));
+  const orc = { ...createCreature('Orc'), id: 'homebrew--orc', version: 1, image: ORC_ASSET, notes: 'Two\nlines' };
+  files.set('library/creatures/homebrew--orc.json', json(orc));
   files.set(ORC_ASSET.path, new Uint8Array([1, 2, 3]));
   const goblin = { ...createCreature('Goblin'), id: 'srd-goblin' };
   storage.files.content.set('packs/srd/pack.json', json({ id: 'srd', name: 'SRD 5.1' }));
@@ -66,14 +66,14 @@ describe('migrateDataRoot', () => {
       'campaigns/c1/encounters/e1/fog/explored/pc1.png',
       'campaigns/c1/encounters/e1/fog/hidden.png',
       'campaigns/c1/notes.md',
-      'library/creatures/legacy--orc.jpg',
-      'library/creatures/legacy--orc.txt',
+      'library/creatures/homebrew--orc.jpg',
+      'library/creatures/homebrew--orc.txt',
       'library/creatures/srd-goblin.png',
       'library/maps/m1/map.json',
       'library/maps/m1/terrain.png',
     ]);
 
-    const orcRef = { area: 'data' as const, path: 'library/creatures/legacy--orc.jpg' };
+    const orcRef = { area: 'data' as const, path: 'library/creatures/homebrew--orc.jpg' };
     const loadedOrc = await repository.load('creature', { area: 'data', id: orc.id });
     expect(loadedOrc).toEqual({ ...orc, version: 2, image: orcRef });
     expect(storage.files.data.get(orcRef.path)).toEqual(new Uint8Array([1, 2, 3]));

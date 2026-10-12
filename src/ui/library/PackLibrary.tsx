@@ -19,13 +19,17 @@ import { listFolder, readFileBytes, writeFileBytes } from '@/data/tauriStorage';
 import { useAppStore } from '@/state/appStore';
 import { packName, useLibraryStore } from '@/state/libraryStore';
 import { Button, confirmDialog, EmptyState, Icon } from '../kit';
+import { openAuroraImport } from './compendiumUi';
 
-const COUNT_LABELS: Record<LibraryKind | 'model', [string, string]> = {
+const COUNT_LABELS: Record<LibraryKind | 'model' | 'portrait', [string, string]> = {
   creature: ['creature', 'creatures'],
   marker: ['area template', 'area templates'],
   map: ['map', 'maps'],
   table: ['table', 'tables'],
+  item: ['item', 'items'],
+  spell: ['spell', 'spells'],
   model: ['3D model', '3D models'],
+  portrait: ['portrait', 'portraits'],
 };
 
 function countText(counts: PackInfo['counts']): string {
@@ -169,6 +173,13 @@ export function PackActions() {
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
+      <Button
+        icon="users"
+        label="Import from Aurora Builder…"
+        disabled={!isTauri()}
+        title={isTauri() ? 'Characters, items, spells and portraits' : 'Needs the desktop app'}
+        onClick={openAuroraImport}
+      />
       <Button
         icon="folder"
         label="Import folder…"

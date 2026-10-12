@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { bytesToHex } from '@/core/binary';
 import { assetRefSchema, type AssetRef } from '@/core/model';
+import { isHistoryPath } from '@/data/history';
 import type { SyncPayload } from './protocol';
 import {
   assetTarget,
@@ -188,6 +189,9 @@ export class RelayUploader {
   }
 
   private async read(ref: AssetRef): Promise<Upload[]> {
+    if (ref.area === 'data' && isHistoryPath(ref.path)) {
+      throw new Error(`${ref.path} is a kept old version and never leaves this computer`);
+    }
     const bytes = await this.readAsset(ref);
     const ext = fileExtension(ref.path);
     const sides = ext === 'gltf' || ext === 'glb' ? modelSideFiles(ref, bytes) : [];

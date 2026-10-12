@@ -47,22 +47,24 @@ texts come with each package.
 
 ### npm, shipped in the app or the relay
 
-| Package                   | Version | License           |
-| ------------------------- | ------- | ----------------- |
-| @react-three/drei         | 10.7.9  | MIT               |
-| @react-three/fiber        | 9.8.1   | MIT               |
-| @tauri-apps/api           | 2.12.3  | Apache-2.0 OR MIT |
-| @tauri-apps/plugin-dialog | 2.8.2   | MIT OR Apache-2.0 |
-| immer                     | 11.1.21 | MIT               |
-| react                     | 19.3.0  | MIT               |
-| react-dom                 | 19.3.0  | MIT               |
-| three                     | 0.186.1 | MIT               |
-| three-mesh-bvh            | 0.8.3   | MIT               |
-| ulid                      | 3.0.2   | MIT               |
-| uqr                       | 0.1.3   | MIT               |
-| ws                        | 8.22.0  | MIT               |
-| zod                       | 4.6.6   | MIT               |
-| zustand                   | 5.0.15  | MIT               |
+| Package                    | Version | License           |
+| -------------------------- | ------- | ----------------- |
+| @react-three/drei          | 10.7.9  | MIT               |
+| @react-three/fiber         | 9.8.1   | MIT               |
+| @tauri-apps/api            | 2.12.3  | Apache-2.0 OR MIT |
+| @tauri-apps/plugin-dialog  | 2.8.2   | MIT OR Apache-2.0 |
+| @tauri-apps/plugin-process | 2.4.0   | MIT OR Apache-2.0 |
+| @tauri-apps/plugin-updater | 2.13.3  | MIT OR Apache-2.0 |
+| immer                      | 11.1.21 | MIT               |
+| react                      | 19.3.0  | MIT               |
+| react-dom                  | 19.3.0  | MIT               |
+| three                      | 0.186.1 | MIT               |
+| three-mesh-bvh             | 0.8.3   | MIT               |
+| ulid                       | 3.0.2   | MIT               |
+| uqr                        | 0.1.3   | MIT               |
+| ws                         | 8.22.0  | MIT               |
+| zod                        | 4.6.6   | MIT               |
+| zustand                    | 5.0.15  | MIT               |
 
 ### npm, development only
 
@@ -89,18 +91,23 @@ texts come with each package.
 
 ### Rust crates
 
-| Crate               | Version | Kind  | License             |
-| ------------------- | ------- | ----- | ------------------- |
-| axum                | 0.8.9   | app   | MIT                 |
-| getrandom           | 0.3.4   | app   | MIT OR Apache-2.0   |
-| if-addrs            | 0.15.0  | app   | MIT OR BSD-3-Clause |
-| russh               | 0.64.1  | app   | Apache-2.0          |
-| serde               | 1.0.229 | app   | MIT OR Apache-2.0   |
-| serde_json          | 1.0.154 | app   | MIT OR Apache-2.0   |
-| tauri               | 2.12.3  | app   | Apache-2.0 OR MIT   |
-| tauri-plugin-dialog | 2.8.2   | app   | Apache-2.0 OR MIT   |
-| tokio               | 1.53.2  | app   | MIT                 |
-| tokio-util          | 0.7.20  | app   | MIT                 |
-| tauri-build         | 2.7.2   | build | Apache-2.0 OR MIT   |
-| futures-util        | 0.3.34  | test  | MIT OR Apache-2.0   |
-| tokio-tungstenite   | 0.29.0  | test  | MIT                 |
+| Crate                | Version | Kind  | License             |
+| -------------------- | ------- | ----- | ------------------- |
+| axum                 | 0.8.9   | app   | MIT                 |
+| chrono               | 0.4.45  | app   | MIT OR Apache-2.0   |
+| getrandom            | 0.3.4   | app   | MIT OR Apache-2.0   |
+| if-addrs             | 0.15.0  | app   | MIT OR BSD-3-Clause |
+| russh                | 0.64.1  | app   | Apache-2.0          |
+| serde                | 1.0.229 | app   | MIT OR Apache-2.0   |
+| serde_json           | 1.0.154 | app   | MIT OR Apache-2.0   |
+| sha2                 | 0.11.0  | app   | MIT OR Apache-2.0   |
+| tauri                | 2.12.3  | app   | Apache-2.0 OR MIT   |
+| tauri-plugin-dialog  | 2.8.2   | app   | Apache-2.0 OR MIT   |
+| tauri-plugin-process | 2.4.0   | app   | Apache-2.0 OR MIT   |
+| tauri-plugin-updater | 2.13.3  | app   | Apache-2.0 OR MIT   |
+| tokio                | 1.53.2  | app   | MIT                 |
+| tokio-util           | 0.7.20  | app   | MIT                 |
+| winapi-util          | 0.1.11  | app   | Unlicense OR MIT    |
+| tauri-build          | 2.7.2   | build | Apache-2.0 OR MIT   |
+| futures-util         | 0.3.34  | test  | MIT OR Apache-2.0   |
+| tokio-tungstenite    | 0.29.0  | test  | MIT                 |

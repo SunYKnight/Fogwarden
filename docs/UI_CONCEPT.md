@@ -63,8 +63,8 @@ work in progress is never hidden behind "back".
 
 - **Continue** card: last encounter (map thumbnail, round, whose turn) → _Resume_.
 - **Recent**: last 6 maps / encounters.
-- **First steps** (shown until done, dismissible): _Choose data folder_ · _Import from the old WPF tool_ ·
-  _Create a map from an image_ · _Open the sample encounter_ (shipped SRD content + a sample map).
+- **First steps** (shown until done, dismissible): _Choose data folder_ · _Create a map from an image_ ·
+  _Open the sample encounter_ (shipped SRD content + a sample map).
 - Big drop zone: dropping an image creates a map (→ 4.2 wizard); dropping a `.txt` stat block opens the creature import.
 
 ### 4.2 New map wizard (instead of "uncalibrated map + find the tool")
@@ -153,9 +153,9 @@ The calibration tool remains in the editor for later corrections, but under _Map
 
 ### 4.7 Settings
 
-- Sections: _Data_ (folder picker dialog, "open folder", "copy my data to new folder", "import from the old WPF
-  tool"), _Player view_ (monitor thumbnails with "identify" flash and "test window"), _LAN_ (port), _Rules_
-  (diagonals), _About_ (version, revision, licenses).
+- Sections: _Data_ (folder picker dialog, "open folder", "copy my data to new folder", version history with
+  "restore this version"), _Player view_ (monitor thumbnails with "identify" flash and "test window"), _LAN_ (port),
+  _Rules_ (diagonals), _About_ (version, revision, updates, licenses).
 
 ### 4.8 Player window
 

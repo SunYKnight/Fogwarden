@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "dm",
-  "description": "DM window only: native file and folder pickers, save dialog for exports",
+  "description": "DM window only: native file and folder pickers, save dialog for exports, app updates",
   "windows": ["dm"],
-  "permissions": ["dialog:allow-open", "dialog:allow-save"]
+  "permissions": ["dialog:allow-open", "dialog:allow-save", "updater:default", "process:allow-restart"]
 }

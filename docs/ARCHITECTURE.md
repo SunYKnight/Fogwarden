@@ -51,6 +51,21 @@ between modules.
   `TauriStorage` (desktop), `BrowserStorage` (IndexedDB, dev in a browser), `MemoryStorage` (tests),
   `NodeStorage` (`tools/nodeStorage.ts`, CLI tools; same path rules and atomic writes as the Rust side).
   `readBytes` (Rust `storage_read_bytes`, raw IPC response) reads PNG blobs.
+- Version history (`src-tauri/src/history.rs`, desktop only): every data area write (`storage_write_text`/
+  `_bytes`, `_import_file`, `_copy` file by file, all atomic) and `storage_remove` first calls `history::keep`:
+  unless `history/<YYYY-MM-DD>/<path>` (local date) exists or the new bytes equal the old ones, the current file's
+  content goes once into `history/.objects/<sha256>` and the dated path becomes a hard link to it (a copy where the
+  file system has no hard links). Writes, removes and copies into `history/` are refused; `storage_list` of the data
+  root leaves it out. Commands `history_list` (`{folders: [{name, files: [{path, bytes}]}], bytes}`, oldest first,
+  size counting each file identity once via volume + file index / device + inode), `history_prune` (`appStore.init`
+  on every start and root switch: folders older than 30 days, then the oldest before today while above 2 GiB, then
+  objects no folder links to), `history_clean(olderThanDays)`, `history_restore(files: [{folder, path}])` (keeps the
+  replaced file like a write and in `history/<YYYY-MM-DD> <HH-MM-SS> before restore/`, so restores are undoable even
+  after earlier changes that day), `history_open_folder`. `src/data/history.ts`: `documentOf(path)` maps a data path
+  to its document (kind, id, own file; a map's pictures and terrain belong to the map), `historyDocuments(folder)`,
+  `restorePlan(listing, folder, key)` (per file of the document the version of the first folder from `folder` on,
+  i.e. the document as it was before that folder's changes), `historyDocumentName`. UI: `HistorySection`
+  (Settings > Data). `NodeStorage` and `BrowserStorage` keep no history.
 - Creature pictures are files named after the creature id next to its text file (`<id>.<png|jpg|jpeg|webp>`,
   `<id>.token.<ext>`); they resolve by pack precedence like documents, so a picture in My content's
   `library/creatures/` pictures a pack's creature without a user copy. Token picture precedence `resolveTokenAsset`:
@@ -83,11 +98,14 @@ Packs (`content/packs/<id>/`, `<data root>/packs/<id>/`) use the same folders as
     dungeon-alchemist-objects.json     model per Dungeon Alchemist object kind
     dungeon-alchemist-models/<model>/  models picked for those kinds, with their files
     tables/<id>.txt                    random table (one entry per line)
+    items/<id>.md                      item (header + Markdown description)
+    spells/<id>.md                     spell (header + Markdown description)
+    portraits/<name>.<png|jpg|webp>    picture library (picked for creatures and player characters)
     sounds/sounds.json                 moods (playlists) and sound board, file names relative to sounds/
     sounds/<file>.<mp3|ogg|wav|m4a>    imported music and effects
   packs/<id>/
     pack.json                          {id, name, version, author, license, description, url}
-    creatures/ markers/ maps/ tables/ sounds/ models/   as in library/
+    creatures/ markers/ maps/ tables/ items/ spells/ portraits/ sounds/ models/   as in library/
   campaigns/<id>/
     campaign.json
     notes.md                           campaign notes (Markdown)
@@ -101,6 +119,8 @@ Packs (`content/packs/<id>/`, `<data root>/packs/<id>/`) use the same folders as
     people-and-places/<id>.<ext>       its picture (named in the header)
     quests/<id>.md                     quest (header + Markdown)
     calendar.json                      in-game calendar
+  history/<YYYY-MM-DD>/<path>          earlier version of <path> (version history, see Documents and storage)
+  history/.objects/<sha256>            its content, stored once
 ```
 
 - **Sounds** (`sounds/sounds.json` in My content and in every pack, `soundLibraryFileSchema`):
@@ -113,8 +133,9 @@ Packs (`content/packs/<id>/`, `<data root>/packs/<id>/`) use the same folders as
   an optional header between `---` lines, then the stat block in the layout `parseStatBlock` reads. Header lines
   are `key: value` with creature field names (case-insensitive): text plain (a multi-line value such as `notes`
   as an indented block under `notes:`), `tags` as a comma list, other values as JSON. The header holds `createdAt`
-  and `updatedAt` plus only what the stat block cannot carry (`kind`, `source`, `license`, `tags`, `notes`, values
-  the block would read back differently); header values win over the block. Unknown or duplicate keys are errors
+  and `updatedAt` plus only what the stat block cannot carry (`kind`, `level` of a player character, `source`,
+  `license`, `tags`, `notes`, values the block would read back differently); header values win over the block. A
+  player character's `level` becomes its combatant's level when added. Unknown or duplicate keys are errors
   naming the line. With a header the block is read exactly (indented lines continue an entry, a bracketed line
   under an action holds attack data its text does not imply); without one, any pasted stat block loads tolerantly
   as a monster. `parseCreatureFile(formatCreatureFile(c))` reproduces every shipped creature exactly and the text
@@ -161,6 +182,15 @@ title, notes}]}`; months and days count from 1, days have 24 hours, years are th
   `createdAt`, `updatedAt`), then one entry per line; `#` lines are comments. `3: text` weighs 3, plain lines 1. A
   `dice` header, any `a-b:` range or the numbers 1, 2, 3 … on every line make a dice table: ranges must follow each
   other without gaps, `00` is 100, without `dice` it rolls `1d<highest>` and must start at 1.
+- **Item** (`library/items/<id>.md`, `src/core/items.ts`): header `name`, `type`, `rarity` (empty for mundane
+  items), `attunement` (empty, `yes` or the condition such as `by a spellcaster`), `cost`, `weight`, `source`,
+  `createdAt`, `updatedAt`, then the description in Markdown.
+- **Spell** (`library/spells/<id>.md`, `src/core/spells.ts`): header `name`, `level` (0 = cantrip, to 9), `school`,
+  `castingTime`, `range`, `components` (`V, S, M (…)`), `duration`, `ritual` (`yes`/`no`), `classes` (comma list),
+  `source`, `createdAt`, `updatedAt`, then the description in Markdown. Items and spells use `frontMatter.ts` like
+  the campaign files.
+- **Portraits** (`portraits/` in My content or a pack): PNG, JPEG or WebP files offered by the picture library
+  (`repository.listPortraits()`); picking one for a creature copies it to the creature's picture name on save.
 - **Encounter** (`encounter.json`, schema `encounter` v6): combatants, markers, door states, log, notes,
   `playersMoveTokens` (players may drag their own token) and `fog.cellsPerSquare`. Since v5 every combatant has
   `level` (player characters, else null), `effects` (`{id, name, condition, expires: {round, turnOf, at:
@@ -186,13 +216,11 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
   "Kept in the old format: …" in the load problems; old pictures and the portrait index stay until all documents
   converted.
 - **Pack migration** (`migrateToPacks`, `src/data/packMigration.ts`, after `migrateDataRoot`, only while
-  `settings.json` is older than v7 or missing): documents of the legacy import (`legacy--` ids) move from
-  `library/` into the pack `packs/legacy-dm-tool/`; asset references to shipped files (`content:creatures/…`,
-  `markers/`, `maps/`, `models/cc0/`) and to the moved files are rewritten in maps, encounters and
-  `dungeon-alchemist-objects.json` (any `{area, path}` object in the JSON). New files are read back and compared
-  before an old one is deleted, rewritten documents are restored on a mismatch; any problem keeps every old legacy
-  file (My content still wins over the copies), is listed as "Not moved into packs yet: …" and leaves the settings
-  version, so the next start tries again. Success saves the settings as v7.
+  `settings.json` is older than v7 or missing): asset references to shipped files (`content:creatures/…`,
+  `markers/`, `maps/`, `models/cc0/`) are rewritten in maps, encounters and `dungeon-alchemist-objects.json` (any
+  `{area, path}` object in the JSON). Rewritten documents are read back and restored on a mismatch; any problem is
+  listed as "Not moved into packs yet: …" and leaves the settings version, so the next start tries again. Success
+  saves the settings as v7.
 
 ## Content packs
 
@@ -206,9 +234,9 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
   `enabled`), `librarySources()` (enabled, in order), `listPacks()` (manifest, counts per kind and 3D models,
   problems such as a user folder with a built-in pack's id). The repository takes the pack settings from
   `loadSettings`/`saveSettings`.
-- Kinds (`LibraryKind`: creature, marker, map, table) are laid out by `KIND_LAYOUTS` (`dir`, file suffix, folder,
-  fallback id) and read/written by one codec each (`textCodec` for one text file per document). A new kind adds
-  its `LibraryKind`, `LibraryDocs` type, layout and codec. `list(kind)` returns the winner per id
+- Kinds (`LibraryKind`: creature, marker, map, table, item, spell) are laid out by `KIND_LAYOUTS` (`dir`, file
+  suffix, folder, fallback id) and read/written by one codec each (`textCodec` for one text file per document). A
+  new kind adds its `LibraryKind`, `LibraryDocs` type, layout and codec. `list(kind)` returns the winner per id
   (`entry.pack`, `entry.overrides`: packs it hides), `shadowed` (`{id, pack, by}`) and `unavailable` (ids only a
   disabled pack holds). `load(kind, ref)` resolves `ref.id` by precedence (`ref.area` only records where it was);
   an id only a disabled pack holds throws naming that pack. Encounters keep working from their combatants' own
@@ -216,8 +244,7 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
   disabled pack is reported on opening, and its grid still sizes the fog so saving never drops fog.
 - Packs are read-only in the app: saving a pack's document writes My content (the user copy that overrides it).
   Imports may write into a user pack: `ensurePack(manifest)` then `save(kind, doc, packId)`,
-  `importCreaturePicture(…, packId)`, `importMapAsset(…, packId)` (legacy import → "Legacy DM Tool",
-  `import-statblocks.ts --pack <id>`).
+  `importCreaturePicture(…, packId)`, `importMapAsset(…, packId)` (`import-statblocks.ts --pack <id>`).
 - Asset references inside a pack name its own files as `packs/<id>/…`. `src/data/packArchive.ts`: `exportPack`
   (zip with `pack.json` at the top; references into the exported root become `data:packs/<id>/…`; My content
   exports as `my-content-<date>`), `readPackZip`/`packFilesOf` (`pack.json` at the top or in the single top
@@ -227,8 +254,12 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
   names refused, no ZIP64). LAN and relay serve pack pictures and models like any asset; `pack.json`, stat block
   text and `terrain.png` are documents and never served.
 - UI: Compendium tab Packs (`PackLibrary.tsx`): rows in precedence order (drag or Alt+Up/Down to reorder), name,
-  version, author, license, counts, "n overridden by …", enable switch, Export, Remove (imported packs,
-  confirmed); header actions Import folder… (desktop) and Import pack… (.zip). `OriginBadge` names an entry's pack.
+  version, author, license, counts (also portraits), "n overridden by …", enable switch, Export, Remove (imported
+  packs, confirmed); header actions Import from Aurora Builder… and Import folder… (desktop), Import pack… (.zip).
+  `OriginBadge` names an entry's pack. Compendium tabs Items and Spells (`ItemSpellLibrary.tsx`): search, filters
+  (item type and rarity; spell level, school and class), at most 300 rows at once, preview with the facts and the
+  Markdown description. `PictureLibraryDialog` (creature editor Image/Token "Library…", Add combatants' hand-typed
+  player character) shows `repository.listPortraits()` as thumbnails.
 
 ## Rules and imports
 
@@ -241,21 +272,36 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
   immunity and vulnerability entries, qualified weapon entries ignored; `areaDamage`: save first, then resistance),
   `resources.ts` (`creatureResources`: legendary count from the intro, `(Recharge 5-6)` and rest recharges,
   `(3/Day)` features, slots from "1st level (4 slots)", innate `N/day [each]` lists, lair flag).
-- `src/core/import/statblock.ts`: `parseStatBlock(text, meta)` reads stat blocks in the legacy raw file layout and
-  throws `StatBlockError` naming the failing line. `legacy.ts` converts the WPF app's JSON (creatures, tile maps,
-  markers). Imported documents get readable stable ids (`slugId`), so re-imports overwrite.
-- `src/data/legacyImport.ts`: the one legacy importer for app and CLI, reading through a `LegacySource`
-  (`list`/`readText`/`readBytes` on absolute paths: Node fs in `tools/import-legacy.ts`, `listFolder`/`readFileText`
-  /`readFileBytes` in the app). `planLegacyImport(source, folder)` checks the folder (`LegacyFolderError` names the
-  missing folders), reads and converts everything without writing and resolves pictures like Windows (case and
-  separators ignored; legacy paths are relative to the program folder above the data folder, then by file name in
-  the folders the old tool used). `runLegacyImport(plan, source, repository, onProgress)` writes through the
-  repository and reports imported counts, skipped files and warnings by file name. UI: `LegacyImportDialog`
-  (First steps, Settings > Data). `src/core/imageSize.ts` reads PNG/JPEG pixel sizes from the header.
+- `src/core/import/statblock.ts`: `parseStatBlock(text, meta)` reads raw stat block text and throws
+  `StatBlockError` naming the failing line. Imported documents get readable stable ids (`slugId`), so re-imports
+  overwrite. `src/core/imageSize.ts` reads PNG/JPEG pixel sizes from the header.
 - `src/core/import/portraitMatch.ts`: `matchPortraits(fileNames, creatures)` pairs picture files with creatures by
   `portraitKey` (slug without extension and `source--` prefixes): id beats name beats family name ("Werewolf, Human
   Form" → "werewolf"); a file fits all creatures sharing the key, the first sorted file wins per creature.
   UI: `AttachPortraitsDialog` (Compendium header) previews, then copies each file to `library/creatures/<id>.<ext>`.
+- Aurora Builder (`src/core/xml.ts`: dependency-free XML reader; `src/core/import/aurora.ts`,
+  `auroraMarkdown.ts`, `auroraCharacter.ts`; `src/data/auroraImport.ts`): `indexAuroraElements` reads the element
+  files of `custom/**/*.xml` by Aurora id; `auroraItem` (types Item, Weapon, Armor, Magic Item: type from the
+  `type` setter or category, weapon category and armor group from internal supports, damage/properties/AC as a
+  first description line, rarity title-cased, attunement with its condition) and `auroraSpell` map them;
+  `auroraMarkdown` turns description markup (`p`, `h1`-`h6`, lists, tables, `b`/`i`, sidebars as quotes,
+  `div class="reference"` as "See _name_.") into Markdown. Ids are the Aurora id as a slug
+  (`ID_PHB_SPELL_AID` → `phb-spell-aid`), characters' the file name (`Varis_6.dnd5e` → `varis-6`), so re-imports
+  overwrite. `auroraCharacter(text, fileName, index)`: `.dnd5e` files hold the build, not the sheet, so it collects
+  the ids of the chosen elements and the equipped items and evaluates their `<stat>` rules like Aurora (sum per
+  name, highest per `bonus` group, `level`, `requirements` and `equipped` conditions, values referring to other
+  stats); Aurora's built-ins are applied directly (ability score improvements `ID_INTERNAL_ASI_*`, save and skill
+  proficiency and expertise ids, darkvision ids, proficiency bonus, armor: light full Dex, medium at most +2,
+  heavy none, `ac:calculation` alternatives, shield, `ac:misc`). Hit points: first level die in full, then the
+  average (Aurora option) or Aurora's stored rolls (`rndhp`), plus Con and `hp` stats. The result is a creature of
+  kind `player` with `level`, attacks as actions, spellcasting as a trait with slots, the portrait file name and
+  the embedded portrait. Checked against Aurora's own sheets of four characters (AC, HP, speed, scores, saves,
+  skills, passive Perception equal). `planAuroraImport(source, folder)` reads everything without writing
+  (problems per unreadable file); `runAuroraImport(plan, source, repository, onProgress)` writes the pack
+  `aurora-builder` (`AURORA_PACK`, license "see source books"): portraits, items, spells, characters (portrait
+  from the folder by file name, else the embedded one), then deletes the pack's files the import did not write.
+  UI: `AuroraImportDialog` (Compendium > Packs, Add combatants > Player character > From Aurora…; folder dialog
+  starting in `Documents/5e Character Builder`, counts preview, progress, report).
 - Map imports (`src/core/import`, all positions end in feet from the map's north-west corner):
   - `uvtt.ts` `parseUvtt(text, fileName)`: Universal VTT (`.dd2vtt`/`.df2vtt`/`.uvtt`). Squares minus
     `map_origin` × 5 ft; `pixels_per_grid` is the calibration; the base64 picture is sniffed (`sniffImage`: PNG,
@@ -279,14 +325,34 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
     (`READERS`, 11 so far; others throw). One unit is one tile = one square = 5 ft (Dungeon Alchemist's custom
     model guide: 1 Blender meter is one square). `terrainLayers[0].terrain` is base64: int32 header `-1, 0, cols,
 rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8 samples per tile
-    (`decodeDamTerrain`; the second layer repeats the first 0.1 tiles lower). `buildingBlockInstances` give
-    object kind (`blockId`), center (tiles, y from the south), base `height`, `scale`, `rotation` (clockwise).
+    (`decodeDamTerrain`; the second layer repeats the first 0.1 tiles lower). Objects are the
+    `buildingBlockInstances` that `objects[]` lists (walls, floors, pillars and openings have their own blocks):
+    kind (`blockId`), center (tiles, y from the south), base `height`, `scale`, `rotation` (clockwise, missing =
+    0). Only the ground level is read: the foundation that is its own base on layer 0 (`foundations[]`; layer -1
+    is a cellar, layer 1 the floor above); parts on other foundations count as `otherLevelParts`. Buildings
+    (`DamStructure`): `walls[].wall {p1, p2}` are tile-corner pieces one tile long; `wallOpenings[].wallPieceSection`
+    `"x1 y1 x2 y2 level;offset;width"` is a run of `width` pieces from p1 towards p2 (offset 0 in every file seen);
+    `rooms[].parts` are the floor tiles, outlined by `cellOutline` (`geometry/polygon.ts`, holes left out);
+    `pillars[].position.positionInCm` are wall corners in cm (100 per tile; one entry per corner quadrant, read
+    once). Floor = ground foundation height (0.2 tiles = 1 ft; the terrain under buildings lies at it), storey =
+    height of the foundation above minus it (2.4 tiles = 12 ft), else 12 ft. `floors[].height` is no height (it
+    counts up per tile) and is not read; door or window is not in the file (only the opening's model id).
     Exports add the same border around the project (4 squares in the default), so `damMargin` derives it from
     the map size; `damTerrainField` resamples onto the map's height grid, the border repeats the nearest edge.
     Dungeon Alchemist's meshes are never read.
+  - `damStructures.ts` `withDamStructures(content, sources, project, grid)`: the picture is a perspective render
+    from above the map centre; the ground lies true to the grid (project tile `(x, y)` → map square
+    `(margin + x, margin + height - y)`), wall tops appear scaled about the centre, and `.dd2vtt`/Foundry/Fantasy
+    Grounds lines are drawn at the wall tops (`Untitled Map2`: factor 1.0534, lines up within 0.05 ft; 2.6 ft off
+    unscaled). `fitWallTopScale` finds the factor from the export's own lines (`ImportedMap.sources`, as drawn).
+    Export lines and portals within 0.75 ft of the scaled project walls are dropped, the rest stay; project walls
+    (`wallRuns`: touching colinear pieces merged) become storey-high walls on the true lines, openings take door or
+    window from the export portals on them (door without one), free pillars become 1.5 ft closed walls, rooms get
+    floor, storey ceiling and a roof. Other levels add "Upper floors … are not imported yet" to the notes.
   - `damObjects.ts`: `damObjectKinds`, `damProps` (props at the object positions, Y turn negated because three.js
     turns counter-clockwise, `unitFt × scale`, no sight or movement blocking; the export's walls do that).
-  - UI: `mapImport.ts` `saveImportedMap` (content, terrain, `props(mapId, grid)`; terrain fit is checked before any
+  - UI: `mapImport.ts` `saveImportedMap` (content, terrain, project buildings via `withDamStructures` when
+    `sources` come along, `props(mapId, grid)`; terrain and buildings are checked before any
     file is written; `writeImage` returns the stored picture's size and the calibration is scaled to it, squares
     stay those of the original), `storeMapImage` (pictures above `MAX_TEXTURE_PX` are stored reduced to it:
     `reducedImageSize`/`scaleCalibration` in `calibration.ts`, `OffscreenCanvas`, JPEG, PNG if any pixel is
@@ -300,10 +366,9 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
     step after the image (pick or drop the `.dam`, Skip creates the map without it); `.df2vtt`/`.uvtt` come from
     other tools and have no project.
 - CLI (`pnpm tsx tools/<script>.ts`, default data root = the desktop app's, override with `--data-root`):
-  `import-statblocks.ts <folder> [--source <name>] [--pack <id>]`, `import-legacy.ts <legacy data folder>` (into
-  the pack "Legacy DM Tool"), `build-srd.ts [--input <5e-SRD-Monsters.json>]` regenerates the pack
-  `content/packs/srd` (attribution in its `LICENSE.md`), `build-sample.ts` regenerates the pack
-  `content/packs/sample-map` with the map `sample-chapel` (procedural drawing, PNG encoder `src/core/png.ts`).
+  `import-statblocks.ts <folder> [--source <name>] [--pack <id>]`, `build-srd.ts [--input <5e-SRD-Monsters.json>]`
+  regenerates the pack `content/packs/srd` (attribution in its `LICENSE.md`), `build-sample.ts` regenerates the
+  pack `content/packs/sample-map` with the map `sample-chapel` (procedural drawing, PNG encoder `src/core/png.ts`).
 
 ## Map rendering
 
@@ -439,8 +504,10 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   0 HP, `EffectsSection` with concentration, `ResourcesSection`, `CarriedLightField` under Players and map);
   `AreaTargets` in the Areas tab for `useEncounterUi.areaTargetsId` (set when a marker is placed or its Targets
   button is pressed); `ConcentrationDialog` works through `useEncounterUi.concentrationChecks` (queued by
-  `changeHp` and area damage); `EndCombatDialog` (End combat in the turn bar) logs XP and loot (random tables via
-  `rollTable`) before `endCombat`.
+  `changeHp` and area damage); `EndCombatDialog` (End combat in the turn bar) logs XP and loot (typed with item
+  names suggested, rolled on random tables via `rollTable`, or a random library item of a chosen rarity) before
+  `endCombat`. The Add combatants dialog's Player character tab lists library creatures of kind `player`
+  (spawned with their `level`) and keeps the hand-typed form under "Enter by hand".
 - `TokenLayer` / `MarkerLayer` (`src/render/tokens`, `src/render/markers`): read `useEncounterStore` in `dm` mode and
   `usePlayerStore` in `player` mode. Tokens snap to whole squares by 5e size (`snapTokenPoint`).
 - `TokenView`: disc with the picture in the top view; in the perspective camera a standee (side-colored base, card
@@ -537,10 +604,10 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
 - Routes: `/player.html?token=` (sets an `/asset`-scoped cookie with that token so relative `.gltf` resources load),
   `/assets/*` (Vite bundle, public), `/asset/{area}/{path}?token=` (images and models only, path stays inside the
   storage root via `storage::resolve`; documents are never served, nor the PNGs inside campaign folders (fog masks)
-  except a campaign's `handouts/`, or `terrain.png`), `/ws?token=` (relay). The DM socket speaks the
-  internet relay's view frames and status frames (see below); a player gets only frames of its link's view, and
-  only the player messages `rebuild_player_message` accepts pass, rebuilt and at most 10 at once then one per 500 ms
-  (more are dropped); any other player message closes its socket. Changed links close the
+  except a campaign's `handouts/`, or `terrain.png`, nor anything in `history/`), `/ws?token=` (relay). The DM
+  socket speaks the internet relay's view frames and status frames (see below); a player gets only frames of its
+  link's view, and only the player messages `rebuild_player_message` accepts pass, rebuilt and at most 10 at once
+  then one per 500 ms (more are dropped); any other player message closes its socket. Changed links close the
   sockets of withdrawn tokens with `RELAY_LINK_REVOKED` and of reassigned ones with 1013.
 - Bundle files come from `app.asset_resolver()` (`src-tauri/src/frontend.rs`): release builds embed `dist/`; dev
   builds (devUrl set) read `dist/` from disk, so run `pnpm build` before testing the LAN view under `pnpm app:dev`.
@@ -583,9 +650,9 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   and `src/sync/relayClient.ts`: `fetchRelaySession` (refuses a relay of another API version with an "update the
   server" or "update the app" message), `pushRelayLinks` (on connect and whenever the links change),
   `RelayUploader` (`ensure(refs)` uploads assets plus glTF/GLB side files found by `modelSideFiles`, remembered per
-  connection; `uploadBundle`) and `RelayTransport` (a `ViewSocketTransport` whose sends wait for the assets
-  `collectAssetRefs` finds anywhere in the payload). `DmApp` adds the transport to `startDmPublisher`. Plain
-  `http://` URLs are refused except for loopback (the DM key would travel unencrypted).
+  connection, and refuses `history/` paths; `uploadBundle`) and `RelayTransport` (a `ViewSocketTransport` whose
+  sends wait for the assets `collectAssetRefs` finds anywhere in the payload). `DmApp` adds the transport to
+  `startDmPublisher`. Plain `http://` URLs are refused except for loopback (the DM key would travel unencrypted).
 - Setup (`src-tauri/src/deploy.rs`, `russh` with `ring`): templates `src-tauri/src/deploy/install.sh` and
   `fogwarden-relay.nginx.conf` filled with the validated domain, email and port; commands `deploy_write_files(folder,
 setup)`, `deploy_host_key(host, port)` (`SHA256:` fingerprint, confirmed and stored in
@@ -687,3 +754,19 @@ no stubs/TODOs. Format with `pnpm format`; check with `pnpm typecheck`, `pnpm li
 - Video battlemaps: `useProjectionUniforms` loads `.mp4`/`.webm` images with `loadVideoTexture` (muted, looping,
   no mipmaps); `AssetImage` shows their first frame. LAN `asset_mime` and `RELAY_ASSET_TYPES` include audio and
   video; the relay serves single byte ranges (`byteRange`).
+
+## Updates
+
+- `tauri-plugin-updater` reads `latest.json` of the latest GitHub release (`plugins.updater` in `tauri.conf.json`:
+  endpoint, public key, passive NSIS install); `tauri-plugin-process` restarts. Only the DM window has the
+  `updater:default` and `process:allow-restart` permissions.
+- `src/core/updates.ts`: `autoCheckDecision(settings.updates, now, playing)` → `check` | `wait` | `skip` (switched
+  off or checked within 24 h: skip; Play with combat running: wait).
+- `src/state/updateStore.ts`: `useUpdateStore` (`status`, `check()`, `install()`: flushes map and encounter, then
+  `downloadAndInstall` and `relaunch`); check and install failures become a `failed` status with a plain message.
+  `startAutoUpdateCheck()` (desktop, started in `DmApp`) decides once per app start, stamps
+  `settings.updates.lastCheck` and reports a found version or a failure as a notice.
+- Release: `tools/package.ts` builds with the signing key (`TAURI_SIGNING_PRIVATE_KEY*` env or
+  `data-local/signing/fogwarden.key`) and writes installer, `.sig` and `latest.json` (`tools/updateManifest.ts`:
+  notes = newest `CHANGELOG.md` section, URL = asset of release `v<version>`) to `artifacts/`;
+  `tools/set-version.ts` sets the version in `package.json`, `tauri.conf.json` and `Cargo.toml`.

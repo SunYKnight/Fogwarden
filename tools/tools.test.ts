@@ -44,9 +44,9 @@ describe('shipped SRD content', () => {
       ['srd', 'SRD 5.1'],
     ]);
     expect(shipped.map((p) => p.counts)).toEqual([
-      { creature: 0, marker: 0, map: 0, table: 0, model: 11 },
-      { creature: 0, marker: 0, map: 1, table: 0, model: 0 },
-      { creature: 334, marker: 5, map: 0, table: 0, model: 0 },
+      { creature: 0, marker: 0, map: 0, table: 0, item: 0, spell: 0, model: 11, portrait: 0 },
+      { creature: 0, marker: 0, map: 1, table: 0, item: 0, spell: 0, model: 0, portrait: 0 },
+      { creature: 334, marker: 5, map: 0, table: 0, item: 0, spell: 0, model: 0, portrait: 0 },
     ]);
     expect(shipped.every((p) => existsSync(join(CONTENT_ROOT, p.source.root, 'LICENSE.md')))).toBe(true);
   });

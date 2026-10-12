@@ -30,6 +30,7 @@ type Codec = 'text' | 'list' | 'json';
 // Literal order is the header line order.
 const HEADER_CODECS: Record<HeaderKey, Codec> = {
   kind: 'text',
+  level: 'json',
   source: 'text',
   license: 'text',
   tags: 'list',

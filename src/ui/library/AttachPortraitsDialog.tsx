@@ -100,7 +100,7 @@ export function AttachPortraitsDialog({ folder, files }: { folder: string; files
         <p className="muted portrait-folder">{folder}</p>
         <p>
           <strong>{planned.length}</strong> creatures matched. Pictures are matched by creature name or id; case,
-          accents, punctuation and prefixes such as "legacy--" don't matter.
+          accents, punctuation and prefixes such as "homebrew--" don't matter.
         </p>
         {existing > 0 && (
           <CheckboxField

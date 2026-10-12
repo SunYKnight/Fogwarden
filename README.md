@@ -9,8 +9,9 @@ players a fog-of-war view on a second screen or in any browser on the local netw
 - **Encounters**: initiative, HP, conditions, attack and dice rolls with a log, tokens on the map, area templates,
   doors, measuring; encounter difficulty, area saves with resistances, timed effects and concentration, monster
   resources (legendary, recharge, slots), death saves, carried torches, XP and loot at the end of combat.
-- **Libraries**: creatures (334 SRD 5.1 monsters shipped, stat block import from text), area markers, maps,
-  random tables (names, loot, rumours as editable text), campaigns.
+- **Libraries**: creatures (334 SRD 5.1 monsters shipped, stat block import from text), items, spells, area
+  markers, maps, random tables (names, loot, rumours as editable text), a picture library, campaigns; Aurora Builder
+  characters, items, spells and portraits import into a local pack.
 - **Campaigns**: encounters, a session journal that Play fills with combat events, people and places with
   pictures, quests, and an in-game calendar with rests.
 - **Player view**: second window, LAN browser or any browser on the internet through a small relay server; each
@@ -42,9 +43,46 @@ GUI smoke tests can drive the real WebView2 over its DevTools port:
 ## Build
 
 ```sh
-pnpm package        # release build; installer copied to artifacts/
+pnpm package        # signed release build: installer, its .sig and latest.json in artifacts/
 pnpm build:server   # internet relay only: dist-server/relay.mjs (part of pnpm build)
 ```
+
+Release builds sign the installer for the auto-updater, so `pnpm package` (and `pnpm app:build`) need the updater's
+private key, see below.
+
+## Release
+
+The desktop app looks for updates at
+`https://github.com/SunYKnight/Fogwarden/releases/latest/download/latest.json` (Settings > About, and once a day on
+start unless switched off there) and installs only installers signed with the key whose public half is
+`plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
+
+1. `pnpm set-version 0.2.0` sets the version in `package.json`, `src-tauri/tauri.conf.json` and
+   `src-tauri/Cargo.toml`.
+2. In `CHANGELOG.md`, rename `## Unreleased` to `## 0.2.0`: the newest section becomes the release notes the app
+   shows. Commit, so the installer's revision has no `-dirty`.
+3. `pnpm package` builds and writes to `artifacts/`: `Fogwarden_0.2.0_x64-setup-<revision>.exe`, the same name with
+   `.sig`, and `latest.json` (version, notes, date, signature and the download URL of the installer in the release
+   `v0.2.0`).
+4. On GitHub, create the release with tag `v0.2.0` (published, not a draft or pre-release, so it is "latest") and
+   upload these three files unrenamed. With the GitHub CLI:
+   `gh release create v0.2.0 artifacts/Fogwarden_0.2.0_x64-setup-<revision>.exe* artifacts/latest.json`.
+
+### The signing key
+
+`pnpm package` takes the private key from `TAURI_SIGNING_PRIVATE_KEY` (key text) or else from
+`data-local/signing/fogwarden.key`, and its password from `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty if unset).
+`data-local/` is gitignored; the key never goes into the repository.
+
+- **Back up** `fogwarden.key` (and its password) outside the repository, e.g. in a password manager or on an
+  encrypted drive. Installed apps accept only updates signed with this key: if it is lost, the next version needs a
+  new key pair, and every user has to download and install that version by hand.
+- **Keep it private**: whoever holds it can sign installers the app accepts. If it leaks, make a new pair and ship it
+  the same way.
+- New pair (asks for a password; add `--ci` for none):
+  `pnpm tauri signer generate -w data-local/signing/fogwarden.key`, then put the content of
+  `data-local/signing/fogwarden.key.pub` into `plugins.updater.pubkey`. The current key has no password; replacing
+  it with a password-protected pair costs nothing before the first release.
 
 ## Play over the internet
 
@@ -88,16 +126,11 @@ to everyone or one view.
 | Build output            | `dist/`, `dist-server/`, `src-tauri/target/`, `artifacts/` (all gitignored)                           |
 | Your data               | `%APPDATA%/io.github.sunyknight.fogwarden/` by default; change it in Settings (e.g. a Dropbox folder) |
 
-## Import from the old WPF tool
+## Import stat blocks
 
-In the app: Home > First steps > **Import…** or Settings > Data > **Import from the old WPF tool…**, then choose the
-`240722_DnD_DMTool_Data` folder. The dialog lists what it found before anything is written; running it again replaces
-earlier imports. Everything goes into the content pack "Legacy DM Tool" (`packs/legacy-dm-tool/`), which you can
-switch off or export under Compendium > Packs. Developers can run the same importer from the project folder:
+Developers can import raw stat block text from the project folder:
 
 ```sh
-# creatures, maps (images, tile heights, walls) and markers from the legacy data folder
-pnpm tsx tools/import-legacy.ts "<path>/240722_DnD_DMTool_Data" [--data-root <path>]
 # raw stat block text files (one creature per file); --pack <id> puts them into the pack packs/<id>/
 pnpm tsx tools/import-statblocks.ts <folder> [--data-root <path>] [--source <name>] [--pack <id>]
 ```
@@ -124,9 +157,12 @@ the app. Settings > Data shows and changes the folder.
 | Handouts          | `campaigns/<id>/handouts/`: pictures (`.png`, `.jpg`, `.webp`), videos (`.mp4`, `.webm`), `.md`, `.txt` |
 | Calendar          | `campaigns/<id>/calendar.json`: months, current date and time, events                                   |
 | Random tables     | `library/tables/<id>.txt`: one entry per line                                                           |
+| Items, spells     | `library/items/<id>.md`, `library/spells/<id>.md`: header (type, rarity … / level, school …) + Markdown |
+| Picture library   | `library/portraits/` and `portraits/` of each pack: pictures to pick for creatures and characters       |
 | Content packs     | `packs/<id>/`: `pack.json` and the same folders as `library/` (see Content packs below)                 |
 | Settings          | `settings.json`                                                                                         |
 | Object models     | `library/dungeon-alchemist-objects.json` (model per object kind), `library/dungeon-alchemist-models/`   |
+| Version history   | `history/<YYYY-MM-DD>/<path>`: earlier versions of changed and deleted files (see below)                |
 
 - File names are the ids. A new `.txt` stat block in `library/creatures/` shows up in the Compendium; a picture named
   after a creature id pictures it, shipped ones too (`srd-goblin.jpg` for the SRD goblin).
@@ -145,12 +181,29 @@ the app. Settings > Data shows and changes the folder.
 Data folders of older versions are converted on first start; a file that cannot be converted safely stays as it
 was and is listed as a load problem. Format details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#data-formats).
 
+### Version history
+
+Before the desktop app changes or deletes a file in the data folder, it keeps the previous version in
+`history/<YYYY-MM-DD>/` under the file's own path, so `history/2026-10-11/library/maps/cave/map.json` is the cave map
+as it was before its first change on 11 October. Each file is kept once per day; an unchanged save keeps nothing.
+The history keeps 30 days and at most 2 GB (oldest days go first on start, today's always stay); identical
+contents are stored once in `history/.objects/` and the dated files are hard links to them (file systems without
+hard links, such as FAT drives, get copies).
+
+**Settings > Data > History** lists the days with the documents changed on them. _Restore this version_ brings a
+document back to how it was before that day's changes; what it replaces is kept in
+`history/<YYYY-MM-DD> <HH-MM-SS> before restore/`, listed there too, so a restore can be restored away again.
+_Open history folder_ shows the files, the size readout and _Clean up older than…_ free space. You can also copy a
+file back by hand while the app does not have its document open. The history is never sent to players (LAN or
+relay). Command-line tools write without keeping a history.
+
 ## Content packs
 
 A content pack is a folder (or a `.zip` of it) with a `pack.json` and the usual library folders: `creatures/`,
-`markers/`, `maps/<id>/`, `tables/`, `models/`. **Compendium > Packs** lists the installed packs with their counts,
-switches each on or off, exports any pack (also your own content) to a `.zip`, removes imported packs and imports new
-ones (**Import pack…** for a `.zip`, **Import folder…** in the desktop app).
+`markers/`, `maps/<id>/`, `tables/`, `items/`, `spells/`, `portraits/`, `models/`. **Compendium > Packs** lists the
+installed packs with their counts, switches each on or off, exports any pack (also your own content) to a `.zip`,
+removes imported packs and imports new ones (**Import pack…** for a `.zip`, **Import folder…** in the desktop app,
+**Import from Aurora Builder…**, see below).
 
 ```json
 {
@@ -172,16 +225,33 @@ ones (**Import pack…** for a `.zip`, **Import folder…** in the desktop app).
 - Shipped packs (SRD 5.1, CC0 models, sample map) are read-only; editing one of their entries creates your copy.
   Imported packs live in your data folder under `packs/<id>/`.
 
+### Aurora Builder
+
+**Compendium > Packs > Import from Aurora Builder…** (desktop app; also **Add combatants > Player character > From
+Aurora…**) reads Aurora's documents folder (`Documents/5e Character Builder`: `custom/`, `portraits/`, `*.dnd5e`),
+shows what it found and writes the pack "Aurora Builder" into your data folder:
+
+- characters as player characters (`creatures/<file name>.txt` with `kind: player` and `level`): AC, hit points,
+  speed, ability scores, saves, skills, passive Perception, darkvision, attacks, spell slots and the portrait,
+  computed from the build the way Aurora computes its sheet. The Player character tab of the Add combatants dialog
+  lists them.
+- items and magic items (`items/<id>.md`) and spells (`spells/<id>.md`) for the Compendium tabs Items and Spells
+  and for loot at the end of combat;
+- the portraits folder (`portraits/`) as the picture library (**Library…** next to a creature's image or token).
+
+Import again after a level-up: the import replaces the pack (ids come from Aurora's element ids and the character
+file names). The pack holds book content: it stays on your computer; export and share it only where the books allow.
+
 ## Battlemaps from map makers
 
 Besides plain images (PNG, JPEG, WebP), the New map wizard, the Home drop zone and the Maps page take exports that
 bring the grid, walls, doors, windows and lights along:
 
-| Format                                                      | Made by                                                           | What comes along                                          |
-| ----------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
-| Universal VTT (`.dd2vtt`, `.df2vtt`, `.uvtt`)               | Dungeon Alchemist, Dungeondraft, DungeonFog, Arkenforge, MapForge | image, grid, walls, doors, windows, lights, ambient light |
-| Foundry export folder (`<map>_NN.json` + picture per floor) | Dungeon Alchemist                                                 | one map per floor with walls, doors, lights               |
-| Project file (`.dam`, with one of the above)                | Dungeon Alchemist                                                 | ground heights, object positions                          |
+| Format                                                      | Made by                                                           | What comes along                                                           |
+| ----------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Universal VTT (`.dd2vtt`, `.df2vtt`, `.uvtt`)               | Dungeon Alchemist, Dungeondraft, DungeonFog, Arkenforge, MapForge | image, grid, walls, doors, windows, lights, ambient light                  |
+| Foundry export folder (`<map>_NN.json` + picture per floor) | Dungeon Alchemist                                                 | one map per floor with walls, doors, lights                                |
+| Project file (`.dam`, with one of the above)                | Dungeon Alchemist                                                 | ground heights, buildings (rooms, walls, doors, windows), object positions |
 
 - **Dungeon Alchemist**: _Export_ > format _Universal VTT_ gives a `.dd2vtt`. Drop it on Home or Maps (together with
   the saved `.dam` project for hills and objects) or pick it in _New map_. For several floors, export with format
@@ -190,6 +260,11 @@ bring the grid, walls, doors, windows and lights along:
 - **Dungeondraft**: _File > Export_, export mode _Universal VTT_, gives a `.dd2vtt`. Portals with _Block light_ off
   arrive as windows.
 - **DungeonFog**: export with file type _Universal VTT_ (`.df2vtt`).
+
+With a `.dam`, the buildings of its ground level replace the export's wall lines: walls stand on the true room
+outlines at Dungeon Alchemist's storey height (12 ft), rooms get floors and roofs, doors and windows sit where the
+project has them. Dungeon Alchemist draws its picture in perspective, so the export's lines trace the wall tops a
+little outside the true walls; the import works this out. Upper floors are not imported yet.
 
 The grid comes from the file, so the wizard skips the grid step; _Check grid_ shows it over the image first. Walls are
 10 ft high, sight-blocking objects 6 ft; lights reach their full range, half of it bright. When the export says the
@@ -219,7 +294,7 @@ battlemap exports its first frame.
 Tokens show the creature picture: a disc in the top view, an upright standee in the 3D view (Settings > Rules
 switches standees off for you and your players). To give the shipped SRD creatures pictures, use **Compendium >
 Attach portraits from folder…** and pick a folder of PNG/JPEG/WebP files named after the creatures (`goblin.jpg`,
-`Adult Red Dragon.png`, `legacy--werewolf.jpg`; case, accents, punctuation and `legacy--` prefixes don't matter). The
+`Adult Red Dragon.png`, `homebrew--werewolf.jpg`; case, accents, punctuation and `source--` prefixes don't matter). The
 preview lists matched and unmatched files before anything is copied into your data folder under the creatures' ids;
 existing pictures are only replaced when you tick the box. One picture per creature also works in the creature
 editor's Image/Token fields (the file is copied at once); for shipped creatures that keeps the creature shipped.

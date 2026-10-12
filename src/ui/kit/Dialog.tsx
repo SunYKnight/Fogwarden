@@ -11,9 +11,18 @@ interface DialogProps {
   width?: number;
 }
 
+/** Open dialogs, innermost last: Esc closes only the dialog on top. */
+const openDialogs: object[] = [];
+
 /** Modal dialog: Esc and the backdrop close it, focus moves into it on open. */
 export function Dialog({ title, onClose, children, footer, width = 520 }: DialogProps) {
   const box = useRef<HTMLDivElement>(null);
+  const token = useRef({});
+  useEffect(() => {
+    const own = token.current;
+    openDialogs.push(own);
+    return () => void openDialogs.splice(openDialogs.indexOf(own), 1);
+  }, []);
   useEffect(() => {
     // Fields first: the header's Close button comes first in document order.
     const root = box.current;
@@ -22,7 +31,7 @@ export function Dialog({ title, onClose, children, footer, width = 520 }: Dialog
       root?.querySelector<HTMLElement>('button.btn-primary, .dialog-foot button');
     first?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && openDialogs.at(-1) === token.current) {
         e.stopPropagation();
         onClose();
       }
@@ -30,7 +39,6 @@ export function Dialog({ title, onClose, children, footer, width = 520 }: Dialog
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
-
   return createPortal(
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={box} className="dialog" role="dialog" aria-modal="true" aria-label={title} style={{ width }}>

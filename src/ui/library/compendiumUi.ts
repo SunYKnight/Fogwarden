@@ -6,7 +6,8 @@ import { useAppStore } from '@/state/appStore';
 export type CompendiumDialog =
   | { kind: 'creature-import'; text: string }
   | { kind: 'new-encounter'; campaignId: string | null; map: DocRef | null }
-  | { kind: 'attach-portraits'; folder: string; files: string[] };
+  | { kind: 'attach-portraits'; folder: string; files: string[] }
+  | { kind: 'aurora-import' };
 
 export const useCompendiumDialogStore = create<{ dialog: CompendiumDialog | null }>(() => ({ dialog: null }));
 
@@ -23,4 +24,9 @@ export function openCreatureImport(text: string): void {
 /** Asks for name, campaign and map, creates the encounter and opens it on the Play page. */
 export function openNewEncounter(campaignId: string | null, map: DocRef | null = null): void {
   useCompendiumDialogStore.setState({ dialog: { kind: 'new-encounter', campaignId, map } });
+}
+
+/** Import from Aurora Builder (Compendium > Packs, Add combatants > Player character). */
+export function openAuroraImport(): void {
+  useCompendiumDialogStore.setState({ dialog: { kind: 'aurora-import' } });
 }

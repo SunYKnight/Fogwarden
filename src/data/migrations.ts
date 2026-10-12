@@ -7,6 +7,7 @@ import {
   defaultPackSettings,
   defaultPlayerLinks,
   defaultRemoteSettings,
+  defaultUpdateSettings,
   ENCOUNTER_SCHEMA_VERSION,
   freshCombatState,
   MAP_SCHEMA_VERSION,
@@ -91,6 +92,14 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     (doc) => ({ ...doc, packs: defaultPackSettings() }),
     // v8: sound volumes.
     (doc) => ({ ...doc, audio: defaultAudioSettings() }),
+    // v9: release checks of the desktop app.
+    (doc) => ({ ...doc, updates: defaultUpdateSettings() }),
+    // v10: the import from the old tool and its first step are gone.
+    (doc) => {
+      const { done, ...onboarding } = doc.onboarding as { done: Record<string, unknown> };
+      const { legacyImport: _unused, ...steps } = done;
+      return { ...doc, onboarding: { ...onboarding, done: steps } };
+    },
   ],
 };
 

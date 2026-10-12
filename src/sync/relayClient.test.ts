@@ -77,6 +77,16 @@ describe('relayBaseUrl', () => {
   });
 });
 
+describe('RelayUploader', () => {
+  it('never uploads kept versions from the history', async () => {
+    const readAsset = vi.fn(async () => encode('PNG'));
+    const uploader = new RelayUploader('https://relay.test', 'k', readAsset);
+    const kept: AssetRef = { area: 'data', path: 'History/2026-10-12/library/maps/m1/assets/map.png' };
+    await expect(uploader.ensure([kept])).rejects.toThrow('never leaves this computer');
+    expect(readAsset).not.toHaveBeenCalled();
+  });
+});
+
 describe('fetchRelaySession', () => {
   afterEach(() => {
     vi.unstubAllGlobals();

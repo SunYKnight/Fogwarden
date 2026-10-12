@@ -2,6 +2,7 @@ import {
   freshCombatState,
   newId,
   nowIso,
+  type AssetRef,
   type AttackRoll,
   type Combatant,
   type Creature,
@@ -84,7 +85,7 @@ export function spawnCombatant(creature: Creature, ref: DocRef, options: SpawnOp
     hiddenFromPlayers: false,
     token: creature.token ?? creature.image,
     notes: '',
-    ...freshCombatState(null),
+    ...freshCombatState(creature.level),
   };
 }
 
@@ -96,6 +97,8 @@ export interface PcOptions {
   visionSource: boolean;
   /** Character level; unknown when absent. */
   level?: number;
+  /** Token picture, e.g. from the picture library. */
+  token?: AssetRef | null;
 }
 
 /** Player character entered at the table without a library creature. */
@@ -115,7 +118,7 @@ export function createPc(options: PcOptions): Combatant {
     senses: options.senses,
     visionSource: options.visionSource,
     hiddenFromPlayers: false,
-    token: null,
+    token: options.token ?? null,
     notes: '',
     ...freshCombatState(options.level ?? null),
   };

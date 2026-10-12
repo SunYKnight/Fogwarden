@@ -31,8 +31,15 @@ const empty = <K extends LibraryKind>(): LibraryListing<K> => ({
 });
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
-  listings: { creature: empty(), marker: empty(), map: empty(), table: empty() },
-  loading: { creature: false, marker: false, map: false, table: false },
+  listings: {
+    creature: empty(),
+    marker: empty(),
+    map: empty(),
+    table: empty(),
+    item: empty(),
+    spell: empty(),
+  },
+  loading: { creature: false, marker: false, map: false, table: false, item: false, spell: false },
   packs: [],
   packProblems: [],
 

@@ -64,7 +64,7 @@ export function SettingsPage() {
                 onChange={(tokenStandees) => save({ ...settings, tokenStandees })}
               />
             </Section>
-            <AboutSection />
+            <AboutSection settings={settings} save={save} />
           </div>
         ) : (
           <div className="waiting">Loading settings…</div>

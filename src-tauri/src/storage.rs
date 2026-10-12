@@ -6,11 +6,13 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::{AppHandle, Manager, State};
 
+use crate::history;
+
 const BOOTSTRAP_FILE: &str = "bootstrap.json";
 const PATH_HEADER: &str = "x-storage-path";
 
 #[derive(Debug)]
-pub struct StorageError(String);
+pub struct StorageError(pub(crate) String);
 
 impl std::fmt::Display for StorageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -146,7 +148,7 @@ pub(crate) fn resolve(root: &Path, relative: &str) -> Result<PathBuf, StorageErr
 }
 
 // Temp file + rename keeps the old file intact if the app dies mid-write.
-fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), StorageError> {
+pub(crate) fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), StorageError> {
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -159,6 +161,22 @@ fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), StorageError> {
     fs::write(&tmp, bytes)?;
     fs::rename(&tmp, target)?;
     Ok(())
+}
+
+/// A data area path the app may write or remove: anything but the version history.
+fn resolve_writable(root: &Path, relative: &str) -> Result<PathBuf, StorageError> {
+    if history::in_history(Path::new(relative)) {
+        Err(StorageError(format!("the version history is changed by restores only: {relative}")))
+    } else {
+        resolve(root, relative)
+    }
+}
+
+/// Every write into the data area: keeps the replaced version in the history, then writes atomically.
+fn write_data(root: &Path, relative: &str, bytes: &[u8]) -> Result<(), StorageError> {
+    let target = resolve_writable(root, relative)?;
+    history::keep(root, Path::new(relative), Some(bytes), &history::today())?;
+    write_atomic(&target, bytes)
 }
 
 fn percent_decode(value: &str) -> Result<String, StorageError> {
@@ -210,14 +228,16 @@ const FILE_MANAGER: &str = "open";
 #[cfg(all(unix, not(target_os = "macos")))]
 const FILE_MANAGER: &str = "xdg-open";
 
+pub(crate) fn open_in_file_manager(dir: &Path) -> Result<(), StorageError> {
+    // Explorer exits with 1 even on success, so only the spawn is checked.
+    std::process::Command::new(FILE_MANAGER).arg(dir).spawn()?;
+    Ok(())
+}
+
 /// Shows the data root in the OS file manager.
 #[tauri::command]
 pub fn storage_open_data_root(state: State<'_, StorageState>) -> Result<(), StorageError> {
-    // Explorer exits with 1 even on success, so only the spawn is checked.
-    std::process::Command::new(FILE_MANAGER)
-        .arg(state.root(Area::Data)?)
-        .spawn()?;
-    Ok(())
+    open_in_file_manager(&state.root(Area::Data)?)
 }
 
 #[tauri::command]
@@ -233,7 +253,7 @@ pub fn storage_read_bytes(state: State<'_, StorageState>, area: Area, path: Stri
 
 #[tauri::command]
 pub fn storage_write_text(state: State<'_, StorageState>, path: String, text: String) -> Result<(), StorageError> {
-    write_atomic(&resolve(&state.root(Area::Data)?, &path)?, text.as_bytes())
+    write_data(&state.root(Area::Data)?, &path, text.as_bytes())
 }
 
 /// The percent-encoded path a raw-body command carries in its header.
@@ -255,8 +275,7 @@ fn raw_body<'a>(request: &'a Request<'_>) -> Result<&'a [u8], StorageError> {
 
 #[tauri::command]
 pub fn storage_write_bytes(state: State<'_, StorageState>, request: Request<'_>) -> Result<(), StorageError> {
-    let target = resolve(&state.root(Area::Data)?, &header_path(&request)?)?;
-    write_atomic(&target, raw_body(&request)?)
+    write_data(&state.root(Area::Data)?, &header_path(&request)?, raw_body(&request)?)
 }
 
 /// File types the app writes outside its roots: map exports and content pack archives.
@@ -345,9 +364,19 @@ fn list_dir(dir: &Path) -> Result<Vec<Entry>, StorageError> {
     Ok(entries)
 }
 
+// The version history is no document folder; only its own commands list it.
+fn list_area(root: &Path, path: &str) -> Result<Vec<Entry>, StorageError> {
+    let dir = resolve(root, path)?;
+    let entries = list_dir(&dir)?;
+    Ok(entries
+        .into_iter()
+        .filter(|e| dir != root || !history::in_history(Path::new(&e.name)))
+        .collect())
+}
+
 #[tauri::command]
 pub fn storage_list(state: State<'_, StorageState>, area: Area, path: String) -> Result<Vec<Entry>, StorageError> {
-    list_dir(&resolve(&state.root(area)?, &path)?)
+    list_area(&state.root(area)?, &path)
 }
 
 /// Entries of a folder the user picked in a native dialog, outside the storage roots.
@@ -364,7 +393,7 @@ pub fn storage_list_folder(path: String) -> Result<Vec<Entry>, StorageError> {
 /// Copies the file `from`, an absolute path outside the storage roots, to `to` inside `root`.
 fn import_file(root: &Path, from: &Path, to: &str) -> Result<(), StorageError> {
     if from.is_absolute() && from.is_file() {
-        write_atomic(&resolve(root, to)?, &fs::read(from)?)
+        write_data(root, to, &fs::read(from)?)
     } else {
         Err(StorageError(format!("not a file: {}", from.display())))
     }
@@ -406,13 +435,17 @@ pub fn storage_exists(state: State<'_, StorageState>, area: Area, path: String) 
 #[tauri::command]
 pub fn storage_remove(state: State<'_, StorageState>, path: String) -> Result<(), StorageError> {
     let root = state.root(Area::Data)?;
-    let target = resolve(&root, &path)?;
+    let target = resolve_writable(&root, &path)?;
     if target == root {
         Err(StorageError("refusing to remove the data root".into()))
-    } else if target.is_dir() {
-        Ok(fs::remove_dir_all(&target)?)
-    } else if target.is_file() {
-        Ok(fs::remove_file(&target)?)
+    } else if target.exists() {
+        history::keep_removed(&root, Path::new(&path), &history::today())?;
+        if target.is_dir() {
+            fs::remove_dir_all(&target)?;
+        } else {
+            fs::remove_file(&target)?;
+        }
+        Ok(())
     } else {
         Ok(())
     }
@@ -439,14 +472,21 @@ fn copy_recursive(from: &Path, to: &Path) -> Result<(), StorageError> {
     Ok(())
 }
 
-/// Copies a file or folder from either area into the data area.
+/// Copies a file or folder from either area into the data area, file by file like any write.
 #[tauri::command]
 pub fn storage_copy(state: State<'_, StorageState>, area: Area, from: String, to: String) -> Result<(), StorageError> {
     let source = resolve(&state.root(area)?, &from)?;
-    if !source.exists() {
-        Err(StorageError(format!("nothing to copy at {from}")))
+    let root = state.root(Area::Data)?;
+    if source.is_dir() {
+        for file in history::files_under(&source)? {
+            let target = Path::new(&to).join(&file);
+            write_data(&root, &target.to_string_lossy(), &fs::read(source.join(&file))?)?;
+        }
+        Ok(())
+    } else if source.is_file() {
+        write_data(&root, &to, &fs::read(&source)?)
     } else {
-        copy_recursive(&source, &resolve(&state.root(Area::Data)?, &to)?)
+        Err(StorageError(format!("nothing to copy at {from}")))
     }
 }
 
@@ -499,6 +539,20 @@ mod tests {
         fs::write(dir.join("root/settings.json"), b"{}").unwrap();
         fs::write(dir.join("root/library/maps/m1/assets/map.png"), b"PNGDATA").unwrap();
         fs::canonicalize(dir).unwrap()
+    }
+
+    #[test]
+    fn data_writes_keep_a_history_that_listings_hide() {
+        let dir = test_dir("history");
+        let root = dir.join("root");
+        write_data(&root, "settings.json", b"{\"a\": 1}").unwrap();
+        let kept = root.join(history::HISTORY_DIR).join(history::today()).join("settings.json");
+        assert_eq!(fs::read(kept).unwrap(), b"{}");
+        let names: Vec<_> = list_area(&root, "").unwrap().into_iter().map(|e| e.name).collect();
+        assert_eq!(names, ["library", "settings.json"]);
+        assert!(write_data(&root, "History/x.json", b"{}").is_err());
+        assert!(resolve_writable(&root, "./history").is_err());
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

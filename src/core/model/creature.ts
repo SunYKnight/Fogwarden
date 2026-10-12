@@ -183,6 +183,8 @@ export type CreatureKind = z.infer<typeof creatureKindSchema>;
 export const creatureSchema = z.object({
   ...docHeader('creature'),
   kind: creatureKindSchema,
+  /** Character level of a player character (encounter difficulty, Creature tab); null for others. */
+  level: z.number().int().min(1).max(20).nullable().default(null),
   source: z.string(),
   license: z.string(),
   tags: z.array(z.string()),

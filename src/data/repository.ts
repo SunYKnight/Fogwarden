@@ -29,7 +29,9 @@ import {
   type Settings,
   type StorageArea,
 } from '@/core/model';
+import { formatItemFile, parseItemFile, type Item } from '@/core/items';
 import { readPngSize } from '@/core/png';
+import { formatSpellFile, parseSpellFile, type Spell } from '@/core/spells';
 import { formatTableFile, parseTableFile, type RandomTable } from '@/core/tables';
 import { HeightField } from '@/core/terrain/heightfield';
 import { decodeHeightmap, encodeHeightmap } from '@/core/terrain/heightmap';
@@ -54,14 +56,16 @@ import {
 } from './packs';
 import type { DirEntry, Storage } from './storage';
 
-export type LibraryKind = 'creature' | 'marker' | 'map' | 'table';
-export const LIBRARY_KINDS: LibraryKind[] = ['creature', 'marker', 'map', 'table'];
+export type LibraryKind = 'creature' | 'marker' | 'map' | 'table' | 'item' | 'spell';
+export const LIBRARY_KINDS: LibraryKind[] = ['creature', 'marker', 'map', 'table', 'item', 'spell'];
 
 export interface LibraryDocs {
   creature: Creature;
   marker: MarkerTemplate;
   map: BattleMap;
   table: RandomTable;
+  item: Item;
+  spell: Spell;
 }
 
 interface KindLayout {
@@ -79,6 +83,8 @@ export const KIND_LAYOUTS: Record<LibraryKind, KindLayout> = {
   marker: { dir: 'markers', file: '.json', folder: false, fallbackId: 'area' },
   map: { dir: 'maps', file: '/map.json', folder: true, fallbackId: 'map' },
   table: { dir: 'tables', file: '.txt', folder: false, fallbackId: 'table' },
+  item: { dir: 'items', file: '.md', folder: false, fallbackId: 'item' },
+  spell: { dir: 'spells', file: '.md', folder: false, fallbackId: 'spell' },
 };
 
 /** Reads and writes one kind; `reader` gets the kind folder listings of `sources` in the same order. */
@@ -98,6 +104,16 @@ const PICTURE_FILE = /^(.+?)(\.token)?\.(png|jpe?g|webp)$/i;
 /** A file in the creature folder of My content or a pack. */
 const CREATURE_FOLDER_FILE = /^(?:library|packs\/[a-z0-9-]+)\/creatures\/[^/]+$/;
 const MODEL_FILE = /\.(glb|gltf)$/i;
+/** Picture library folder of a pack root (Aurora Builder portraits and the like). */
+export const PORTRAITS_DIR = 'portraits';
+
+/** A picture in a `portraits/` folder of My content or a pack. */
+export interface PortraitEntry {
+  pack: string;
+  /** File name, e.g. `elf female druid.jpg`. */
+  name: string;
+  ref: AssetRef;
+}
 
 export type PictureKind = 'image' | 'token';
 type Pictures = Pick<Creature, PictureKind>;
@@ -129,8 +145,8 @@ export interface LibraryListing<K extends LibraryKind> {
 export interface PackInfo extends InstalledPack {
   manifest: PackManifest;
   enabled: boolean;
-  /** Documents per library kind plus 3D models (`.glb`/`.gltf` under `models/`). */
-  counts: Record<LibraryKind | 'model', number>;
+  /** Documents per library kind plus 3D models (`.glb`/`.gltf` under `models/`) and pictures in `portraits/`. */
+  counts: Record<LibraryKind | 'model' | 'portrait', number>;
 }
 
 export class DataError extends Error {
@@ -372,7 +388,9 @@ export class Repository {
         const { source } = pack;
         const lists = await this.kindFoldersOf(source);
         const models = (await this.listFiles(source.area, `${source.root}/models`)).filter((f) => MODEL_FILE.test(f));
-        const counts = { creature: 0, marker: 0, map: 0, table: 0, model: models.length };
+        const portraits = await this.storage.list(source.area, `${source.root}/${PORTRAITS_DIR}`);
+        const portrait = portraits.filter((e) => !e.isDir && PICTURE_FILE.test(e.name)).length;
+        const counts = { creature: 0, marker: 0, map: 0, table: 0, item: 0, spell: 0, model: models.length, portrait };
         LIBRARY_KINDS.forEach((kind, i) => {
           counts[kind] = docIds(kind, lists[i]!).length;
         });
@@ -396,6 +414,21 @@ export class Repository {
     if (!(await this.storage.exists('data', path))) {
       await this.storage.writeText(path, formatPackManifest(parsed));
     }
+  }
+
+  /** Pictures in the `portraits/` folders of My content and the enabled packs, by precedence, then name. */
+  async listPortraits(): Promise<PortraitEntry[]> {
+    const sources = await this.librarySources();
+    const folders = await Promise.all(sources.map((s) => this.storage.list(s.area, `${s.root}/${PORTRAITS_DIR}`)));
+    return sources.flatMap((source, i) =>
+      folders[i]!.filter((e) => !e.isDir && PICTURE_FILE.test(e.name))
+        .map((e) => ({
+          pack: source.pack,
+          name: e.name,
+          ref: { area: source.area, path: `${source.root}/${PORTRAITS_DIR}/${e.name}` },
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
   }
 
   // --- creatures ---
@@ -576,6 +609,8 @@ export class Repository {
       write: (target, doc) => this.storeMap(doc, target.pack),
     },
     table: this.textCodec('table', parseTableFile, formatTableFile),
+    item: this.textCodec('item', parseItemFile, formatItemFile),
+    spell: this.textCodec('spell', parseSpellFile, formatSpellFile),
   };
 
   private kindFolders(kind: LibraryKind, sources: LibrarySource[]): Promise<DirEntry[][]> {

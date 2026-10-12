@@ -83,6 +83,17 @@ describe('settings migration', () => {
     expect(migrated.packs).toEqual({ order: [], disabled: [] });
     expect(migrated.diagonalRule).toBe('5-10-5');
   });
+
+  it('drops the old tool import step from v9 settings and keeps the other steps', () => {
+    const done = { dataFolder: true, legacyImport: true, mapFromImage: false, sampleEncounter: true };
+    const v9 = { ...defaultSettings(), version: 9, onboarding: { dismissed: true, done } };
+    const migrated = migrate('settings', v9);
+    expect(migrated.onboarding).toEqual({
+      dismissed: true,
+      done: { dataFolder: true, mapFromImage: false, sampleEncounter: true },
+    });
+    expect(settingsSchema.parse(migrated).version).toBe(10);
+  });
 });
 
 describe('encounter migration', () => {
@@ -170,5 +181,13 @@ describe('atmosphere migrations', () => {
     const { audio: _unused, ...v7 } = defaultSettings();
     const migrated = settingsSchema.parse(migrate('settings', { ...v7, version: 7 }));
     expect(migrated.audio).toEqual(defaultSettings().audio);
+  });
+});
+
+describe('update settings migration', () => {
+  it('turns the automatic release check on for v8 settings', () => {
+    const { updates: _unused, ...v8 } = defaultSettings();
+    const migrated = settingsSchema.parse(migrate('settings', { ...v8, version: 8 }));
+    expect(migrated.updates).toEqual({ autoCheck: true, lastCheck: null });
   });
 });

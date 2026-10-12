@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const SETTINGS_SCHEMA_VERSION = 8;
+export const SETTINGS_SCHEMA_VERSION = 10;
 
 /** View of all player characters together; any other view is one player character's combatant id. */
 export const PARTY_VIEW = 'party';
@@ -13,7 +13,6 @@ export const onboardingSchema = z.object({
   dismissed: z.boolean(),
   done: z.object({
     dataFolder: z.boolean(),
-    legacyImport: z.boolean(),
     mapFromImage: z.boolean(),
     sampleEncounter: z.boolean(),
   }),
@@ -24,7 +23,7 @@ export type OnboardingStep = keyof Onboarding['done'];
 export function defaultOnboarding(): Onboarding {
   return {
     dismissed: false,
-    done: { dataFolder: false, legacyImport: false, mapFromImage: false, sampleEncounter: false },
+    done: { dataFolder: false, mapFromImage: false, sampleEncounter: false },
   };
 }
 
@@ -98,6 +97,18 @@ export function defaultAudioSettings(): AudioSettings {
   return { volume: 0.8, dmVolume: 1 };
 }
 
+export const updateSettingsSchema = z.object({
+  /** Look for a new release on start, at most once a day (Settings > About). */
+  autoCheck: z.boolean(),
+  /** ISO time of the last automatic check; null before the first. */
+  lastCheck: z.string().nullable(),
+});
+export type UpdateSettings = z.infer<typeof updateSettingsSchema>;
+
+export function defaultUpdateSettings(): UpdateSettings {
+  return { autoCheck: true, lastCheck: null };
+}
+
 export const settingsSchema = z.object({
   schema: z.literal('settings'),
   version: z.number().int().positive(),
@@ -124,6 +135,8 @@ export const settingsSchema = z.object({
   packs: packSettingsSchema,
   /** Sound volumes (Settings > Audio, Play > Sound). */
   audio: audioSettingsSchema,
+  /** Release checks of the desktop app (Settings > About). */
+  updates: updateSettingsSchema,
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -141,5 +154,6 @@ export function defaultSettings(): Settings {
     playerLinks: defaultPlayerLinks(),
     packs: defaultPackSettings(),
     audio: defaultAudioSettings(),
+    updates: defaultUpdateSettings(),
   };
 }

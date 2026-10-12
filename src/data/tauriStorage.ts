@@ -1,5 +1,6 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { AssetRef, StorageArea } from '@/core/model';
+import type { HistoryListing, RestoreFile } from './history';
 import type { DirEntry, Storage, StorageRoots } from './storage';
 
 const PATH_HEADER = 'x-storage-path';
@@ -93,4 +94,29 @@ export function writeFileBytes(absolutePath: string, bytes: Uint8Array): Promise
   return invoke<void>('storage_write_file_bytes', bytes, {
     headers: { [PATH_HEADER]: encodeURIComponent(absolutePath) },
   });
+}
+
+/** Every version kept in the data root's history (desktop only). */
+export function listHistory(): Promise<HistoryListing> {
+  return invoke<HistoryListing>('history_list');
+}
+
+/** Drops history folders older than 30 days, then the oldest beyond 2 GiB (desktop only). */
+export function pruneHistory(): Promise<void> {
+  return invoke<void>('history_prune');
+}
+
+/** Drops the versions kept more than `olderThanDays` days ago (desktop only). */
+export function cleanHistory(olderThanDays: number): Promise<void> {
+  return invoke<void>('history_clean', { olderThanDays });
+}
+
+/** Writes kept versions back; what they replace stays in the history (desktop only). */
+export function restoreHistory(files: RestoreFile[]): Promise<void> {
+  return invoke<void>('history_restore', { files });
+}
+
+/** Shows the history folder in the OS file manager (desktop only). */
+export function openHistoryFolder(): Promise<void> {
+  return invoke<void>('history_open_folder');
 }
