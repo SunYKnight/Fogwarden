@@ -1,0 +1,226 @@
+import { TransformControls } from '@react-three/drei';
+import { createPortal, useThree } from '@react-three/fiber';
+import { useCallback } from 'react';
+import { create } from 'zustand';
+import { newId, type AssetRef, type MapPoint, type Prop, type WorldVec3 } from '@/core/model';
+import { usePropObjects } from '@/render/props/propObjects';
+import { useAppStore } from '@/state/appStore';
+import { useEditorStore } from '@/state/editorStore';
+import { CheckboxField } from '@/ui/components/fields';
+import type { EditorTool } from '../../tool';
+import { addItem, editItem, editorMap } from './documentEdits';
+import { OverlayMarker } from './drafting';
+
+// glTF stores meters (Blender's unit) and the map uses feet.
+const METERS_TO_FEET = 3.28084;
+const DEG = 180 / Math.PI;
+const ROTATION_SNAP_DEG = 15;
+const SCALE_SNAP = 0.1;
+const MODEL_FILE = /\.(glb|gltf)$/i;
+
+export type GizmoMode = 'translate' | 'rotate' | 'scale';
+const GIZMO_MODES: GizmoMode[] = ['translate', 'rotate', 'scale'];
+
+interface PropToolState {
+  /** Imported model waiting for a click on the map. */
+  pending: { asset: AssetRef; name: string } | null;
+  /** Last imported model, so it can be placed again without importing twice. */
+  last: { asset: AssetRef; name: string } | null;
+  importing: boolean;
+  gizmo: GizmoMode;
+  snap: boolean;
+  cursor: MapPoint | null;
+}
+
+export const usePropTool = create<PropToolState>(() => ({
+  pending: null,
+  last: null,
+  importing: false,
+  gizmo: 'translate',
+  snap: true,
+  cursor: null,
+}));
+
+/** Copies the chosen model file (plus .bin/texture files of a .gltf) into the map's asset folder. */
+async function importModel(files: File[]): Promise<void> {
+  const model = files.find((f) => MODEL_FILE.test(f.name));
+  if (!model) {
+    throw new Error('Choose a .glb or .gltf file');
+  }
+  const map = editorMap();
+  const { repository } = useAppStore.getState();
+  usePropTool.setState({ importing: true });
+  try {
+    const refs = await Promise.all(
+      files.map(
+        async (f) =>
+          [f, await repository.importMapAsset(map.id, f.name, new Uint8Array(await f.arrayBuffer()))] as const,
+      ),
+    );
+    const asset = refs.find(([f]) => f === model)![1];
+    const imported = { asset, name: model.name.replace(MODEL_FILE, '') };
+    usePropTool.setState({ pending: imported, last: imported });
+  } finally {
+    usePropTool.setState({ importing: false });
+  }
+}
+
+function placeProp(point: MapPoint): void {
+  const { pending } = usePropTool.getState();
+  if (pending) {
+    const prop: Prop = {
+      id: newId(),
+      name: pending.name,
+      asset: pending.asset,
+      position: [point.x, point.elevationFt, point.y],
+      rotationDeg: [0, 0, 0],
+      scale: [METERS_TO_FEET, METERS_TO_FEET, METERS_TO_FEET],
+      projectMap: false,
+      occludesSight: true,
+      blocksMovement: true,
+      walkable: false,
+    };
+    addItem('Add prop', (d) => d.props, prop, 'prop');
+    usePropTool.setState({ pending: null });
+  }
+}
+
+/** Gizmo mode buttons shared by the prop tool and the prop selection panel. */
+export function GizmoModeButtons() {
+  const gizmo = usePropTool((s) => s.gizmo);
+  return (
+    <div className="row">
+      {GIZMO_MODES.map((mode) => (
+        <button
+          key={mode}
+          className={mode === gizmo ? 'active' : ''}
+          onClick={() => usePropTool.setState({ gizmo: mode })}
+        >
+          {mode}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PropToolPanel() {
+  const { pending, last, importing, snap } = usePropTool();
+  const reportError = useAppStore((s) => s.reportError);
+  return (
+    <>
+      <div className="field">
+        <label>Import model</label>
+        <input
+          type="file"
+          accept=".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp,.ktx2"
+          multiple
+          disabled={importing}
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = '';
+            importModel(files).catch(reportError);
+          }}
+        />
+      </div>
+      <p className="muted">
+        {importing
+          ? 'Importing…'
+          : pending
+            ? `Click the map to place “${pending.name}”.`
+            : 'Select a .glb, or a .gltf together with its .bin and texture files.'}
+      </p>
+      {last && !pending && (
+        <button onClick={() => usePropTool.setState({ pending: last })}>Place “{last.name}” again</button>
+      )}
+      <h3>Gizmo for the selected prop</h3>
+      <GizmoModeButtons />
+      <CheckboxField label="Snap to grid" value={snap} onChange={(v) => usePropTool.setState({ snap: v })} />
+    </>
+  );
+}
+
+function rounded(values: number[]): WorldVec3 {
+  const [x, y, z] = values.map((v) => Math.round(v * 1000) / 1000);
+  return [x!, y!, z!];
+}
+
+function sameVec(a: WorldVec3, b: WorldVec3): boolean {
+  return a.every((v, i) => v === b[i]);
+}
+
+/** TransformControls on the selected prop's scene object; one undo step per drag. */
+function PropGizmo() {
+  const scene = useThree((s) => s.scene);
+  const id = useEditorStore((s) => (s.selection?.kind === 'prop' ? s.selection.id : null));
+  const feetPerSquare = useEditorStore((s) => s.map?.grid.feetPerSquare ?? 5);
+  const object = usePropObjects((s) => (id ? s.objects[id] : undefined));
+  const { gizmo, snap } = usePropTool();
+  const commit = useCallback(() => {
+    try {
+      if (object && id) {
+        const position = rounded(object.position.toArray());
+        const rotationDeg = rounded([object.rotation.x * DEG, object.rotation.y * DEG, object.rotation.z * DEG]);
+        const scale = rounded(object.scale.toArray());
+        editItem(
+          'Transform prop',
+          (d) => d.props,
+          id,
+          (prop) => {
+            if (!sameVec(prop.position, position)) prop.position = position;
+            if (!sameVec(prop.rotationDeg, rotationDeg)) prop.rotationDeg = rotationDeg;
+            if (!sameVec(prop.scale, scale)) prop.scale = scale;
+          },
+        );
+      }
+    } catch (error) {
+      useAppStore.getState().reportError(error);
+    }
+  }, [object, id]);
+  // Outside MapView's pointer group: gizmo clicks never reach tools as hits.
+  return object
+    ? createPortal(
+        <TransformControls
+          object={object}
+          mode={gizmo}
+          translationSnap={snap ? feetPerSquare : null}
+          rotationSnap={snap ? ROTATION_SNAP_DEG / DEG : null}
+          scaleSnap={snap ? SCALE_SNAP : null}
+          onMouseUp={commit}
+        />,
+        scene,
+      )
+    : null;
+}
+
+function PropToolOverlay() {
+  const cursor = usePropTool((s) => s.cursor);
+  const pending = usePropTool((s) => s.pending);
+  return (
+    <group>
+      <PropGizmo />
+      {pending && cursor && <OverlayMarker position={cursor} color="#c56cf0" />}
+    </group>
+  );
+}
+
+export const propTool: EditorTool = {
+  id: 'prop',
+  label: 'Prop',
+  icon: '◈',
+  group: 'scene',
+  shortcut: 'p',
+  hint: 'Import a .glb/.gltf in the side panel, click to place it; click a prop to move, rotate or scale it',
+  onPointer: (event) => {
+    const select = event.type === 'down' && event.button === 0 && event.hit?.kind === 'prop';
+    if (event.point && event.type === 'move') {
+      usePropTool.setState({ cursor: event.point });
+    } else if (select && event.hit) {
+      useEditorStore.getState().select({ kind: 'prop', id: event.hit.id, vertex: null });
+    } else if (event.point && event.type === 'down' && event.button === 0) {
+      placeProp(event.point);
+    }
+  },
+  Panel: PropToolPanel,
+  Overlay: PropToolOverlay,
+  deactivate: () => usePropTool.setState({ pending: null, cursor: null }),
+};
