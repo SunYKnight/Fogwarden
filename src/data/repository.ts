@@ -8,6 +8,8 @@ import {
   markerTemplateSchema,
   newId,
   nowIso,
+  portraitIndexSchema,
+  PORTRAITS_SCHEMA_VERSION,
   settingsSchema,
   type AssetRef,
   type BattleMap,
@@ -16,6 +18,7 @@ import {
   type DocRef,
   type Encounter,
   type MarkerTemplate,
+  type Portraits,
   type Settings,
   type StorageArea,
 } from '@/core/model';
@@ -43,6 +46,7 @@ const LIBRARY_DIRS: Record<LibraryKind, { data: string; content: string }> = {
 };
 
 const SETTINGS_PATH = 'settings.json';
+const PORTRAITS_PATH = 'library/portraits.json';
 
 export interface LibraryEntry<K extends LibraryKind> {
   ref: DocRef;
@@ -81,6 +85,12 @@ export function libraryDocPath(kind: LibraryKind, area: StorageArea, id: string)
 
 export function mapAssetRef(mapId: string, fileName: string): AssetRef {
   return { area: 'data', path: `${LIBRARY_DIRS.map.data}/${mapId}/assets/${fileName}` };
+}
+
+/** Where an imported creature picture is stored; `kind` keeps image and token files of one creature apart. */
+export function creatureAssetRef(creatureId: string, kind: 'image' | 'token', fileName: string): AssetRef {
+  const safeName = fileName.replace(/[^\w.\- ]+/g, '_');
+  return { area: 'data', path: `${LIBRARY_DIRS.creature.data}/assets/${creatureId}-${kind}-${safeName}` };
 }
 
 export function campaignPath(id: string): string {
@@ -254,5 +264,18 @@ export class Repository {
     const parsed = settingsSchema.parse(settings);
     await this.writeDoc(SETTINGS_PATH, parsed);
     return parsed;
+  }
+
+  /** Portraits attached to creatures without editing them; none before the first is attached. */
+  async loadPortraits(): Promise<Portraits> {
+    const exists = await this.storage.exists('data', PORTRAITS_PATH);
+    const index = exists && (await this.readDoc('portraits', portraitIndexSchema, 'data', PORTRAITS_PATH));
+    return index ? index.portraits : {};
+  }
+
+  async savePortraits(portraits: Portraits): Promise<Portraits> {
+    const index = portraitIndexSchema.parse({ schema: 'portraits', version: PORTRAITS_SCHEMA_VERSION, portraits });
+    await this.writeDoc(PORTRAITS_PATH, index);
+    return index.portraits;
   }
 }

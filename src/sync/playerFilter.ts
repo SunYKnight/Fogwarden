@@ -1,4 +1,4 @@
-import type { BattleMap, Combatant, Encounter } from '@/core/model';
+import type { AssetRef, BattleMap, Combatant, Encounter } from '@/core/model';
 import { FOG_VISIBLE, fogCellAt, type FogCells } from '@/core/vision/fog';
 import { currentCombatant } from '@/state/encounterActions';
 import type { PlayerCombatant, PlayerEncounter } from './protocol';
@@ -43,8 +43,8 @@ function visibleTo(combatant: Combatant, fog: FogCells | null): boolean {
   return cell >= 0 && fog?.cells[cell] === FOG_VISIBLE;
 }
 
-function toPlayer(combatant: Combatant): PlayerCombatant {
-  const { id, name, side, size, position, facingDeg, conditions, token, visionSource } = combatant;
+function toPlayer(combatant: Combatant, token: AssetRef | null): PlayerCombatant {
+  const { id, name, side, size, position, facingDeg, conditions, visionSource } = combatant;
   return {
     id,
     name,
@@ -59,20 +59,29 @@ function toPlayer(combatant: Combatant): PlayerCombatant {
   };
 }
 
+export interface PlayerViewOptions {
+  /** The DM's choice to show the turn order of the sent combatants. */
+  showTurnOrder: boolean;
+  standees: boolean;
+  /** Token picture of a combatant; the DM side resolves creature pictures and portraits here. */
+  tokenOf: (combatant: Combatant) => AssetRef | null;
+}
+
+const PLAIN_VIEW: PlayerViewOptions = { showTurnOrder: false, standees: true, tokenOf: (c) => c.token };
+
 /**
  * Encounter as players may see it: hidden combatants never, other non-player combatants only while they
  * stand in a currently visible fog cell; markers the DM shares; door states without closed secret doors.
- * `showTurnOrder` is the DM's choice to show the turn order of these combatants.
  */
 export function filterEncounterForPlayers(
   encounter: Encounter,
   map: BattleMap | null,
   fog: FogCells | null,
-  showTurnOrder = false,
+  view: PlayerViewOptions = PLAIN_VIEW,
 ): PlayerEncounter {
   const combatants = encounter.combatants
     .filter((c) => !c.hiddenFromPlayers && (c.side === 'player' || visibleTo(c, fog)))
-    .map(toPlayer);
+    .map((c) => toPlayer(c, view.tokenOf(c)));
   const active = currentCombatant(encounter);
   const secret = new Set(map?.openings.filter((o) => o.secret).map((o) => o.id) ?? []);
   const openingStates = Object.fromEntries(
@@ -83,7 +92,8 @@ export function filterEncounterForPlayers(
     round: encounter.round,
     activeCombatantId: active && combatants.some((c) => c.id === active.id) ? active.id : null,
     combatants,
-    showTurnOrder,
+    showTurnOrder: view.showTurnOrder,
+    standees: view.standees,
     markers: encounter.markers.filter((m) => m.visibleToPlayers),
     openingStates,
   };

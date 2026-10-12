@@ -35,4 +35,5 @@ export const NAV_ITEMS: NavItem[] = [
     matches: (r) => r.page === 'campaigns',
   },
   { id: 'play', label: 'Play', icon: 'play', route: { page: 'play' }, matches: (r) => r.page === 'play' },
+  { id: 'server', label: 'Server', icon: 'server', route: { page: 'server' }, matches: (r) => r.page === 'server' },
 ];

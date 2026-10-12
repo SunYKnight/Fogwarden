@@ -1,22 +1,59 @@
+import { useFrame, useThree } from '@react-three/fiber';
+import { useEffect, useMemo, useRef } from 'react';
+import { Mesh, PerspectiveCamera, Vector3, type Group, type Intersection, type Raycaster, type Texture } from 'three';
 import type { AssetRef, CreatureSize, MapPoint, Side } from '@/core/model';
+import { useAppStore } from '@/state/appStore';
+import { usePlayerStore } from '@/ui/player/playerStore';
 import { TextLabel, type LabelLine } from '../TextLabel';
-import type { HitTag } from '../mapRenderContext';
+import { useMapRender, type HitTag } from '../mapRenderContext';
+import { cardHeightRatio, tokenInitials } from './standee';
+import {
+  FRAME_MATERIALS,
+  initialsCard,
+  PLAIN_TOP_MATERIALS,
+  portraitLook,
+  RING_MATERIALS,
+  ringGeometry,
+  SIDE_COLORS,
+  SIDE_MATERIALS,
+  TOKEN_GEOMETRY,
+} from './tokenMaterials';
 import { TOKEN_DIAMETER_FT } from './tokenPlacement';
 import { useAssetTexture } from './useAssetTexture';
 
-export const SIDE_COLORS: Record<Side, string> = {
-  player: '#3d8bfd',
-  ally: '#46b45a',
-  enemy: '#e04040',
-  neutral: '#e0c040',
-};
-
 const DISC_HEIGHT_FT = 0.6;
-const GHOST_OPACITY = 0.4;
+const BASE_HEIGHT_FT = 0.4;
+const CARD_DEPTH_FT = 0.12;
+/** Card width per token diameter. */
+const CARD_WIDTH = 0.85;
+/** Card frame around the picture per card width. */
+const CARD_BORDER = 0.05;
+const LABEL_GAP_FT = 0.8;
 const NO_RAYCAST = () => undefined;
+const view = new Vector3();
 
 function healthColor(fraction: number): string {
   return fraction > 0.5 ? '#4caf50' : fraction > 0.25 ? '#e0a030' : fraction > 0 ? '#e04040' : '#777777';
+}
+
+// Pointer events must report the ground under a standee, not a point high on
+// the card: drops, the ruler and markers aim at the floor. Card meshes are
+// children of the billboard group, whose parent stands at the token centre.
+function raycastToBase(this: Mesh, raycaster: Raycaster, intersects: Intersection[]): void {
+  const first = intersects.length;
+  Mesh.prototype.raycast.call(this, raycaster, intersects);
+  for (let i = first; i < intersects.length; i++) {
+    this.parent?.parent?.getWorldPosition(intersects[i]!.point);
+  }
+}
+
+/** Standees in the perspective camera unless the DM chose discs; players follow the DM's choice. */
+function useStandees(): boolean {
+  const { mode } = useMapRender();
+  const dmChoice = useAppStore((s) => s.settings?.tokenStandees ?? true);
+  const playerChoice = usePlayerStore((s) => s.encounter?.standees ?? true);
+  const perspective = useThree((s) => s.camera instanceof PerspectiveCamera);
+  return perspective && (mode === 'player' ? playerChoice : dmChoice);
 }
 
 export interface TokenViewProps {
@@ -37,47 +74,146 @@ export interface TokenViewProps {
   caption?: string;
 }
 
-/** Token disc with the creature picture on top, a ring in the side color, name label and health band. */
+interface PartProps {
+  side: Side;
+  radius: number;
+  texture: Texture | null;
+  ghost: boolean;
+  raycast: typeof NO_RAYCAST | undefined;
+}
+
+function Disc({ side, radius, texture, ghost, raycast }: PartProps) {
+  const look = ghost ? 'ghost' : 'solid';
+  return (
+    <>
+      <mesh
+        geometry={TOKEN_GEOMETRY.cylinder}
+        material={SIDE_MATERIALS[side][look]}
+        scale={[radius, DISC_HEIGHT_FT, radius]}
+        raycast={raycast}
+        castShadow
+      />
+      <mesh
+        geometry={TOKEN_GEOMETRY.circle}
+        material={texture ? portraitLook(texture).disc[look] : PLAIN_TOP_MATERIALS[look]}
+        position-y={DISC_HEIGHT_FT + 0.02}
+        scale={radius * 0.82}
+        raycast={raycast}
+      />
+    </>
+  );
+}
+
+interface StandeeProps extends PartProps {
+  name: string;
+  frame: 'current' | 'selected' | null;
+  cardWidth: number;
+  cardHeight: number;
+}
+
+function Standee({ side, radius, texture, ghost, raycast, name, frame, cardWidth, cardHeight }: StandeeProps) {
+  const look = ghost ? 'ghost' : 'solid';
+  const billboard = useRef<Group>(null);
+  const initials = tokenInitials(name);
+  const plain = useMemo(() => (texture ? null : initialsCard(initials, SIDE_COLORS[side])), [texture, initials, side]);
+  useEffect(
+    () => () => {
+      plain?.texture.dispose();
+      plain?.materials.solid.dispose();
+      plain?.materials.ghost.dispose();
+    },
+    [plain],
+  );
+
+  // Only the vertical axis turns: the card stays upright like a paper mini.
+  useFrame(({ camera }) => {
+    const group = billboard.current;
+    if (group) {
+      camera.getWorldDirection(view);
+      group.rotation.y = Math.atan2(-view.x, -view.z);
+    }
+  });
+
+  const border = cardWidth * CARD_BORDER;
+  const picture = texture ? portraitLook(texture).card[look] : plain?.materials[look];
+  const cardRaycast = raycast ?? raycastToBase;
+  return (
+    <>
+      <mesh
+        geometry={TOKEN_GEOMETRY.cylinder}
+        material={SIDE_MATERIALS[side][look]}
+        scale={[radius, BASE_HEIGHT_FT, radius]}
+        raycast={raycast}
+        castShadow={!ghost}
+      />
+      <group ref={billboard} position-y={BASE_HEIGHT_FT}>
+        <mesh
+          geometry={TOKEN_GEOMETRY.box}
+          material={(frame ? FRAME_MATERIALS[frame] : SIDE_MATERIALS[side])[look]}
+          scale={[cardWidth + border * 2, cardHeight + border * 2, CARD_DEPTH_FT]}
+          raycast={cardRaycast}
+          castShadow={!ghost}
+        />
+        <mesh
+          geometry={TOKEN_GEOMETRY.plane}
+          material={picture}
+          position={[0, border, CARD_DEPTH_FT / 2 + 0.01]}
+          scale={[cardWidth, cardHeight, 1]}
+          raycast={cardRaycast}
+        />
+      </group>
+    </>
+  );
+}
+
+/**
+ * Combatant token: a disc with the creature picture on top in the top view, an upright card on a base
+ * (billboard around the vertical axis) in the 3D view. Side color, selection and current-turn rings, name
+ * label and health band are the same in both.
+ */
 export function TokenView(props: TokenViewProps) {
   const { id, name, side, size, position, health, ghost = false, interactive = true } = props;
   const texture = useAssetTexture(props.token);
-  const radius = (TOKEN_DIAMETER_FT[size] / 2) * 0.92;
+  const standee = useStandees();
+  const diameter = TOKEN_DIAMETER_FT[size];
+  const radius = (diameter / 2) * 0.92;
+  const cardWidth = diameter * CARD_WIDTH;
+  const cardHeight = cardWidth * (texture ? portraitLook(texture).cardRatio : cardHeightRatio(null));
   const hit: HitTag = { kind: 'token', id };
   const raycast = interactive ? undefined : NO_RAYCAST;
-  const material = { transparent: ghost, opacity: ghost ? GHOST_OPACITY : 1, depthWrite: !ghost };
+  const part = { side, radius, texture, ghost, raycast };
+  const frame = props.current ? 'current' : props.selected ? 'selected' : null;
   const labelLines: LabelLine[] = [
     { text: name },
     ...(props.caption ? [{ text: props.caption, color: '#d4a24c', bold: true }] : []),
   ];
+  const cardTop = BASE_HEIGHT_FT + cardHeight + cardWidth * CARD_BORDER * 2;
+  const ringInner = radius * 1.05;
   return (
     <group position={[position.x, position.elevationFt, position.y]} userData={interactive ? { hit } : {}}>
-      <mesh position={[0, DISC_HEIGHT_FT / 2, 0]} raycast={raycast} castShadow>
-        <cylinderGeometry args={[radius, radius, DISC_HEIGHT_FT, 40]} />
-        <meshStandardMaterial color={SIDE_COLORS[side]} {...material} />
-      </mesh>
-      <mesh position={[0, DISC_HEIGHT_FT + 0.02, 0]} rotation-x={-Math.PI / 2} raycast={raycast}>
-        <circleGeometry args={[radius * 0.82, 40]} />
-        <meshBasicMaterial
-          key={texture?.uuid ?? 'plain'}
-          map={texture}
-          color={texture ? '#ffffff' : '#2a2d35'}
-          {...material}
+      {standee ? (
+        <Standee {...part} name={name} frame={frame} cardWidth={cardWidth} cardHeight={cardHeight} />
+      ) : (
+        <Disc {...part} />
+      )}
+      {frame && (
+        <mesh
+          geometry={ringGeometry(ringInner, ringInner + 0.6)}
+          material={RING_MATERIALS[frame]}
+          position-y={0.08}
+          raycast={NO_RAYCAST}
         />
-      </mesh>
-      {(props.selected || props.current) && (
-        <mesh position={[0, 0.08, 0]} rotation-x={-Math.PI / 2} raycast={NO_RAYCAST}>
-          <ringGeometry args={[radius * 1.05, radius * 1.05 + 0.6, 48]} />
-          <meshBasicMaterial color={props.current ? '#ffc940' : '#ffffff'} />
-        </mesh>
       )}
       {props.selected && props.current && (
-        <mesh position={[0, 0.08, 0]} rotation-x={-Math.PI / 2} raycast={NO_RAYCAST}>
-          <ringGeometry args={[radius * 1.05 + 0.7, radius * 1.05 + 1.1, 48]} />
-          <meshBasicMaterial color="#ffffff" />
-        </mesh>
+        <mesh
+          geometry={ringGeometry(ringInner + 0.7, ringInner + 1.1)}
+          material={RING_MATERIALS.selected}
+          position-y={0.08}
+          raycast={NO_RAYCAST}
+        />
       )}
       <TextLabel
-        position={[0, DISC_HEIGHT_FT, radius + 1.4]}
+        position={standee ? [0, cardTop + LABEL_GAP_FT, 0] : [0, DISC_HEIGHT_FT, radius + 1.4]}
         lines={labelLines}
         bar={health === null ? null : { fraction: health, color: healthColor(health) }}
         opacity={ghost ? 0.6 : 1}

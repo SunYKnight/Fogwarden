@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Combatant, Encounter } from '@/core/model';
-import { SIDE_COLORS } from '@/render/tokens/TokenView';
+import { SIDE_COLORS } from '@/render/tokens/tokenMaterials';
 import { currentCombatant, moveCombatant } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { OptionalNumberInput } from '../creature/creatureFields';

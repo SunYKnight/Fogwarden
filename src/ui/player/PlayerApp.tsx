@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SCENE_LAYERS } from '@/render/layers';
 import { MapView } from '@/render/MapView';
-import { SIDE_COLORS } from '@/render/tokens/TokenView';
+import { SIDE_COLORS } from '@/render/tokens/tokenMaterials';
 import type { PlayerEncounter, SyncTransport } from '@/sync/protocol';
 import type { WebSocketTransport } from '@/sync/wsTransport';
 import { usePlayerStore } from './playerStore';

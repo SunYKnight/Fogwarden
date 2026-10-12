@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const SETTINGS_SCHEMA_VERSION = 3;
+export const SETTINGS_SCHEMA_VERSION = 5;
 
 export const encounterLocatorSchema = z.object({ campaignId: z.string(), encounterId: z.string() });
 export type EncounterLocator = z.infer<typeof encounterLocatorSchema>;
@@ -25,6 +25,40 @@ export function defaultOnboarding(): Onboarding {
   };
 }
 
+export const remoteSettingsSchema = z.object({
+  /** Relay base URL, e.g. `https://dmtool.example.org`; empty until set up. */
+  url: z.string(),
+  /** Secret the install script created; authenticates this app as the DM. */
+  dmKey: z.string(),
+  /** Inputs of the install script and the SSH deploy; passwords are never stored. */
+  setup: z.object({
+    domain: z.string(),
+    /** Let's Encrypt account email; empty skips certbot. */
+    email: z.string(),
+    appPort: z.number().int().min(1024).max(65535),
+  }),
+  ssh: z.object({
+    host: z.string(),
+    port: z.number().int().min(1).max(65535),
+    user: z.string(),
+    /** Private key file; null means password login. */
+    keyPath: z.string().nullable(),
+  }),
+  /** Trusted SSH host key fingerprints by `host:port`, confirmed on first connect. */
+  knownHosts: z.record(z.string(), z.string()),
+});
+export type RemoteSettings = z.infer<typeof remoteSettingsSchema>;
+
+export function defaultRemoteSettings(): RemoteSettings {
+  return {
+    url: '',
+    dmKey: '',
+    setup: { domain: '', email: '', appPort: 7718 },
+    ssh: { host: '', port: 22, user: 'root', keyPath: null },
+    knownHosts: {},
+  };
+}
+
 export const settingsSchema = z.object({
   schema: z.literal('settings'),
   version: z.number().int().positive(),
@@ -39,6 +73,10 @@ export const settingsSchema = z.object({
   /** Encounter the Play screen shows; survives restarts so "Continue" works. */
   lastEncounter: encounterLocatorSchema.nullable(),
   onboarding: onboardingSchema,
+  /** Tokens stand upright as picture cards in the 3D view (DM and players); false keeps discs. */
+  tokenStandees: z.boolean(),
+  /** Internet relay for remote players (Server page). */
+  remote: remoteSettingsSchema,
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -51,5 +89,7 @@ export function defaultSettings(): Settings {
     lan: { port: 7717 },
     lastEncounter: null,
     onboarding: defaultOnboarding(),
+    tokenStandees: true,
+    remote: defaultRemoteSettings(),
   };
 }

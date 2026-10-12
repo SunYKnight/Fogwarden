@@ -4,7 +4,9 @@ import { useAppStore } from '@/state/appStore';
 
 /** Dialogs reachable from every page; `CompendiumDialogHost` renders them. */
 export type CompendiumDialog =
-  { kind: 'creature-import'; text: string } | { kind: 'new-encounter'; campaignId: string | null; map: DocRef | null };
+  | { kind: 'creature-import'; text: string }
+  | { kind: 'new-encounter'; campaignId: string | null; map: DocRef | null }
+  | { kind: 'attach-portraits'; folder: string; files: string[] };
 
 export const useCompendiumDialogStore = create<{ dialog: CompendiumDialog | null }>(() => ({ dialog: null }));
 

@@ -2,13 +2,15 @@ import {
   CAMPAIGN_SCHEMA_VERSION,
   CREATURE_SCHEMA_VERSION,
   defaultOnboarding,
+  defaultRemoteSettings,
   ENCOUNTER_SCHEMA_VERSION,
   MAP_SCHEMA_VERSION,
   MARKER_SCHEMA_VERSION,
+  PORTRAITS_SCHEMA_VERSION,
   SETTINGS_SCHEMA_VERSION,
 } from '@/core/model';
 
-export type SchemaName = 'creature' | 'map' | 'marker' | 'campaign' | 'encounter' | 'settings';
+export type SchemaName = 'creature' | 'map' | 'marker' | 'campaign' | 'encounter' | 'settings' | 'portraits';
 
 type Migration = (doc: Record<string, unknown>) => Record<string, unknown>;
 
@@ -19,6 +21,7 @@ export const CURRENT_VERSION: Record<SchemaName, number> = {
   campaign: CAMPAIGN_SCHEMA_VERSION,
   encounter: ENCOUNTER_SCHEMA_VERSION,
   settings: SETTINGS_SCHEMA_VERSION,
+  portraits: PORTRAITS_SCHEMA_VERSION,
 };
 
 /**
@@ -36,7 +39,12 @@ const MIGRATIONS: Record<SchemaName, Migration[]> = {
     ({ lastCampaignId: _unused, ...rest }) => ({ ...rest, lastEncounter: null }),
     // v3: first steps progress for the Home page.
     (doc) => ({ ...doc, onboarding: defaultOnboarding() }),
+    // v4: tokens may stand upright in the 3D view.
+    (doc) => ({ ...doc, tokenStandees: true }),
+    // v5: internet relay connection and server setup.
+    (doc) => ({ ...doc, remote: defaultRemoteSettings() }),
   ],
+  portraits: [],
 };
 
 export class MigrationError extends Error {

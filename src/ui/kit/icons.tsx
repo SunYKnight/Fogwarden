@@ -12,6 +12,7 @@ export const ICON_PATHS = {
   swords: ['M14 4h6v6L9 21l-3-3z', 'M4 14l6 6', 'M3 21l3-3', 'M10 4H4v6l3 3'],
   play: ['M7 4l13 8-13 8z'],
   monitor: ['M3 4h18v12H3z', 'M8 20h8', 'M12 16v4'],
+  server: ['M4 4h16v7H4z', 'M4 13h16v7H4z', 'M8 7.5h.01M8 16.5h.01', 'M12 7.5h4M12 16.5h4'],
   settings: [
     circle(12, 12, 3),
     'M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1',

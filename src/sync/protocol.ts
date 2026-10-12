@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { AreaMarker, BattleMap, Combatant, OpeningState } from '@/core/model';
 import type { CameraState } from '@/render/CameraRig';
 
@@ -20,6 +21,8 @@ export interface PlayerEncounter {
   combatants: PlayerCombatant[];
   /** The DM lets players see the turn order as an initiative ribbon. */
   showTurnOrder: boolean;
+  /** The DM's token style for the 3D view: upright picture cards or discs. */
+  standees: boolean;
   markers: AreaMarker[];
   openingStates: Record<string, OpeningState>;
 }
@@ -46,6 +49,16 @@ export interface SyncMessage {
   from: 'dm' | 'player';
   payload: SyncPayload;
 }
+
+/**
+ * The only message a relay forwards from a player. Any protocol number passes, so a relay deployed once keeps
+ * working when the app bumps the protocol; strict objects reject smuggled extra fields.
+ */
+export const playerHelloSchema = z.strictObject({
+  protocol: z.number().int().nonnegative(),
+  from: z.literal('player'),
+  payload: z.strictObject({ type: z.literal('hello') }),
+});
 
 export interface SyncTransport {
   send(payload: SyncPayload): void;

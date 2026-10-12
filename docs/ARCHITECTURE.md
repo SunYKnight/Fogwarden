@@ -39,8 +39,15 @@ between modules.
 - `Storage` (`src/data/storage.ts`): area `'data'` (user data root) or `'content'` (shipped). Implementations:
   `TauriStorage` (desktop), `BrowserStorage` (IndexedDB, dev in a browser), `MemoryStorage` (tests),
   `NodeStorage` (`tools/nodeStorage.ts`, CLI tools; same path rules and atomic writes as the Rust side).
-- Data root layout: `library/{creatures,markers}/<id>.json`, `library/creatures/assets/` (creature images),
-  `library/maps/<id>/{map.json,assets/}`, `campaigns/<id>/{campaign.json,encounters/<id>.json}`, `settings.json`.
+- Data root layout: `library/{creatures,markers}/<id>.json`, `library/creatures/assets/` (creature images,
+  `creatureAssetRef`), `library/portraits.json` (portrait index), `library/maps/<id>/{map.json,assets/}`,
+  `campaigns/<id>/{campaign.json,encounters/<id>.json}`, `settings.json`.
+- Portrait index (`src/core/model/portraits.ts`, `repository.loadPortraits`/`savePortraits`, held in
+  `useLibraryStore.portraits`): creature id → `{image, token}` for creatures whose document stays untouched (shipped
+  ones). Token picture precedence `resolveTokenAsset`: combatant token > creature token > creature image > index
+  (token, then image); `creaturePortrait` (compendium) prefers images. `combatantToken`/`useCombatantToken`
+  (`libraryStore.ts`) resolve live, so new portraits reach running encounters. Desktop-only file access outside the
+  roots: `listFolder(path)`, `importFile(path, to)` (`tauriStorage.ts`, Rust `storage_list_folder`/`_import_file`).
 - Assets are `AssetRef {area, path}`; display them with `repository.storage.assetUrl(ref)` or `<AssetImage>`.
 
 ## Rules and imports
@@ -51,6 +58,10 @@ between modules.
 - `src/core/import/statblock.ts`: `parseStatBlock(text, meta)` reads stat blocks in the legacy raw file layout and
   throws `StatBlockError` naming the failing line. `legacy.ts` converts the WPF app's JSON (creatures, tile maps,
   markers). Imported documents get readable stable ids (`slugId`), so re-imports overwrite.
+- `src/core/import/portraitMatch.ts`: `matchPortraits(fileNames, creatures)` pairs picture files with creatures by
+  `portraitKey` (slug without extension and `source--` prefixes): id beats name beats family name ("Werewolf, Human
+  Form" → "werewolf"); a file fits all creatures sharing the key, the first sorted file wins per creature.
+  UI: `AttachPortraitsDialog` (Compendium header) previews, then copies into `library/creatures/assets/`.
 - CLI (`pnpm tsx tools/<script>.ts`, default data root = the desktop app's, override with `--data-root`):
   `import-statblocks.ts <folder> [--source <name>]`, `import-legacy.ts <240722_DnD_DMTool_Data folder>`,
   `build-srd.ts [--input <5e-SRD-Monsters.json>]` regenerates `content/creatures` and `content/markers`
@@ -148,9 +159,17 @@ between modules.
   `handleEncounterPointer` with transient state in `useEncounterUi`.
 - `TokenLayer` / `MarkerLayer` (`src/render/tokens`, `src/render/markers`): read `useEncounterStore` in `dm` mode and
   `usePlayerStore` in `player` mode. Tokens snap to whole squares by 5e size (`snapTokenPoint`).
+- `TokenView`: disc with the picture in the top view; in the perspective camera a standee (side-colored base, card
+  in a side/current/selected frame, height from `TOKEN_DIAMETER_FT` and the picture aspect, `standee.ts` crop math)
+  turned around Y each frame with a module-level scratch vector. Card meshes report hits at the token base
+  (`raycastToBase`) and DM tokens ignore the pointer while a token is dragged or placed. `settings.tokenStandees`
+  (DM) and `PlayerEncounter.standees` (players) choose standees. Geometry and materials are shared
+  (`tokenMaterials.ts`; per-texture materials die with the texture); `useAssetTexture` reference-counts one texture
+  per asset, decoded at most 1024 px.
 - Sync (`src/sync/protocol.ts`): the DM sends `map` (filtered for players), `encounter` (`PlayerEncounter`), `fog`
   (`PlayerFog`) and `camera`; the player sends `hello` to request a resend. Filtering happens on the DM side; the
-  player never receives hidden combatants, secret doors, hidden regions or notes.
+  player never receives hidden combatants, secret doors, hidden regions or notes. Combatant tokens are sent
+  resolved (`filterEncounterForPlayers(..., { showTurnOrder, standees, tokenOf })`).
   Transports: `TauriEventTransport`, `BroadcastChannelTransport` (`createLocalTransport(role)`), `WebSocketTransport`
   (`src/sync/wsTransport.ts`, LAN; reconnects with backoff, announces every connect with `hello`).
 - Player window: `player.html` → `PlayerApp` with `usePlayerStore` built only from received messages.
@@ -174,14 +193,52 @@ between modules.
   `/assets/*` (Vite bundle, public), `/asset/{area}/{path}?token=` (images and models only, path stays inside the
   storage root via `storage::resolve`; documents are never served), `/ws?token=` (relay). The relay forwards DM
   messages to all players and only a rebuilt `hello` from players; any other player message closes its socket.
-- Bundle files come from `app.asset_resolver()`: release builds embed `dist/`; dev builds (devUrl set) read `dist/`
-  from disk, so run `pnpm build` before testing the LAN view under `pnpm app:dev`. For player-code work, open
-  `http://localhost:1420/player.html?token=<t>&ws=ws://127.0.0.1:<port>/ws` on the Vite dev server instead.
+- Bundle files come from `app.asset_resolver()` (`src-tauri/src/frontend.rs`): release builds embed `dist/`; dev
+  builds (devUrl set) read `dist/` from disk, so run `pnpm build` before testing the LAN view under `pnpm app:dev`.
+  For player-code work, open `http://localhost:1420/player.html?token=<t>&ws=ws://127.0.0.1:<port>/ws` on the Vite
+  dev server instead.
 - DM side: `useLanStore` (`src/state/lanStore.ts`) holds the DM's `WebSocketTransport`; `DmApp` adds it to
-  `startDmPublisher`. UI: `LanControls` (`src/ui/shell/LanControls.tsx`) in the rail's Players popover (start/stop,
-  URLs, copy, QR code via `uqr`); the port is set under Settings.
+  `startDmPublisher`. UI: `LanControls` (`src/ui/shell/LanControls.tsx`) on the Server page and in the rail's
+  Players popover (start/stop, URLs, copy, QR code via `uqr`); the port is set under Settings.
 - Browser client: `player.html?token=` → `src/app/player.tsx` sets `useAppStore`'s repository to a read-only
   `LanStorage` (`src/data/lanStorage.ts`, `assetUrl` → `/asset/...`) before rendering `PlayerApp`.
+
+## Internet relay
+
+- The DM app connects out to a relay on a server the DM controls; the relay only receives what the player filter
+  already produced. Contract shared by both sides: `src/sync/relayApi.ts` (routes, limits, file type allowlists,
+  schemas); the only player message the relay forwards is validated with `playerHelloSchema` (`protocol.ts`), and
+  DM messages pass unparsed, so protocol bumps need no relay redeploy.
+- Relay (`server/`, Node 20+, `ws`): `createRelay({dmKey, dataDir})` (`relayServer.ts`), entry `relay.ts` (env
+  `DMTOOL_DM_KEY`, `DMTOOL_RELAY_PORT`, `DMTOOL_RELAY_HOST`, `DMTOOL_RELAY_DATA`), bundled by `pnpm build:server`
+  (`tools/build-server.ts`, esbuild) into `dist-server/relay.mjs`. Routes: `/health`; `/?t=<token>` and
+  `/player.html` (uploaded player page, sets the `/asset` token cookie); `/assets/*` (uploaded bundle, public);
+  `/asset/{area}/{path}?token=` (uploaded assets); `/ws` (players with `?token=`, the DM with the subprotocols
+  `dmtool-dm` + DM key, never in a logged URL). DM API with `Authorization: Bearer <key>`: `GET /api/session`
+  (player token, kept in `dataDir/session-token` across restarts, and player count), `POST /api/missing` (which
+  upload targets differ by SHA-256), `PUT /api/asset/{area}/{path}` and `PUT /api/bundle/{path}` (hash header
+  checked, 128 MiB limit, extension allowlist, `containedPath`, atomic rename). The relay pushes `{relay: {players}}`
+  frames to DM sockets, pings every 30 s and drops players more than 16 MiB behind.
+- Player bundle: `tools/vite-relay-plugin.ts` copies `relay.mjs` into `dist/` (so `pnpm build` fails without
+  `build:server`, which `pnpm build` runs first) and writes `dist/player-bundle.json` (every built file except
+  `index.html` and source maps, the player page last, with SHA-256). On connect the app reads them through the
+  `frontend_file` command and uploads what changed, so app updates never need a relay redeploy.
+- DM side: `useRelayStore` (`src/state/relayStore.ts`: `link`, `players`, `playerUrl`, `lastError`, `transport`)
+  and `src/sync/relayClient.ts`: `RelayUploader` (`ensure(refs)` uploads assets plus glTF/GLB side files found by
+  `modelSideFiles`, remembered per connection; `uploadBundle`) and `RelayTransport` (a `WebSocketTransport` whose
+  sends wait for the assets `collectAssetRefs` finds anywhere in the payload). `DmApp` adds the transport to
+  `startDmPublisher`. Plain `http://` URLs are refused except for loopback (the DM key would travel unencrypted).
+- Setup (`src-tauri/src/deploy.rs`, `russh` with `ring`): templates `src-tauri/src/deploy/install.sh` and
+  `dmtool-relay.nginx.conf` filled with the validated domain, email and port; commands `deploy_write_files(folder,
+setup)`, `deploy_host_key(host, port)` (`SHA256:` fingerprint, confirmed and stored in
+  `settings.remote.knownHosts` by the UI), `deploy_run(request, events)` (uploads to `~/dmtool-relay-setup/` with
+  `cat` over exec, runs the script as root, directly or via `sudo`, streams lines to a `Channel`, returns the DM key
+  from the `DMTOOL_DM_KEY=` line, which never reaches the log). The script installs Node 22 (NodeSource) when
+  needed, user and systemd unit `dmtool-relay`, `/etc/dmtool-relay/relay.env` with the DM key (kept on re-runs),
+  the nginx site (WebSocket upgrade on `/ws`) and, given an email, a certbot certificate.
+- UI: `src/ui/server/ServerPage.tsx` (rail entry Server): Local network (`LanControls`), Remote server (URL, DM key,
+  connect, connection test via `/health` + `/api/session`, link + QR), Set up a server (`DeployDialog`). Settings
+  `remote` (schema v5): `url`, `dmKey`, `setup`, `ssh` (no password), `knownHosts`.
 
 ## UI registries
 

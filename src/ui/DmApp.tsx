@@ -3,6 +3,7 @@ import { useAppStore, type Route } from '@/state/appStore';
 import { startAutosave } from '@/state/autosave';
 import { useLanStore } from '@/state/lanStore';
 import { useLibraryStore } from '@/state/libraryStore';
+import { useRelayStore } from '@/state/relayStore';
 import { startDmPublisher } from '@/sync/dmPublisher';
 import { startFogTracker } from '@/sync/fogTracker';
 import { createLocalTransport } from '@/sync/transports';
@@ -18,6 +19,7 @@ import { CompendiumPage } from './pages/CompendiumPage';
 import { MapsPage } from './pages/MapsPage';
 import { PlayPage } from './pages/PlayPage';
 import { refreshPlayerWindowState } from './playerWindow';
+import { ServerPage } from './server/ServerPage';
 import { SettingsPage } from './settings/SettingsPage';
 import { NavRail } from './shell/NavRail';
 
@@ -45,6 +47,9 @@ function Page({ route }: { route: Route }) {
     case 'settings':
       page = <SettingsPage />;
       break;
+    case 'server':
+      page = <ServerPage />;
+      break;
     case 'creature-editor':
       page = (
         <CreatureEditorPage key={route.ref ? `${route.ref.area}:${route.ref.id}` : 'new'} creatureRef={route.ref} />
@@ -60,9 +65,10 @@ export function DmApp() {
   const [ready, setReady] = useState(false);
   const [local] = useState(() => createLocalTransport('dm'));
   const lan = useLanStore((s) => s.transport);
+  const relay = useRelayStore((s) => s.transport);
 
   useEffect(() => startFogTracker(), []);
-  useEffect(() => startDmPublisher(lan ? [local, lan] : [local]), [local, lan]);
+  useEffect(() => startDmPublisher([local, ...(lan ? [lan] : []), ...(relay ? [relay] : [])]), [local, lan, relay]);
   useEffect(() => {
     useLanStore.getState().refresh().catch(reportError);
     refreshPlayerWindowState().catch(reportError);

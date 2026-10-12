@@ -1,3 +1,5 @@
+mod deploy;
+mod frontend;
 mod lan;
 mod storage;
 
@@ -22,9 +24,15 @@ pub fn run() {
             storage::storage_copy,
             storage::storage_copy_data_root,
             storage::storage_open_data_root,
+            storage::storage_list_folder,
+            storage::storage_import_file,
             lan::lan_start,
             lan::lan_stop,
             lan::lan_status,
+            frontend::frontend_file,
+            deploy::deploy_write_files,
+            deploy::deploy_host_key,
+            deploy::deploy_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the DM tool");

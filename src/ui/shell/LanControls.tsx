@@ -5,7 +5,7 @@ import { useAppStore } from '@/state/appStore';
 import { useLanStore, type LanInfo } from '@/state/lanStore';
 import { Button } from '../kit';
 
-function QrCode({ text }: { text: string }) {
+export function QrCode({ text }: { text: string }) {
   // Four modules of quiet zone: phone scanners miss codes with less.
   const { size, data } = useMemo(() => encode(text, { ecc: 'M', border: 4 }), [text]);
   const path = data.flatMap((row, y) => row.map((dark, x) => (dark ? `M${x} ${y}h1v1h-1z` : ''))).join('');

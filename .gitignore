@@ -1,5 +1,6 @@
 # build output
 dist/
+dist-server/
 artifacts/
 src-tauri/target/
 src-tauri/gen/schemas/

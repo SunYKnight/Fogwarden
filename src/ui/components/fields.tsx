@@ -81,9 +81,11 @@ interface TextFieldProps {
   onChange: (value: string) => void;
   multiline?: boolean;
   placeholder?: string;
+  /** Masks the value, e.g. keys and passwords. */
+  secret?: boolean;
 }
 
-export function TextField({ label, value, onChange, multiline, placeholder }: TextFieldProps) {
+export function TextField({ label, value, onChange, multiline, placeholder, secret = false }: TextFieldProps) {
   const [text, setText] = useDraft(value);
   const id = useId();
   const commit = () => {
@@ -105,6 +107,7 @@ export function TextField({ label, value, onChange, multiline, placeholder }: Te
       ) : (
         <input
           id={id}
+          type={secret ? 'password' : 'text'}
           value={text}
           placeholder={placeholder}
           onChange={(e) => setText(e.target.value)}

@@ -16,7 +16,7 @@ import {
 } from '@/core/model';
 import { abilityModifier, formatCr, formatModifier, proficiencyBonusForCr, xpForCr } from '@/core/rules/abilities';
 import { averageDice } from '@/core/rules/dice';
-import type { Repository } from '@/data/repository';
+import { creatureAssetRef, type Repository } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { AssetImage } from '../components/AssetImage';
 import { CheckboxField, Field, NumberField, SelectField, TextField } from '../components/fields';
@@ -42,10 +42,9 @@ async function importCreatureAsset(
   kind: 'image' | 'token',
   file: File,
 ): Promise<AssetRef> {
-  const safeName = file.name.replace(/[^\w.\- ]+/g, '_');
-  const path = `library/creatures/assets/${creatureId}-${kind}-${safeName}`;
-  await repository.storage.writeBytes(path, new Uint8Array(await file.arrayBuffer()));
-  return { area: 'data', path };
+  const ref = creatureAssetRef(creatureId, kind, file.name);
+  await repository.storage.writeBytes(ref.path, new Uint8Array(await file.arrayBuffer()));
+  return ref;
 }
 
 function ImageField(props: {

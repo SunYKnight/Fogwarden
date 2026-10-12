@@ -1,7 +1,9 @@
 import { bytesToBase64 } from '@/core/binary';
 import type { BattleMap } from '@/core/model';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
+import { useAppStore } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
+import { combatantToken, useLibraryStore } from '@/state/libraryStore';
 import { useDmCameraStore } from './cameraStore';
 import { usePlayerViewStore } from './playerViewStore';
 import { filterEncounterForPlayers, filterMapForPlayers, playerMapInputs } from './playerFilter';
@@ -46,8 +48,14 @@ export function startDmPublisher(transports: SyncTransport[]): () => void {
   const publishEncounter = (force: boolean) => {
     const { map, encounter } = useEncounterStore.getState();
     const fog = useFogViewStore.getState().fog;
-    const showTurnOrder = usePlayerViewStore.getState().showTurnOrder;
-    const player = encounter ? filterEncounterForPlayers(encounter, map, fog, showTurnOrder) : null;
+    const library = useLibraryStore.getState();
+    const player =
+      encounter &&
+      filterEncounterForPlayers(encounter, map, fog, {
+        showTurnOrder: usePlayerViewStore.getState().showTurnOrder,
+        standees: useAppStore.getState().settings?.tokenStandees ?? true,
+        tokenOf: (c) => combatantToken(c, library),
+      });
     const json = JSON.stringify(player);
     if (json !== sentEncounter || force) {
       sentEncounter = json;
@@ -96,6 +104,14 @@ export function startDmPublisher(transports: SyncTransport[]): () => void {
     }),
     useDmCameraStore.subscribe(() => publishCamera(false)),
     usePlayerViewStore.subscribe(() => publishEncounter(false)),
+    useLibraryStore.subscribe((state, previous) => {
+      if (state.listings.creature !== previous.listings.creature || state.portraits !== previous.portraits) {
+        publishEncounter(false);
+      }
+    }),
+    useAppStore.subscribe((state, previous) => {
+      if (state.settings !== previous.settings) publishEncounter(false);
+    }),
     ...transports.map((transport) =>
       transport.subscribe((payload) => {
         if (payload.type === 'hello') {

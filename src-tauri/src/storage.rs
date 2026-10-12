@@ -244,12 +244,10 @@ pub fn storage_write_bytes(state: State<'_, StorageState>, request: Request<'_>)
     }
 }
 
-#[tauri::command]
-pub fn storage_list(state: State<'_, StorageState>, area: Area, path: String) -> Result<Vec<Entry>, StorageError> {
-    let dir = resolve(&state.root(area)?, &path)?;
+fn list_dir(dir: &Path) -> Result<Vec<Entry>, StorageError> {
     let mut entries = Vec::new();
     if dir.is_dir() {
-        for item in fs::read_dir(&dir)? {
+        for item in fs::read_dir(dir)? {
             let item = item?;
             entries.push(Entry {
                 name: item.file_name().to_string_lossy().into_owned(),
@@ -259,6 +257,37 @@ pub fn storage_list(state: State<'_, StorageState>, area: Area, path: String) ->
     }
     entries.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(entries)
+}
+
+#[tauri::command]
+pub fn storage_list(state: State<'_, StorageState>, area: Area, path: String) -> Result<Vec<Entry>, StorageError> {
+    list_dir(&resolve(&state.root(area)?, &path)?)
+}
+
+/// Entries of a folder the user picked in a native dialog, outside the storage roots.
+#[tauri::command]
+pub fn storage_list_folder(path: String) -> Result<Vec<Entry>, StorageError> {
+    let dir = PathBuf::from(&path);
+    if dir.is_absolute() && dir.is_dir() {
+        list_dir(&dir)
+    } else {
+        Err(StorageError(format!("not a folder: {path}")))
+    }
+}
+
+/// Copies the file `from`, an absolute path outside the storage roots, to `to` inside `root`.
+fn import_file(root: &Path, from: &Path, to: &str) -> Result<(), StorageError> {
+    if from.is_absolute() && from.is_file() {
+        write_atomic(&resolve(root, to)?, &fs::read(from)?)
+    } else {
+        Err(StorageError(format!("not a file: {}", from.display())))
+    }
+}
+
+/// Copies a file the user picked (absolute path) into the data area.
+#[tauri::command]
+pub fn storage_import_file(state: State<'_, StorageState>, from: String, to: String) -> Result<(), StorageError> {
+    import_file(&state.root(Area::Data)?, Path::new(&from), &to)
 }
 
 #[tauri::command]
@@ -392,6 +421,22 @@ mod tests {
         assert!(copy_data_root(&root, &dir.join("missing")).is_err());
         assert!(copy_data_root(&root, Path::new("relative")).is_err());
         assert_eq!(fs::read(full.join("keep.txt")).unwrap(), b"x");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn imports_a_picked_file_into_the_data_area() {
+        let dir = test_dir("import");
+        let picked = dir.join("picked");
+        fs::create_dir_all(&picked).unwrap();
+        fs::write(picked.join("goblin.jpg"), b"JPG").unwrap();
+        let root = dir.join("root");
+        import_file(&root, &picked.join("goblin.jpg"), "library/creatures/assets/g.jpg").unwrap();
+        assert_eq!(fs::read(root.join("library/creatures/assets/g.jpg")).unwrap(), b"JPG");
+        assert!(import_file(&root, Path::new("goblin.jpg"), "x.jpg").is_err());
+        assert!(import_file(&root, &picked, "x.jpg").is_err());
+        assert!(import_file(&root, &picked.join("goblin.jpg"), "../escape.jpg").is_err());
+        assert!(!dir.join("escape.jpg").exists());
         fs::remove_dir_all(dir).unwrap();
     }
 }

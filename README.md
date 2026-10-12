@@ -1,7 +1,7 @@
 # DnD DM Tool
 
 Desktop app for a 5e Dungeon Master: turn 2D battlemaps into 3D scenes, run encounters, and show players a
-fog-of-war view on a second screen or in any browser on the local network.
+fog-of-war view on a second screen or in any browser on the local network or the internet.
 
 - **Map editor**: calibrate the grid to the battlemap image, sculpt terrain, draw walls with doors and windows, rooms
   with roofs, regions, lights and imported Blender models (`.glb`/`.gltf`). The image is projected from above onto
@@ -10,8 +10,8 @@ fog-of-war view on a second screen or in any browser on the local network.
   doors, measuring.
 - **Libraries**: creatures (334 SRD 5.1 monsters shipped, stat block import from text), area markers, maps,
   campaigns.
-- **Player view**: second window or LAN browser; players only see what their characters can see (line of sight,
-  light, darkvision, truesight).
+- **Player view**: second window, LAN browser or any browser on the internet through a small relay server; players
+  only see what their characters can see (line of sight, light, darkvision, truesight).
 
 Background and design: [`PLAN.md`](PLAN.md). Code layout and module contracts:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -39,15 +39,34 @@ GUI smoke tests can drive the real WebView2 over its DevTools port:
 
 ```sh
 pnpm package        # release build; installer copied to artifacts/
+pnpm build:server   # internet relay only: dist-server/relay.mjs (part of pnpm build)
 ```
+
+## Play over the internet
+
+Players outside your network connect through a relay on a server you control; the app connects out to it, so
+nothing at home needs to be reachable. You need an Ubuntu 22.04/24.04 server with root or sudo SSH access and a DNS
+name pointing to it (ports 80 and 443 open).
+
+1. **Server** page > _Set up a server_: enter the domain, an email for the Let's Encrypt certificate and the relay
+   port (default 7718, only nginx talks to it).
+2. Either **Deploy via SSH** (host, user, key file or password; the password is never stored, the host key is shown
+   for confirmation on first connect) or **Download install script** and run `sudo bash install.sh` in the copied
+   folder on the server. The script installs Node.js 22, nginx, the `dmtool-relay` systemd service and the
+   certificate; it is safe to run again and keeps the DM key. It prints the DM key as `DMTOOL_DM_KEY=…`.
+3. _Remote server_: the URL (`https://<domain>`) and DM key are filled in after an SSH deploy; otherwise paste the
+   key. **Connect** uploads the player page and shows the player link with a QR code.
+
+Only filtered player data, map images, token images and models reach the server. App updates upload the new player
+page on the next connect; the server only needs a redeploy for relay changes (see the changelog).
 
 ## Where things live
 
 | What                       | Where                                                                                       |
 | -------------------------- | ------------------------------------------------------------------------------------------- |
-| Source                     | `src/`, `src-tauri/`, `tools/`                                                              |
+| Source                     | `src/`, `src-tauri/`, `server/` (internet relay), `tools/`                                  |
 | Shipped content (SRD only) | `content/`                                                                                  |
-| Build output               | `dist/`, `src-tauri/target/`, `artifacts/` (all gitignored)                                 |
+| Build output               | `dist/`, `dist-server/`, `src-tauri/target/`, `artifacts/` (all gitignored)                 |
 | Your data                  | `%APPDATA%/de.dnddmtool.desktop/` by default; change it in Settings (e.g. a Dropbox folder) |
 
 ## Import from the old WPF tool
@@ -60,6 +79,16 @@ pnpm tsx tools/import-statblocks.ts <folder> [--data-root <path>] [--source <nam
 ```
 
 Imports write into your data folder, never into the repo. Monster Manual text is copyrighted and stays out of git.
+
+## Creature pictures and standees
+
+Tokens show the creature picture: a disc in the top view, an upright standee in the 3D view (Settings > Rules
+switches standees off for you and your players). To give the shipped SRD creatures pictures, use **Compendium >
+Attach portraits from folder…** and pick a folder of PNG/JPEG/WebP files named after the creatures (`goblin.jpg`,
+`Adult Red Dragon.png`, `legacy--werewolf.jpg`; case, accents, punctuation and `legacy--` prefixes don't matter). The
+preview lists matched and unmatched files before anything is copied into your data folder; existing pictures are
+only replaced when you tick the box. One picture per creature also works in the creature editor's Image/Token
+fields; for shipped creatures that keeps the creature shipped and stores only the picture.
 
 ## License of shipped content
 

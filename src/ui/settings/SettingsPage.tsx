@@ -1,6 +1,6 @@
 import type { Settings } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
-import { NumberField, SelectField } from '../components/fields';
+import { CheckboxField, NumberField, SelectField } from '../components/fields';
 import { PageHeader, Section } from '../kit';
 import { AboutSection } from './AboutSection';
 import { DataSection } from './DataSection';
@@ -37,6 +37,11 @@ export function SettingsPage() {
                 options={['5-5-5', '5-10-5'] as const}
                 format={(v) => (v === '5-5-5' ? 'Every diagonal 5 ft (PHB)' : 'Alternate 5/10 ft (DMG variant)')}
                 onChange={(v) => save({ ...settings, diagonalRule: v })}
+              />
+              <CheckboxField
+                label="Standees in the 3D view (DM and players)"
+                value={settings.tokenStandees}
+                onChange={(tokenStandees) => save({ ...settings, tokenStandees })}
               />
             </Section>
             <AboutSection />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSettings, settingsSchema } from '@/core/model';
+import { defaultRemoteSettings, defaultSettings, settingsSchema } from '@/core/model';
 import { migrate, MigrationError } from './migrations';
 import { MemoryStorage } from './memoryStorage';
 import { Repository } from './repository';
@@ -49,5 +49,14 @@ describe('settings migration', () => {
     storage.files.data.set('settings.json', JSON.stringify({ ...v3, version: 2 }));
     const loaded = await new Repository(storage).loadSettings();
     expect(loaded).toEqual(defaultSettings());
+  });
+
+  it('adds empty relay settings to v4 settings and keeps the rest', () => {
+    const { remote: _unused, ...v4 } = { ...defaultSettings(), tokenStandees: false, lan: { port: 9000 } };
+    const migrated = settingsSchema.parse(migrate('settings', { ...v4, version: 4 }));
+    expect(migrated.remote).toEqual(defaultRemoteSettings());
+    expect(migrated.remote.url).toBe('');
+    expect(migrated.tokenStandees).toBe(false);
+    expect(migrated.lan.port).toBe(9000);
   });
 });

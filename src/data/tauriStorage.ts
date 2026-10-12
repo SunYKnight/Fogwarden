@@ -59,3 +59,13 @@ export function copyDataRootTo(absolutePath: string): Promise<StorageRoots> {
 export function openDataRootFolder(): Promise<void> {
   return invoke<void>('storage_open_data_root');
 }
+
+/** Entries of a folder the user picked, outside the storage roots (desktop only). */
+export function listFolder(absolutePath: string): Promise<DirEntry[]> {
+  return invoke<DirEntry[]>('storage_list_folder', { path: absolutePath });
+}
+
+/** Copies the picked file `absolutePath` into the data area at `to` (desktop only). */
+export function importFile(absolutePath: string, to: string): Promise<void> {
+  return invoke<void>('storage_import_file', { from: absolutePath, to });
+}

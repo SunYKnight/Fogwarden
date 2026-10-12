@@ -7,6 +7,7 @@ import { AssetImage } from '../components/AssetImage';
 import { Field, TextField } from '../components/fields';
 import { StatBlock } from '../creature/StatBlock';
 import { Button, Dialog, Icon } from '../kit';
+import { AttachPortraitsDialog } from './AttachPortraitsDialog';
 import { closeCompendiumDialog, useCompendiumDialogStore } from './compendiumUi';
 
 function CreatureImportDialog({ initialText }: { initialText: string }) {
@@ -220,6 +221,8 @@ export function CompendiumDialogHost() {
     shown = <CreatureImportDialog initialText={dialog.text} />;
   } else if (dialog?.kind === 'new-encounter') {
     shown = <NewEncounterDialog campaignId={dialog.campaignId} initialMap={dialog.map} />;
+  } else if (dialog?.kind === 'attach-portraits') {
+    shown = <AttachPortraitsDialog folder={dialog.folder} files={dialog.files} />;
   }
   return shown;
 }

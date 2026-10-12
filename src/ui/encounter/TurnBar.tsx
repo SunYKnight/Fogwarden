@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Combatant, CreatureAction, Encounter } from '@/core/model';
 import { formatModifier } from '@/core/rules/abilities';
 import type { RollMode } from '@/core/rules/dice';
-import { SIDE_COLORS } from '@/render/tokens/TokenView';
+import { SIDE_COLORS } from '@/render/tokens/tokenMaterials';
 import { useAppStore } from '@/state/appStore';
 import { currentCombatant, type AttackResult } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';

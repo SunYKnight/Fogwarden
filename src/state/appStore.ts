@@ -15,6 +15,7 @@ export type Route =
   | { page: 'compendium'; tab: CompendiumTab }
   | { page: 'campaigns'; campaignId: string | null }
   | { page: 'play' }
+  | { page: 'server' }
   | { page: 'settings' }
   | { page: 'creature-editor'; ref: DocRef | null };
 

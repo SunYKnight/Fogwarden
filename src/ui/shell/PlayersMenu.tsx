@@ -2,6 +2,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { useAppStore } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLanStore } from '@/state/lanStore';
+import { useRelayStore } from '@/state/relayStore';
 import { useDmCameraStore } from '@/sync/cameraStore';
 import { usePlayerViewStore } from '@/sync/playerViewStore';
 import { CheckboxField, SelectField } from '../components/fields';
@@ -14,10 +15,14 @@ import { LanControls } from './LanControls';
 export function usePlayersStatus(): string {
   const playerWindow = usePlayerWindowStore((s) => s);
   const lan = useLanStore((s) => s.info);
+  const remoteLink = useRelayStore((s) => s.link);
+  const remotePlayers = useRelayStore((s) => s.players);
   const parts = [
     playerWindow.open && playerWindow.monitor ? `Window on ${monitorLabel(playerWindow.monitor)}` : null,
     playerWindow.open && !playerWindow.monitor ? 'Window' : null,
     lan ? `LAN ${lan.players} ${lan.players === 1 ? 'player' : 'players'}` : null,
+    remoteLink === 'online' ? `Remote ${remotePlayers} ${remotePlayers === 1 ? 'player' : 'players'}` : null,
+    remoteLink === 'connecting' || remoteLink === 'reconnecting' ? 'Remote connecting' : null,
   ].filter((p) => p !== null);
   return parts.length > 0 ? parts.join(' · ') : 'Off';
 }

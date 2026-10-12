@@ -1,9 +1,10 @@
 import { useMemo, useState, type MouseEvent } from 'react';
-import { CREATURE_TYPES, newId, nowIso, type Creature } from '@/core/model';
+import { CREATURE_TYPES, creaturePortrait, newId, nowIso, type Creature } from '@/core/model';
 import { formatCr } from '@/core/rules/abilities';
 import type { LibraryEntry } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
+import { AssetImage } from '../components/AssetImage';
 import { StatBlock } from '../creature/StatBlock';
 import { Button, confirmDialog, EmptyState, Icon, openContextMenu, type MenuItem } from '../kit';
 import { openCreatureImport } from './compendiumUi';
@@ -125,6 +126,7 @@ export function CreatureLibrary() {
   const navigate = useAppStore((s) => s.navigate);
   const listing = useLibraryStore((s) => s.listings.creature);
   const refresh = useLibraryStore((s) => s.refresh);
+  const portraits = useLibraryStore((s) => s.portraits);
   const [filter, setFilter] = useState(NO_FILTER);
   const [sort, setSort] = useState<SortKey>('name');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -135,6 +137,7 @@ export function CreatureLibrary() {
     [listing, filter, sort],
   );
   const selected = listing.entries.find((e) => e.ref.id === selectedId) ?? null;
+  const selectedPortrait = selected && creaturePortrait(selected.doc, portraits[selected.ref.id]);
 
   const edit = (entry: Entry) => navigate({ page: 'creature-editor', ref: entry.ref });
 
@@ -220,6 +223,11 @@ export function CreatureLibrary() {
               }}
               onContextMenu={(e) => showMenu(e, entry)}
             >
+              <AssetImage
+                asset={creaturePortrait(entry.doc, portraits[entry.ref.id])}
+                alt=""
+                className="creature-row-thumb"
+              />
               <span className="row-name">{entry.doc.name}</span>
               <span className="row-cr">CR {formatCr(entry.doc.challenge)}</span>
               <span className="muted row-type">{entry.doc.type}</span>
@@ -263,6 +271,13 @@ export function CreatureLibrary() {
                 />
               )}
             </div>
+            {selectedPortrait && (
+              <AssetImage
+                asset={selectedPortrait}
+                alt={`Portrait of ${selected.doc.name}`}
+                className="creature-portrait"
+              />
+            )}
             <StatBlock creature={selected.doc} />
           </>
         ) : (

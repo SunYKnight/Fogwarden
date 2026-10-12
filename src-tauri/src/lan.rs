@@ -25,6 +25,7 @@ use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tokio_util::io::ReaderStream;
 
+use crate::frontend;
 use crate::storage::{self, Area, StorageError, StorageState};
 
 const PLAYERS_EVENT: &str = "lan-players";
@@ -97,13 +98,8 @@ impl LanHost for AppHost {
         Ok(self.0.state::<StorageState>().root(area)?)
     }
 
-    // Release builds embed dist/ in the executable. Dev builds (devUrl set)
-    // embed nothing and Tauri reads ../dist from disk: run `pnpm build` first.
     fn frontend_file(&self, path: &str) -> Option<(Vec<u8>, String)> {
-        self.0
-            .asset_resolver()
-            .get(path.to_owned())
-            .map(|asset| (asset.bytes, asset.mime_type))
+        frontend::read(&self.0, path)
     }
 
     fn players_changed(&self, count: usize) {
