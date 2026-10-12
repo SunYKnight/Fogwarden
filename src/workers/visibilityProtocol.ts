@@ -10,5 +10,9 @@ export type VisibilityRequest =
   | { type: 'compute'; id: number; state: VisionState };
 
 export type VisibilityResponse =
-  /** `visible` per fog cell: FOG_VISIBLE or 0; `ms` is the compute time inside the worker. */
-  { type: 'result'; id: number; visible: Uint8Array; ms: number } | { type: 'error'; id: number; message: string };
+  /**
+   * `visible`: per fog cell FOG_VISIBLE or 0, by vision source id; `ms` is the compute time inside the
+   * worker.
+   */
+  | { type: 'result'; id: number; visible: Map<string, Uint8Array<ArrayBuffer>>; ms: number }
+  | { type: 'error'; id: number; message: string };

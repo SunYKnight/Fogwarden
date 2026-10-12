@@ -10,8 +10,9 @@ fog-of-war view on a second screen or in any browser on the local network or the
   doors, measuring.
 - **Libraries**: creatures (334 SRD 5.1 monsters shipped, stat block import from text), area markers, maps,
   campaigns.
-- **Player view**: second window, LAN browser or any browser on the internet through a small relay server; players
-  only see what their characters can see (line of sight, light, darkvision, truesight).
+- **Player view**: second window, LAN browser or any browser on the internet through a small relay server; each
+  screen sees through one character's eyes or the whole party's (line of sight, light, darkvision, truesight), with
+  explored areas remembered per character.
 
 Background and design: [`PLAN.md`](PLAN.md). Code layout and module contracts:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -55,10 +56,19 @@ name pointing to it (ports 80 and 443 open).
    folder on the server. The script installs Node.js 22, nginx, the `dmtool-relay` systemd service and the
    certificate; it is safe to run again and keeps the DM key. It prints the DM key as `DMTOOL_DM_KEY=…`.
 3. _Remote server_: the URL (`https://<domain>`) and DM key are filled in after an SSH deploy; otherwise paste the
-   key. **Connect** uploads the player page and shows the player link with a QR code.
+   key. **Connect** uploads the player page and shows the player links with a QR code.
 
 Only filtered player data, map images, token images and models reach the server. App updates upload the new player
-page on the next connect; the server only needs a redeploy for relay changes (see the changelog).
+page on the next connect; the server only needs a redeploy for relay changes (see the changelog). The app refuses
+an outdated relay and asks you to run the setup again.
+
+## Player links
+
+On the Server page and in the rail's Players popover (LAN), _Link for_ picks a view: **Party** shows what all
+characters see and have explored, each player character's link only what that character sees and remembers. The
+links stay valid across restarts and work for LAN and relay alike (with the respective address); **New link**
+replaces a view's link and disconnects everyone still using the old one. Characters' links belong to the open
+encounter. The player window picks its view under Players > _Shows_.
 
 ## Where things live
 

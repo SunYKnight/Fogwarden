@@ -2245,3 +2245,10 @@ kbd {
   align-items: center;
   padding: 3px 8px;
 }
+
+/* Player links: one view picked from a list, its link and QR code */
+.player-links-head > .field {
+  flex: 1;
+  grid-template-columns: auto 1fr;
+  margin-bottom: 0;
+}

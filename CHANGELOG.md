@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Player views per character: every player screen shows either one player character's sight or the party's
+  (union of all vision sources). Each vision source keeps its own explored fog (encounter schema v2; the shared
+  explored area of older encounters goes to every player character and vision source); the Fog menu's "Reset
+  explored" asks for one character or all. Player links: one per view (Party plus each player character of the open
+  encounter) with copy, QR code and "New link", on the Server page and in the Players popover; tokens are HMAC-derived
+  from a secret in the settings (schema v6, also the player window's view, picked under Players > Shows), stay valid
+  across restarts and work on LAN and relay. A replaced or removed link disconnects its players at once and their
+  page says so. Both relays route each DM message only to the players of its views (sync protocol 2, relay API 2:
+  `PUT /api/links`, view-prefixed frames, per-view player counts); **the internet relay must be updated** (run the
+  server setup again), and the app refuses an older relay. The player page shows its view's name. LAN links no
+  longer change on every start. `tools/bench-visibility.ts` measures the visibility and per-view costs.
 - Map editor: step tabs (Ground, Walls, Areas, Light & objects) with labelled tools and their options in one tool
   bar; inspector shows only the selection or step help and layers; map settings dialog (name, grid calibration with
   pick on the map, lighting, ground); status bar with cursor position, terrain height, snapping and save state;

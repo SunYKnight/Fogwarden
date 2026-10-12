@@ -1,4 +1,6 @@
+import { isTauri } from '@tauri-apps/api/core';
 import { useEffect, useState, type ReactNode } from 'react';
+import { PARTY_VIEW } from '@/core/model';
 import { useAppStore, type Route } from '@/state/appStore';
 import { startAutosave } from '@/state/autosave';
 import { useLanStore } from '@/state/lanStore';
@@ -6,7 +8,8 @@ import { useLibraryStore } from '@/state/libraryStore';
 import { useRelayStore } from '@/state/relayStore';
 import { startDmPublisher } from '@/sync/dmPublisher';
 import { startFogTracker } from '@/sync/fogTracker';
-import { createLocalTransport } from '@/sync/transports';
+import { createLocalTransport, LocalViewTransport } from '@/sync/transports';
+import { startViewLinks, useViewLinksStore } from '@/sync/views';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CreatureEditorPage } from './creature/CreatureEditorPage';
 import { MapEditorPage } from './editor/MapEditorPage';
@@ -18,7 +21,7 @@ import { CampaignsPage } from './pages/CampaignsPage';
 import { CompendiumPage } from './pages/CompendiumPage';
 import { MapsPage } from './pages/MapsPage';
 import { PlayPage } from './pages/PlayPage';
-import { refreshPlayerWindowState } from './playerWindow';
+import { refreshPlayerWindowState, usePlayerWindowStore } from './playerWindow';
 import { ServerPage } from './server/ServerPage';
 import { SettingsPage } from './settings/SettingsPage';
 import { NavRail } from './shell/NavRail';
@@ -63,11 +66,18 @@ export function DmApp() {
   const route = useAppStore((s) => s.route);
   const reportError = useAppStore((s) => s.reportError);
   const [ready, setReady] = useState(false);
-  const [local] = useState(() => createLocalTransport('dm'));
+  const [local] = useState(() => new LocalViewTransport(createLocalTransport('dm')));
   const lan = useLanStore((s) => s.transport);
   const relay = useRelayStore((s) => s.transport);
+  const windowOpen = usePlayerWindowStore((s) => s.open);
+  const chosenView = useAppStore((s) => s.settings?.playerWindow.view ?? PARTY_VIEW);
+  // A character of another encounter falls back to the party.
+  const windowView = useViewLinksStore((s) => (s.views.some((v) => v.id === chosenView) ? chosenView : PARTY_VIEW));
 
   useEffect(() => startFogTracker(), []);
+  useEffect(() => startViewLinks(), []);
+  // In the browser the window is a tab the app cannot track.
+  useEffect(() => local.setView(windowOpen || !isTauri() ? windowView : null), [local, windowOpen, windowView]);
   useEffect(() => startDmPublisher([local, ...(lan ? [lan] : []), ...(relay ? [relay] : [])]), [local, lan, relay]);
   useEffect(() => {
     useLanStore.getState().refresh().catch(reportError);

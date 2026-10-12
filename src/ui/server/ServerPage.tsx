@@ -4,10 +4,12 @@ import { useState } from 'react';
 import type { RemoteSettings } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import { useRelayStore, type RelayLink } from '@/state/relayStore';
+import { RELAY_LINK_PARAM } from '@/sync/relayApi';
 import { testRelay } from '@/sync/relayClient';
 import { NumberField, TextField } from '../components/fields';
 import { Button, PageHeader, Section } from '../kit';
-import { LanControls, QrCode } from '../shell/LanControls';
+import { LanControls } from '../shell/LanControls';
+import { PlayerLinks } from '../shell/PlayerLinks';
 import { DeployDialog } from './DeployDialog';
 import { saveRemote, type ServerSetup } from './remoteSettings';
 
@@ -18,30 +20,10 @@ const LINK_TEXT: Record<RelayLink, string> = {
   reconnecting: 'Connection lost, reconnecting…',
 };
 
-function PlayerLink({ url }: { url: string }) {
-  const reportError = useAppStore((s) => s.reportError);
-  const notify = useAppStore((s) => s.notify);
-  return (
-    <div className="col">
-      <div className="row">
-        <code className="grow small lan-url">{url}</code>
-        <Button
-          icon="copy"
-          label="Copy link"
-          iconOnly
-          variant="ghost"
-          onClick={() => navigator.clipboard.writeText(url).then(() => notify('Link copied', 'info'), reportError)}
-        />
-      </div>
-      <QrCode text={url} />
-    </div>
-  );
-}
-
 function RemoteSection({ remote }: { remote: RemoteSettings }) {
   const reportError = useAppStore((s) => s.reportError);
   const notify = useAppStore((s) => s.notify);
-  const { link, players, playerUrl, lastError } = useRelayStore();
+  const { link, players, baseUrl, lastError } = useRelayStore();
   const [testing, setTesting] = useState(false);
   const ready = remote.url.trim() !== '' && remote.dmKey.trim() !== '';
   const connected = link !== 'off';
@@ -102,7 +84,7 @@ function RemoteSection({ remote }: { remote: RemoteSettings }) {
         {link === 'online' && ` · ${players} ${players === 1 ? 'player' : 'players'}`}
       </p>
       {lastError && <p className="error-text small">{lastError}</p>}
-      {playerUrl && <PlayerLink url={playerUrl} />}
+      {baseUrl && <PlayerLinks linkOf={(token) => `${baseUrl}/?${RELAY_LINK_PARAM}=${token}`} />}
     </Section>
   );
 }

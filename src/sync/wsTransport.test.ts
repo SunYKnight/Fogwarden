@@ -1,22 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SYNC_PROTOCOL_VERSION, type SyncMessage, type SyncPayload } from './protocol';
-import type { Role } from './transports';
-import { RECONNECT_DELAYS_MS, WebSocketTransport } from './wsTransport';
+import { RELAY_LINK_REVOKED } from './relayApi';
+import { RECONNECT_DELAYS_MS, ViewSocketTransport, WebSocketTransport } from './wsTransport';
 
 class FakeSocket {
   readyState: number = WebSocket.CONNECTING;
-  readonly sent: SyncMessage[] = [];
+  readonly sent: string[] = [];
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: unknown }) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event: { code: number }) => void) | null = null;
 
   send(data: string): void {
-    this.sent.push(JSON.parse(data) as SyncMessage);
+    this.sent.push(data);
   }
 
-  close(): void {
+  close(code = 1000): void {
     this.readyState = WebSocket.CLOSED;
-    this.onclose?.();
+    this.onclose?.({ code });
   }
 
   open(): void {
@@ -24,25 +24,46 @@ class FakeSocket {
     this.onopen?.();
   }
 
-  receive(from: Role, payload: SyncPayload, protocol: number = SYNC_PROTOCOL_VERSION): void {
-    this.onmessage?.({ data: JSON.stringify({ protocol, from, payload }) });
+  receive(text: string): void {
+    this.onmessage?.({ data: text });
   }
 }
 
-const hello: SyncMessage = { protocol: SYNC_PROTOCOL_VERSION, from: 'player', payload: { type: 'hello' } };
+const message = (from: SyncMessage['from'], payload: SyncPayload, protocol: number = SYNC_PROTOCOL_VERSION) =>
+  JSON.stringify({ protocol, from, payload });
+const hello = message('player', { type: 'hello' });
 const map: SyncPayload = { type: 'map', revision: 1, map: null };
 
-function setup(role: Role) {
+function fakeSockets() {
   const sockets: FakeSocket[] = [];
-  const transport = new WebSocketTransport('ws://dm.test/ws?token=t', role, () => {
+  const create = () => {
     const socket = new FakeSocket();
     sockets.push(socket);
     return socket as unknown as WebSocket;
-  });
+  };
+  return { sockets, create };
+}
+
+function player() {
+  const { sockets, create } = fakeSockets();
+  const transport = new WebSocketTransport('ws://dm.test/ws?token=t', create);
   const received: SyncPayload[] = [];
   transport.subscribe((payload) => received.push(payload));
   return { transport, sockets, received };
 }
+
+function dm() {
+  const { sockets, create } = fakeSockets();
+  const transport = new ViewSocketTransport('ws://127.0.0.1/ws?token=d', create);
+  const resends: (string | null)[] = [];
+  const views: string[][] = [];
+  transport.onResend((view) => resends.push(view));
+  transport.watchViews((active) => views.push([...active]));
+  return { transport, sockets, resends, views };
+}
+
+const status = (views: Record<string, number>) =>
+  JSON.stringify({ relay: { players: Object.values(views).reduce((a, b) => a + b, 0), views } });
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -56,7 +77,7 @@ afterEach(() => {
 
 describe('WebSocketTransport', () => {
   it('player says hello on every connect, including reconnects', () => {
-    const { sockets } = setup('player');
+    const { sockets } = player();
     sockets[0]!.open();
     expect(sockets[0]!.sent).toEqual([hello]);
 
@@ -70,7 +91,7 @@ describe('WebSocketTransport', () => {
   });
 
   it('backs off while the server is unreachable and resets after a successful connect', () => {
-    const { sockets } = setup('player');
+    const { sockets } = player();
     const waits: number[] = [];
     for (let attempt = 0; attempt < RECONNECT_DELAYS_MS.length + 1; attempt += 1) {
       const before = sockets.length;
@@ -89,36 +110,17 @@ describe('WebSocketTransport', () => {
     expect(Date.now() - started).toBe(RECONNECT_DELAYS_MS[0]);
   });
 
-  it('drops messages sent while disconnected instead of sending them late', () => {
-    const { transport, sockets } = setup('dm');
-    transport.send(map);
+  it('delivers only current-protocol messages from the DM', () => {
+    const { sockets, received } = player();
     sockets[0]!.open();
-    expect(sockets[0]!.sent).toEqual([]);
-    transport.send(map);
-    expect(sockets[0]!.sent).toEqual([{ protocol: SYNC_PROTOCOL_VERSION, from: 'dm', payload: map }]);
-  });
-
-  it('DM hears a local hello on every connect so its publisher resends', () => {
-    const { sockets, received } = setup('dm');
-    sockets[0]!.open();
-    sockets[0]!.close();
-    vi.advanceTimersToNextTimer();
-    sockets[1]!.open();
-    expect(received).toEqual([{ type: 'hello' }, { type: 'hello' }]);
-    expect(sockets[1]!.sent).toEqual([]);
-  });
-
-  it('delivers only current-protocol messages from the other side', () => {
-    const { sockets, received } = setup('player');
-    sockets[0]!.open();
-    sockets[0]!.receive('dm', map);
-    sockets[0]!.receive('player', { type: 'hello' });
-    sockets[0]!.receive('dm', map, SYNC_PROTOCOL_VERSION + 1);
+    sockets[0]!.receive(message('dm', map));
+    sockets[0]!.receive(message('player', { type: 'hello' }));
+    sockets[0]!.receive(message('dm', map, SYNC_PROTOCOL_VERSION + 1));
     expect(received).toEqual([map]);
   });
 
   it('reports connects and disconnects to connection watchers', () => {
-    const { transport, sockets } = setup('player');
+    const { transport, sockets } = player();
     const states: boolean[] = [];
     const stop = transport.watchConnection((open) => states.push(open));
     sockets[0]!.open();
@@ -131,16 +133,69 @@ describe('WebSocketTransport', () => {
   });
 
   it('stops reconnecting once closed, also with a retry pending', () => {
-    const open = setup('player');
+    const open = player();
     open.sockets[0]!.open();
     open.transport.close();
     vi.runAllTimers();
     expect(open.sockets).toHaveLength(1);
 
-    const retrying = setup('player');
+    const retrying = player();
     retrying.sockets[0]!.close();
     retrying.transport.close();
     vi.runAllTimers();
     expect(retrying.sockets).toHaveLength(1);
+  });
+
+  it('gives up for good when the server withdraws the link', () => {
+    const { transport, sockets } = player();
+    sockets[0]!.open();
+    expect(transport.revoked).toBe(false);
+    sockets[0]!.close(RELAY_LINK_REVOKED);
+    vi.runAllTimers();
+    expect(sockets).toHaveLength(1);
+    expect(transport.revoked).toBe(true);
+  });
+});
+
+describe('ViewSocketTransport', () => {
+  it('sends view frames only for views with players and drops them while disconnected', () => {
+    const { transport, sockets, views } = dm();
+    transport.send(['party'], map);
+    sockets[0]!.open();
+    sockets[0]!.receive(status({ party: 1, thorin: 2 }));
+    transport.send(['party', 'elara', 'thorin'], map);
+    transport.send(['elara'], map);
+    expect(sockets[0]!.sent).toEqual([`party,thorin\n${message('dm', map)}`]);
+    expect(views).toEqual([[], ['party', 'thorin']]);
+
+    sockets[0]!.close();
+    expect(views.at(-1)).toEqual([]);
+    transport.send(['party'], map);
+    expect(sockets[0]!.sent).toHaveLength(1);
+  });
+
+  it('asks for a resend of one view on its hello and of all views after every reconnect', () => {
+    const { sockets, resends } = dm();
+    sockets[0]!.open();
+    sockets[0]!.receive(status({ party: 1 }));
+    expect(resends).toEqual([null]);
+    sockets[0]!.receive(`thorin\n${hello}`);
+    sockets[0]!.receive(status({ party: 1, thorin: 1 }));
+    expect(resends).toEqual([null, 'thorin']);
+
+    sockets[0]!.close();
+    vi.advanceTimersToNextTimer();
+    sockets[1]!.open();
+    sockets[1]!.receive(status({ party: 1 }));
+    expect(resends).toEqual([null, 'thorin', null]);
+  });
+
+  it('reports player counts from status frames', () => {
+    const { transport, sockets } = dm();
+    const counts: number[] = [];
+    transport.watchStatus(({ players }) => counts.push(players));
+    sockets[0]!.open();
+    sockets[0]!.receive(status({ party: 2, thorin: 1 }));
+    expect(counts).toEqual([0, 3]);
   });
 });

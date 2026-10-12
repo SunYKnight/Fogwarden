@@ -2,10 +2,12 @@ import {
   CAMPAIGN_SCHEMA_VERSION,
   CREATURE_SCHEMA_VERSION,
   defaultOnboarding,
+  defaultPlayerLinks,
   defaultRemoteSettings,
   ENCOUNTER_SCHEMA_VERSION,
   MAP_SCHEMA_VERSION,
   MARKER_SCHEMA_VERSION,
+  PARTY_VIEW,
   PORTRAITS_SCHEMA_VERSION,
   SETTINGS_SCHEMA_VERSION,
 } from '@/core/model';
@@ -33,7 +35,11 @@ const MIGRATIONS: Record<SchemaName, Migration[]> = {
   map: [],
   marker: [],
   campaign: [],
-  encounter: [],
+  encounter: [
+    // v2: explored fog per character; nobody knows who saw what before, so
+    // every player character and vision source keeps the shared set.
+    exploredPerCharacter,
+  ],
   settings: [
     // v2: the never-used lastCampaignId became lastEncounter.
     ({ lastCampaignId: _unused, ...rest }) => ({ ...rest, lastEncounter: null }),
@@ -43,9 +49,22 @@ const MIGRATIONS: Record<SchemaName, Migration[]> = {
     (doc) => ({ ...doc, tokenStandees: true }),
     // v5: internet relay connection and server setup.
     (doc) => ({ ...doc, remote: defaultRemoteSettings() }),
+    // v6: per-view player links and the player window's view.
+    (doc) => ({
+      ...doc,
+      playerWindow: { ...(doc.playerWindow as Record<string, unknown>), view: PARTY_VIEW },
+      playerLinks: defaultPlayerLinks(),
+    }),
   ],
   portraits: [],
 };
+
+function exploredPerCharacter(doc: Record<string, unknown>): Record<string, unknown> {
+  const { explored, ...fog } = doc.fog as { explored: string };
+  const combatants = doc.combatants as { id: string; side: string; visionSource: boolean }[];
+  const owners = explored === '' ? [] : combatants.filter((c) => c.visionSource || c.side === 'player');
+  return { ...doc, fog: { ...fog, exploredBy: Object.fromEntries(owners.map((c) => [c.id, explored])) } };
+}
 
 export class MigrationError extends Error {
   constructor(message: string) {

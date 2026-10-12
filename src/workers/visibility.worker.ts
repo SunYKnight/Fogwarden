@@ -5,7 +5,7 @@ import type { VisibilityRequest, VisibilityResponse } from './visibilityProtocol
 let scene: { map: VisionMap; terrain: HeightField } | null = null;
 
 function reply(response: VisibilityResponse): void {
-  const transfer = response.type === 'result' ? [response.visible.buffer] : [];
+  const transfer = response.type === 'result' ? [...response.visible.values()].map((cells) => cells.buffer) : [];
   self.postMessage(response, { transfer });
 }
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Vec2 } from '@/core/model';
-import type { FogCells } from '@/core/vision/fog';
+import type { FogCells, FogSources } from '@/core/vision/fog';
 
 export type FogBrushMode = 'off' | 'reveal' | 'hide' | 'erase';
 
@@ -11,15 +11,17 @@ interface FogViewState {
   brushRadiusFt: number;
   /** Map point under the pointer while a brush is active; drawn as the brush outline. */
   cursor: Vec2 | null;
-  /** Fog of the open encounter as players get it; null without an encounter map or before the first result. */
+  /** Fog of the open encounter as the party gets it; null without an encounter map or before the first result. */
   fog: FogCells | null;
+  /** What `fog` was composed from; single characters' views compose their fog from it on demand. */
+  sources: FogSources | null;
   /** Duration of the last visibility computation in the worker. */
   computeMs: number | null;
   setShowFogToDm(show: boolean): void;
   setBrush(brush: FogBrushMode): void;
   setBrushRadius(radiusFt: number): void;
   setCursor(cursor: Vec2 | null): void;
-  setFog(fog: FogCells | null, computeMs: number | null): void;
+  setFog(fog: FogCells | null, sources: FogSources | null, computeMs: number | null): void;
 }
 
 export const useFogViewStore = create<FogViewState>((set) => ({
@@ -28,10 +30,11 @@ export const useFogViewStore = create<FogViewState>((set) => ({
   brushRadiusFt: 10,
   cursor: null,
   fog: null,
+  sources: null,
   computeMs: null,
   setShowFogToDm: (showFogToDm) => set({ showFogToDm }),
   setBrush: (brush) => set({ brush, cursor: null }),
   setBrushRadius: (brushRadiusFt) => set({ brushRadiusFt }),
   setCursor: (cursor) => set({ cursor }),
-  setFog: (fog, computeMs) => set({ fog, computeMs }),
+  setFog: (fog, sources, computeMs) => set({ fog, sources, computeMs }),
 }));

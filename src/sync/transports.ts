@@ -1,6 +1,12 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { SYNC_PROTOCOL_VERSION, type SyncMessage, type SyncPayload, type SyncTransport } from './protocol';
+import {
+  SYNC_PROTOCOL_VERSION,
+  type DmTransport,
+  type SyncMessage,
+  type SyncPayload,
+  type SyncTransport,
+} from './protocol';
 
 const CHANNEL = 'dm-tool-sync';
 
@@ -67,4 +73,60 @@ export class BroadcastChannelTransport implements SyncTransport {
 
 export function createLocalTransport(role: Role): SyncTransport {
   return isTauri() ? new TauriEventTransport(role) : new BroadcastChannelTransport(role);
+}
+
+/**
+ * DM side of the player window: it shows one view, chosen by the DM, or none while it is closed. Choosing
+ * another view asks the publisher for a full resend of it.
+ */
+export class LocalViewTransport implements DmTransport {
+  private readonly resendHandlers = new Set<(view: string | null) => void>();
+  private readonly viewHandlers = new Set<(views: ReadonlySet<string>) => void>();
+  private view: string | null = null;
+
+  constructor(private readonly transport: SyncTransport) {}
+
+  /** The window's view, or null while no window shows anything. */
+  setView(view: string | null): void {
+    if (view !== this.view) {
+      this.view = view;
+      const views = new Set(view === null ? [] : [view]);
+      for (const handler of this.viewHandlers) {
+        handler(views);
+      }
+      for (const handler of view === null ? [] : this.resendHandlers) {
+        handler(view);
+      }
+    }
+  }
+
+  send(views: readonly string[], payload: SyncPayload): void {
+    if (this.view !== null && views.includes(this.view)) {
+      this.transport.send(payload);
+    }
+  }
+
+  onResend(handler: (view: string | null) => void): () => void {
+    this.resendHandlers.add(handler);
+    const unsubscribe = this.transport.subscribe((payload) => {
+      // A window that just opened knows nothing yet.
+      if (payload.type === 'hello' && this.view !== null) {
+        handler(this.view);
+      }
+    });
+    return () => {
+      this.resendHandlers.delete(handler);
+      unsubscribe();
+    };
+  }
+
+  watchViews(handler: (views: ReadonlySet<string>) => void): () => void {
+    this.viewHandlers.add(handler);
+    handler(new Set(this.view === null ? [] : [this.view]));
+    return () => this.viewHandlers.delete(handler);
+  }
+
+  close(): void {
+    this.transport.close();
+  }
 }

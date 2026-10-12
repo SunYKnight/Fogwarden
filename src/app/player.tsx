@@ -20,7 +20,7 @@ function lanTransport(params: URLSearchParams, token: string): WebSocketTranspor
   const serverUrl = `${socketUrl.protocol === 'wss:' ? 'https:' : 'http:'}//${socketUrl.host}`;
   useAppStore.setState({ repository: new Repository(new LanStorage(serverUrl, token)) });
   socketUrl.searchParams.set('token', token);
-  return new WebSocketTransport(socketUrl.href, 'player');
+  return new WebSocketTransport(socketUrl.href);
 }
 
 const root = document.getElementById('root');

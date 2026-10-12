@@ -121,7 +121,7 @@ export function createEncounter(name: string, campaignId: string, map: DocRef | 
     combatants: [],
     markers: [],
     openingStates: {},
-    fog: { cellsPerSquare: 2, explored: '', revealedByDm: '', hiddenByDm: '' },
+    fog: { cellsPerSquare: 2, exploredBy: {}, revealedByDm: '', hiddenByDm: '' },
     log: [],
     notes: '',
   };

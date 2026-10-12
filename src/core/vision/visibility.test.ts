@@ -3,7 +3,16 @@ import { BitSet } from '../binary';
 import { createMap } from '../model/factories';
 import type { BattleMap, LightLevel, Opening, Wall } from '../model';
 import { HeightField } from '../terrain/heightfield';
-import { accumulateExplored, composeFog, FOG_EXPLORED, FOG_UNKNOWN, FOG_VISIBLE, readFogBits } from './fog';
+import {
+  accumulateExplored,
+  composeFog,
+  FOG_EXPLORED,
+  FOG_UNKNOWN,
+  FOG_VISIBLE,
+  readFogBits,
+  viewFog,
+  type FogSources,
+} from './fog';
 import { computeVisibility, type VisionCombatant } from './visibility';
 
 // 10x10 squares, one fog cell each: cell (c, r) centre = (c*5+2.5, r*5+2.5).
@@ -57,8 +66,9 @@ function viewer(x: number, y: number, extra: Partial<VisionCombatant> = {}): Vis
 }
 
 function see(map: BattleMap, combatants: VisionCombatant[], openingStates: Record<string, Opening['state']> = {}) {
-  const visible = computeVisibility(map, HeightField.fromMap(map), { openingStates, combatants, cellsPerSquare: 1 });
-  return (col: number, row: number) => visible[row * 10 + col] === FOG_VISIBLE;
+  const state = { openingStates, combatants, cellsPerSquare: 1 };
+  const bySource = [...computeVisibility(map, HeightField.fromMap(map), state).values()];
+  return (col: number, row: number) => bySource.some((visible) => visible[row * 10 + col] === FOG_VISIBLE);
 }
 
 // Wall along x = 25, full map height; its opening spans y = 22.5 .. 27.5.
@@ -107,12 +117,28 @@ describe('line of sight', () => {
         terrain.data[terrain.index(col, row)] = x >= 20 && x <= 30 ? 8 : 0;
       }
     }
-    const state = { openingStates: {}, combatants: [viewer(2.5, 27.5)], cellsPerSquare: 1 };
-    const visible = computeVisibility(map, terrain, state);
+    const hiker = viewer(2.5, 27.5);
+    const state = { openingStates: {}, combatants: [hiker], cellsPerSquare: 1 };
+    const visible = computeVisibility(map, terrain, state).get(hiker.id)!;
     expect(visible[5 * 10 + 3]).toBe(FOG_VISIBLE);
     expect(visible[5 * 10 + 9]).toBe(0);
-    const onHill = { ...state, combatants: [viewer(22.5, 27.5, { position: { x: 22.5, y: 27.5, elevationFt: 8 } })] };
-    expect(computeVisibility(map, terrain, onHill)[5 * 10 + 0]).toBe(FOG_VISIBLE);
+    const climber = viewer(22.5, 27.5, { position: { x: 22.5, y: 27.5, elevationFt: 8 } });
+    const onHill = { ...state, combatants: [climber] };
+    expect(computeVisibility(map, terrain, onHill).get(climber.id)![5 * 10 + 0]).toBe(FOG_VISIBLE);
+  });
+
+  it('keeps the sight of each vision source apart', () => {
+    const map = { ...testMap(), walls: [wall(SPLIT)], openings: [opening('door', 'closed')] };
+    const west = viewer(12.5, 25);
+    const east = viewer(37.5, 25);
+    const goblin = { ...viewer(47.5, 47.5), visionSource: false };
+    const state = { openingStates: {}, combatants: [west, east, goblin], cellsPerSquare: 1 };
+    const bySource = computeVisibility(map, HeightField.fromMap(map), state);
+    expect([...bySource.keys()]).toEqual([west.id, east.id]);
+    expect(bySource.get(west.id)![5 * 10 + 2]).toBe(FOG_VISIBLE);
+    expect(bySource.get(west.id)![5 * 10 + 7]).toBe(0);
+    expect(bySource.get(east.id)![5 * 10 + 7]).toBe(FOG_VISIBLE);
+    expect(bySource.get(east.id)![5 * 10 + 2]).toBe(0);
   });
 });
 
@@ -213,6 +239,34 @@ describe('fog memory', () => {
       Array.from(composeFog(Uint8Array.from([0, FOG_VISIBLE, 0, FOG_VISIBLE]), explored, revealed, hidden)),
     ).toEqual([FOG_EXPLORED, FOG_VISIBLE, FOG_EXPLORED, FOG_UNKNOWN]);
     expect(accumulateExplored(explored, Uint8Array.from([FOG_VISIBLE, 0, 0, 0]), hidden)).toBe(false);
+  });
+
+  it('keeps explored cells per character and gives the party their union', () => {
+    const bits = (...set: number[]) => {
+      const result = new BitSet(4);
+      set.forEach((i) => result.set(i, true));
+      return result;
+    };
+    const sources: FogSources = {
+      size: { cellsX: 4, cellsY: 1, cellFt: 5 },
+      visible: new Map([
+        ['a', Uint8Array.from([FOG_VISIBLE, 0, 0, 0])],
+        ['b', Uint8Array.from([0, 0, FOG_VISIBLE, 0])],
+      ]),
+      explored: new Map([
+        ['a', bits(0, 1)],
+        ['b', bits(2, 3)],
+      ]),
+      revealed: bits(),
+      hidden: bits(),
+    };
+    const V = FOG_VISIBLE;
+    const E = FOG_EXPLORED;
+    const U = FOG_UNKNOWN;
+    expect(Array.from(viewFog(sources, ['a']).cells)).toEqual([V, E, U, U]);
+    expect(Array.from(viewFog(sources, ['b']).cells)).toEqual([U, U, V, E]);
+    expect(Array.from(viewFog(sources, ['a', 'b']).cells)).toEqual([V, E, V, E]);
+    expect(Array.from(viewFog(sources, ['nobody']).cells)).toEqual([U, U, U, U]);
   });
 
   it('drops stored fog that belongs to another map size', () => {

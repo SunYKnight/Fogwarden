@@ -166,68 +166,105 @@ between modules.
   (DM) and `PlayerEncounter.standees` (players) choose standees. Geometry and materials are shared
   (`tokenMaterials.ts`; per-texture materials die with the texture); `useAssetTexture` reference-counts one texture
   per asset, decoded at most 1024 px.
-- Sync (`src/sync/protocol.ts`): the DM sends `map` (filtered for players), `encounter` (`PlayerEncounter`), `fog`
-  (`PlayerFog`) and `camera`; the player sends `hello` to request a resend. Filtering happens on the DM side; the
-  player never receives hidden combatants, secret doors, hidden regions or notes. Combatant tokens are sent
-  resolved (`filterEncounterForPlayers(..., { showTurnOrder, standees, tokenOf })`).
-  Transports: `TauriEventTransport`, `BroadcastChannelTransport` (`createLocalTransport(role)`), `WebSocketTransport`
-  (`src/sync/wsTransport.ts`, LAN; reconnects with backoff, announces every connect with `hello`).
+- Sync (`src/sync/protocol.ts`, protocol 2): the DM sends `map` (filtered for players), `encounter`
+  (`PlayerEncounter`), `fog` (`PlayerFog`), `camera` and `view` (the view's name, shown in the player page's status
+  corner); the player sends `hello` to request a resend. Filtering happens on the DM side; the player never receives
+  hidden combatants, secret doors, hidden regions or notes. Combatant tokens are sent resolved
+  (`filterEncounterForPlayers(..., { showTurnOrder, standees, tokenOf })`).
+- Player views (`src/sync/views.ts`): `PARTY_VIEW` (`'party'`, all vision sources) or one player character's
+  combatant id (only that character's vision). `playerViews(encounter)` lists Party plus the encounter's player
+  characters; `useViewLinksStore` keeps them (also while no encounter is open, so leaving Play withdraws no link)
+  with one link token each. `startViewLinks()` (in `DmApp`) derives the tokens: `linkToken(secret, view, rotation)`
+  is HMAC-SHA256 under `settings.playerLinks.secret` (created on first start), truncated to 128 bits; `rotateLink`
+  bumps `settings.playerLinks.rotations[view]`. The servers only get the token → view table (`linkTable`), so no
+  token reveals or leads to another view's. In a character's view every player character stays visible (the table
+  knows where its party is), other combatants only in cells that character sees; the map, shared markers and door
+  states are the same for every view. Assets stay shared: any valid link may load any uploaded asset by path, but a
+  view only learns the paths in its own payload, so it never asks for a token picture of a combatant it cannot see.
+- Transports. Player side (`SyncTransport`): `TauriEventTransport`, `BroadcastChannelTransport`
+  (`createLocalTransport(role)`), `WebSocketTransport` (`src/sync/wsTransport.ts`; reconnects with backoff,
+  announces every connect with `hello`, stops for good on close code `RELAY_LINK_REVOKED` and the page says the
+  link no longer works). DM side (`DmTransport`: `send(views, payload)`, `onResend`, `watchViews`):
+  `LocalViewTransport` (player window; `DmApp` sets its view from `settings.playerWindow.view`, Party when that
+  character is not in the encounter, none while the window is closed) and `ViewSocketTransport` (LAN and relay
+  socket: view frames out, per-view hellos and status frames in; the first status after every connect asks for a
+  full resend).
 - Player window: `player.html` → `PlayerApp` with `usePlayerStore` built only from received messages.
 - Vision (`src/core/vision/`): `computeVisibility(map, terrain, {openingStates, combatants, cellsPerSquare})` returns
-  the cells the vision sources see now (rays vs wall spans with heights and terrain via `RayGrid` buckets; light
-  regions replace the ambient level, magical darkness wins, lights add bright/dim with shadows; darkvision,
-  truesight, blindsight, tremorsense by range). `fog.ts` holds explored accumulation, DM overrides, brush painting.
+  the cells each vision source sees now, by combatant id (rays vs wall spans with heights and terrain via `RayGrid`
+  buckets; light regions replace the ambient level, magical darkness wins, lights add bright/dim with shadows and
+  light every source alike; darkvision, truesight, blindsight, tremorsense by range). `fog.ts` holds explored
+  accumulation per source (`exploreBySource`), `viewFog(sources, ids)` (union of the given sources' sight and memory
+  with the DM overrides), DM overrides, brush painting.
 - DM side, started in `DmApp`: `startFogTracker()` (`src/sync/fogTracker.ts`) runs visibility in
-  `src/workers/visibility.worker.ts` (latest request wins), merges explored cells and DM overrides into
-  `useFogViewStore.fog` and persists `encounter.fog.explored` at most once per second. `startDmPublisher(transports)`
-  sends `playerFilter` output on change and a full resend on start and on `hello`. The Play page feeds
-  `useDmCameraStore` (camera), `useFogViewStore.showFogToDm` (fog mode) and `fogBrushPointer` (reveal/hide brush,
-  both from the canvas Fog menu).
+  `src/workers/visibility.worker.ts` (latest request wins), adds each source's cells to its own explored set, puts
+  the party's fog into `useFogViewStore.fog` and the per-source parts into `useFogViewStore.sources`, and persists
+  `encounter.fog.exploredBy` (base64 bitset per combatant id, encounter schema v2) at most once per second.
+  `startDmPublisher(transports)` computes only views some transport has receivers for; a character's fog is
+  composed from `sources` once per tracker result. It sends the map to all watched views, each view's encounter and
+  fog on change, the full state of the requested views to one transport on its resend request. Cost
+  (`pnpm tsx tools/bench-visibility.ts`, sample encounter with 2 PCs, 2 cells per square): visibility about 1.1 ms
+  (1.0 ms before per-source results), party fog 0.04 ms, each connected character view +0.06 ms; at 8 cells per
+  square 15-16 ms, 0.6 ms and +1 ms. The Play page feeds `useDmCameraStore` (camera),
+  `useFogViewStore.showFogToDm` (fog mode) and `fogBrushPointer` (reveal/hide brush, both from the canvas Fog
+  menu); "Reset explored" forgets one character's or everyone's explored cells.
 
 ## LAN player view
 
-- `src-tauri/src/lan.rs`: axum server on `0.0.0.0:<settings.lan.port>`, commands `lan_start(port)`, `lan_stop()`,
-  `lan_status()` → `LanInfo {port, urls, token, dmUrl, players}`; Tauri event `lan-players` carries the player count.
-  Each start generates a player token (in the player URLs) and a DM token (in `dmUrl`, accepted from loopback only).
-- Routes: `/player.html?token=` (sets an `/asset`-scoped token cookie so relative `.gltf` resources load),
+- `src-tauri/src/lan.rs`: axum server on `0.0.0.0:<settings.lan.port>`, commands `lan_start(port, links)`,
+  `lan_set_links(links)` (token → view, checked like the relay's patterns), `lan_stop()`, `lan_status()` →
+  `LanInfo {port, hosts, dmUrl, players}` (`hosts`: base URLs, LAN addresses first, localhost last). Each start
+  generates a DM token (in `dmUrl`, accepted from loopback only); player tokens are the links' keys.
+- Routes: `/player.html?token=` (sets an `/asset`-scoped cookie with that token so relative `.gltf` resources load),
   `/assets/*` (Vite bundle, public), `/asset/{area}/{path}?token=` (images and models only, path stays inside the
-  storage root via `storage::resolve`; documents are never served), `/ws?token=` (relay). The relay forwards DM
-  messages to all players and only a rebuilt `hello` from players; any other player message closes its socket.
+  storage root via `storage::resolve`; documents are never served), `/ws?token=` (relay). The DM socket speaks the
+  internet relay's view frames and status frames (see below); a player gets only frames of its link's view, and
+  only a rebuilt `hello` passes from players; any other player message closes its socket. Changed links close the
+  sockets of withdrawn tokens with `RELAY_LINK_REVOKED` and of reassigned ones with 1013.
 - Bundle files come from `app.asset_resolver()` (`src-tauri/src/frontend.rs`): release builds embed `dist/`; dev
   builds (devUrl set) read `dist/` from disk, so run `pnpm build` before testing the LAN view under `pnpm app:dev`.
   For player-code work, open `http://localhost:1420/player.html?token=<t>&ws=ws://127.0.0.1:<port>/ws` on the Vite
   dev server instead.
-- DM side: `useLanStore` (`src/state/lanStore.ts`) holds the DM's `WebSocketTransport`; `DmApp` adds it to
+- DM side: `useLanStore` (`src/state/lanStore.ts`) holds the DM's `ViewSocketTransport`, takes the player count
+  from its status frames and pushes `linkTable` whenever the links change; `DmApp` adds the transport to
   `startDmPublisher`. UI: `LanControls` (`src/ui/shell/LanControls.tsx`) on the Server page and in the rail's
-  Players popover (start/stop, URLs, copy, QR code via `uqr`); the port is set under Settings.
+  Players popover (start/stop, address, `PlayerLinks`: view select, link, copy, QR code via `uqr`, New link); the
+  port is set under Settings.
 - Browser client: `player.html?token=` → `src/app/player.tsx` sets `useAppStore`'s repository to a read-only
   `LanStorage` (`src/data/lanStorage.ts`, `assetUrl` → `/asset/...`) before rendering `PlayerApp`.
 
 ## Internet relay
 
 - The DM app connects out to a relay on a server the DM controls; the relay only receives what the player filter
-  already produced. Contract shared by both sides: `src/sync/relayApi.ts` (routes, limits, file type allowlists,
-  schemas); the only player message the relay forwards is validated with `playerHelloSchema` (`protocol.ts`), and
-  DM messages pass unparsed, so protocol bumps need no relay redeploy.
+  already produced. Contract shared by both sides: `src/sync/relayApi.ts` (`RELAY_API_VERSION` 2, routes, limits,
+  file type allowlists, schemas, view frames); the only player message the relay forwards is validated with
+  `playerHelloSchema` (`protocol.ts`), and DM messages pass unparsed behind their view list, so sync protocol bumps
+  need no relay redeploy.
+- View frames on the DM socket: `<view>[,<view>...]\n<message>`; DM → relay goes to the players of those views,
+  relay → DM carries a player's rebuilt hello under its view. Status frames `{relay: {players, views}}` (players per
+  view) go to the DM on connect and whenever players or links change.
 - Relay (`server/`, Node 20+, `ws`): `createRelay({dmKey, dataDir})` (`relayServer.ts`), entry `relay.ts` (env
   `DMTOOL_DM_KEY`, `DMTOOL_RELAY_PORT`, `DMTOOL_RELAY_HOST`, `DMTOOL_RELAY_DATA`), bundled by `pnpm build:server`
   (`tools/build-server.ts`, esbuild) into `dist-server/relay.mjs`. Routes: `/health`; `/?t=<token>` and
   `/player.html` (uploaded player page, sets the `/asset` token cookie); `/assets/*` (uploaded bundle, public);
   `/asset/{area}/{path}?token=` (uploaded assets); `/ws` (players with `?token=`, the DM with the subprotocols
-  `dmtool-dm` + DM key, never in a logged URL). DM API with `Authorization: Bearer <key>`: `GET /api/session`
-  (player token, kept in `dataDir/session-token` across restarts, and player count), `POST /api/missing` (which
-  upload targets differ by SHA-256), `PUT /api/asset/{area}/{path}` and `PUT /api/bundle/{path}` (hash header
-  checked, 128 MiB limit, extension allowlist, `containedPath`, atomic rename). The relay pushes `{relay: {players}}`
-  frames to DM sockets, pings every 30 s and drops players more than 16 MiB behind.
+  `dmtool-dm` + DM key, never in a logged URL). Player tokens are the keys of the links table. DM API with
+  `Authorization: Bearer <key>`: `GET /api/session` (`{api, players}`), `PUT /api/links` (replaces the token → view
+  table, kept in `dataDir/links.json` across restarts; withdrawn tokens' sockets close with `RELAY_LINK_REVOKED`,
+  reassigned ones with 1013), `POST /api/missing` (which upload targets differ by SHA-256), `PUT
+/api/asset/{area}/{path}` and `PUT /api/bundle/{path}` (hash header checked, 128 MiB limit, extension allowlist,
+  `containedPath`, atomic rename). The relay pings every 30 s and drops players more than 16 MiB behind.
 - Player bundle: `tools/vite-relay-plugin.ts` copies `relay.mjs` into `dist/` (so `pnpm build` fails without
   `build:server`, which `pnpm build` runs first) and writes `dist/player-bundle.json` (every built file except
   `index.html` and source maps, the player page last, with SHA-256). On connect the app reads them through the
   `frontend_file` command and uploads what changed, so app updates never need a relay redeploy.
-- DM side: `useRelayStore` (`src/state/relayStore.ts`: `link`, `players`, `playerUrl`, `lastError`, `transport`)
-  and `src/sync/relayClient.ts`: `RelayUploader` (`ensure(refs)` uploads assets plus glTF/GLB side files found by
-  `modelSideFiles`, remembered per connection; `uploadBundle`) and `RelayTransport` (a `WebSocketTransport` whose
-  sends wait for the assets `collectAssetRefs` finds anywhere in the payload). `DmApp` adds the transport to
-  `startDmPublisher`. Plain `http://` URLs are refused except for loopback (the DM key would travel unencrypted).
+- DM side: `useRelayStore` (`src/state/relayStore.ts`: `link`, `players`, `baseUrl`, `lastError`, `transport`)
+  and `src/sync/relayClient.ts`: `fetchRelaySession` (refuses a relay of another API version with an "update the
+  server" or "update the app" message), `pushRelayLinks` (on connect and whenever the links change),
+  `RelayUploader` (`ensure(refs)` uploads assets plus glTF/GLB side files found by `modelSideFiles`, remembered per
+  connection; `uploadBundle`) and `RelayTransport` (a `ViewSocketTransport` whose sends wait for the assets
+  `collectAssetRefs` finds anywhere in the payload). `DmApp` adds the transport to `startDmPublisher`. Plain
+  `http://` URLs are refused except for loopback (the DM key would travel unencrypted).
 - Setup (`src-tauri/src/deploy.rs`, `russh` with `ring`): templates `src-tauri/src/deploy/install.sh` and
   `dmtool-relay.nginx.conf` filled with the validated domain, email and port; commands `deploy_write_files(folder,
 setup)`, `deploy_host_key(host, port)` (`SHA256:` fingerprint, confirmed and stored in

@@ -1,50 +1,18 @@
 import { isTauri } from '@tauri-apps/api/core';
-import { useMemo, useState } from 'react';
-import { encode } from 'uqr';
+import { useState } from 'react';
 import { useAppStore } from '@/state/appStore';
 import { useLanStore, type LanInfo } from '@/state/lanStore';
+import { SelectField } from '../components/fields';
 import { Button } from '../kit';
-
-export function QrCode({ text }: { text: string }) {
-  // Four modules of quiet zone: phone scanners miss codes with less.
-  const { size, data } = useMemo(() => encode(text, { ecc: 'M', border: 4 }), [text]);
-  const path = data.flatMap((row, y) => row.map((dark, x) => (dark ? `M${x} ${y}h1v1h-1z` : ''))).join('');
-  return (
-    <svg className="qr" viewBox={`0 0 ${size} ${size}`} shapeRendering="crispEdges" role="img" aria-label={text}>
-      <rect width={size} height={size} fill="#fff" />
-      <path d={path} fill="#000" />
-    </svg>
-  );
-}
+import { PlayerLinks } from './PlayerLinks';
 
 function RunningServer({ info }: { info: LanInfo }) {
-  const reportError = useAppStore((s) => s.reportError);
-  const notify = useAppStore((s) => s.notify);
-  const [selected, setSelected] = useState(0);
-  const qrUrl = info.urls[Math.min(selected, info.urls.length - 1)] ?? '';
+  const [chosen, setChosen] = useState('');
+  const host = info.hosts.includes(chosen) ? chosen : (info.hosts[0] ?? '');
   return (
     <>
-      <div className="lan-urls" role="radiogroup" aria-label="Link shown as QR code">
-        {info.urls.map((url, index) => (
-          <div key={url} className="row">
-            <input
-              type="radio"
-              checked={url === qrUrl}
-              onChange={() => setSelected(index)}
-              aria-label={`Show ${url} as QR code`}
-            />
-            <code className="grow small lan-url">{url}</code>
-            <Button
-              icon="copy"
-              label="Copy link"
-              iconOnly
-              variant="ghost"
-              onClick={() => navigator.clipboard.writeText(url).then(() => notify('Link copied', 'info'), reportError)}
-            />
-          </div>
-        ))}
-      </div>
-      <QrCode text={qrUrl} />
+      {info.hosts.length > 1 && <SelectField label="Address" value={host} options={info.hosts} onChange={setChosen} />}
+      <PlayerLinks linkOf={(token) => `${host}/player.html?token=${token}`} />
     </>
   );
 }
@@ -88,8 +56,9 @@ export function LanControls() {
         />
       )}
       <p className="muted small">
-        Phones and tablets on the same network open a link or scan the code. Every start makes a new link; Windows may
-        ask to allow the app through the firewall. The port is in Settings.
+        Phones and tablets on the same network open a link or scan the code: the party link shows what all characters
+        see, a character's link only what that character sees. Links stay valid until replaced; Windows may ask to allow
+        the app through the firewall. The port is in Settings.
       </p>
     </div>
   );

@@ -3,7 +3,7 @@ import { assetRefSchema, docHeader, docRefSchema, idSchema, mapPointSchema, time
 import { conditionSchema, sensesSchema, sizeSchema } from './creature';
 import { areaMarkerSchema } from './marker';
 
-export const ENCOUNTER_SCHEMA_VERSION = 1;
+export const ENCOUNTER_SCHEMA_VERSION = 2;
 export const CAMPAIGN_SCHEMA_VERSION = 1;
 
 export const sideSchema = z.enum(['player', 'ally', 'enemy', 'neutral']);
@@ -48,8 +48,11 @@ export type LogEntry = z.infer<typeof logEntrySchema>;
 export const fogSchema = z.object({
   /** Fog cells per grid square edge. */
   cellsPerSquare: z.number().int().min(1).max(8),
-  /** Base64 bitsets, one bit per fog cell, row-major (south rows, east columns). */
-  explored: z.string(),
+  /**
+   * Base64 bitsets, one bit per fog cell, row-major (south rows, east columns). Explored cells are kept per
+   * vision source by combatant id; the party remembers their union.
+   */
+  exploredBy: z.record(idSchema, z.string()),
   revealedByDm: z.string(),
   hiddenByDm: z.string(),
 });

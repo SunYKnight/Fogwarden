@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -8,16 +8,21 @@ import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { playerHelloSchema } from '@/sync/protocol';
 import {
   fileExtension,
+  parseViewFrame,
+  RELAY_API_VERSION,
   RELAY_ASSET_TYPES,
   RELAY_BUNDLE_TYPES,
   RELAY_DM_PROTOCOL,
   RELAY_HASH_HEADER,
   RELAY_LINK_PARAM,
+  RELAY_LINK_REVOKED,
   RELAY_PLAYER_PAGE,
   RELAY_TOKEN_COOKIE,
+  relayLinksSchema,
   relayMissingRequestSchema,
   type RelaySession,
   type RelayStatus,
+  viewFrame,
 } from '@/sync/relayApi';
 import { containedPath, FileStore, HttpError } from './store';
 
@@ -36,11 +41,12 @@ const AREAS: Record<string, true> = { data: true, content: true };
 const CLOSE_POLICY = 1008;
 const CLOSE_UNSUPPORTED = 1003;
 const CLOSE_AGAIN = 1013;
+const LINKS_FILE = 'links.json';
 
 export interface RelayOptions {
   /** Shared secret of the DM app, created by the install script. */
   dmKey: string;
-  /** Uploaded assets, player bundle and the session token live here. */
+  /** Uploaded assets, player bundle and the player links live here. */
   dataDir: string;
 }
 
@@ -110,14 +116,17 @@ function decodeSegment(segment: string): string {
 /**
  * HTTP + WebSocket relay between one DM app and the players' browsers, mirroring the LAN server
  * (`src-tauri/src/lan.rs`): the DM publishes over `/ws`, players receive and may only send `hello`. The DM
- * uploads assets and the player bundle; the relay never sees anything the DM's player filter removed.
+ * uploads assets and the player bundle; the relay never sees anything the DM's player filter removed. Each
+ * player link token shows one view; the DM addresses every frame to views and the relay forwards it only to
+ * players of those views. The links live in `dataDir/links.json`, so players get in while the DM is away.
  */
 export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Relay> {
   if (dmKey.length < 32) {
     throw new Error('The DM key must have at least 32 characters');
   }
   const store = new FileStore(dataDir);
-  const token = (await store.readOrCreate('session-token', () => randomBytes(16).toString('hex'))).trim();
+  const saved = await store.readText(LINKS_FILE);
+  let links = new Map(Object.entries(saved === null ? {} : relayLinksSchema.parse(JSON.parse(saved)).links));
   const dmSockets = new WebSocketServer({
     noServer: true,
     maxPayload: DM_MESSAGE_LIMIT,
@@ -125,6 +134,7 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
   });
   const playerSockets = new WebSocketServer({ noServer: true, maxPayload: PLAYER_MESSAGE_LIMIT });
   const alive = new WeakSet<WebSocket>();
+  const players = new Map<WebSocket, { token: string; view: string }>();
 
   const requireDm = (request: IncomingMessage) => {
     const given = (request.headers.authorization ?? '').replace(/^Bearer /, '');
@@ -134,8 +144,8 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
   };
 
   const requirePlayer = (given: string) => {
-    if (!secretMatches(token, given)) {
-      throw new HttpError(401, 'missing or wrong player token');
+    if (!links.has(given)) {
+      throw new HttpError(401, 'missing or withdrawn player link');
     }
   };
 
@@ -146,7 +156,34 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
     }
   };
 
-  const playersChanged = () => tellDms({ relay: { players: playerSockets.clients.size } });
+  const status = (): RelayStatus => {
+    const views = new Map<string, number>();
+    for (const { view } of players.values()) {
+      views.set(view, (views.get(view) ?? 0) + 1);
+    }
+    // fromEntries defines own keys, so a view named __proto__ stays a key.
+    return { relay: { players: players.size, views: Object.fromEntries(views) } };
+  };
+
+  const playersChanged = () => tellDms(status());
+
+  const replaceLinks = (next: Map<string, string>) => {
+    links = next;
+    for (const [socket, { token, view }] of players) {
+      const current = links.get(token);
+      if (current !== view) {
+        // Dropped here already, so no frame of the old view reaches it while
+        // the close handshake runs.
+        players.delete(socket);
+        if (current === undefined) {
+          socket.close(RELAY_LINK_REVOKED, 'link revoked');
+        } else {
+          socket.close(CLOSE_AGAIN, 'view changed, reconnect');
+        }
+      }
+    }
+    playersChanged();
+  };
 
   const serveFile = async ({ request, response }: Request, file: string, headers: Record<string, string>) => {
     const info = await stat(file).catch((error: NodeJS.ErrnoException) => {
@@ -176,7 +213,8 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
   };
 
   const playerPage: Handler = async ({ request, response, url }) => {
-    requirePlayer(url.searchParams.get(RELAY_LINK_PARAM) ?? url.searchParams.get('token') ?? '');
+    const token = url.searchParams.get(RELAY_LINK_PARAM) ?? url.searchParams.get('token') ?? '';
+    requirePlayer(token);
     const page = await readFile(store.file('bundle', RELAY_PLAYER_PAGE), 'utf8').catch(
       (error: NodeJS.ErrnoException) => {
         throw error.code === 'ENOENT' ? new HttpError(503, 'The DM has not connected to this server yet.') : error;
@@ -219,8 +257,17 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
 
   const session: Handler = async ({ request, response }) => {
     requireDm(request);
-    const body: RelaySession = { token, players: playerSockets.clients.size };
+    const body: RelaySession = { api: RELAY_API_VERSION, players: players.size };
     send(response, 200, JSON.stringify(body), 'application/json');
+  };
+
+  const putLinks: Handler = async ({ request, response }) => {
+    requireDm(request);
+    const body = relayLinksSchema.parse(await readJson(request));
+    await store.writeText(LINKS_FILE, JSON.stringify(body));
+    response.writeHead(204);
+    response.end();
+    replaceLinks(new Map(Object.entries(body.links)));
   };
 
   const missing: Handler = async ({ request, response }) => {
@@ -252,8 +299,11 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
       response.end();
     };
 
-  const health: Handler = async ({ response }) =>
+  // The DM app's connection test calls this cross-origin from its webview.
+  const health: Handler = async ({ response }) => {
+    response.setHeader('access-control-allow-origin', '*');
     send(response, 200, JSON.stringify({ ok: true, service: RELAY_SERVICE }), 'application/json');
+  };
 
   /** Key: method plus the route's leading segments; the remaining segments become `rest`. */
   const routes: Record<string, { segments: number; handler: Handler }> = {
@@ -263,6 +313,7 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
     'GET /assets': { segments: 1, handler: bundleFile },
     'GET /asset': { segments: 1, handler: asset },
     'GET /api/session': { segments: 2, handler: session },
+    'PUT /api/links': { segments: 2, handler: putLinks },
     'POST /api/missing': { segments: 2, handler: missing },
     'PUT /api/asset': { segments: 2, handler: upload('asset') },
     'PUT /api/bundle': { segments: 2, handler: upload('bundle') },
@@ -321,32 +372,44 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
 
   dmSockets.on('connection', (socket) => {
     watch(socket);
-    socket.send(JSON.stringify({ relay: { players: playerSockets.clients.size } } satisfies RelayStatus));
+    socket.send(JSON.stringify(status()));
     socket.on('message', (data: RawData, isBinary: boolean) => {
+      // Only the view list is decoded; the message, up to several MB, goes
+      // out as the very bytes received.
+      const frame = data as Buffer;
+      const end = frame.indexOf('\n');
+      const parsed = parseViewFrame(frame.subarray(0, end + 1).toString());
       if (isBinary) {
         socket.close(CLOSE_UNSUPPORTED, 'text messages only');
+      } else if (parsed === null) {
+        socket.close(CLOSE_POLICY, 'frames must start with a view list');
       } else {
-        for (const player of playerSockets.clients) {
-          if (player.bufferedAmount > PLAYER_BACKLOG_LIMIT) {
+        const audience = new Set(parsed.views);
+        const message = frame.subarray(end + 1);
+        for (const [player, { view }] of players) {
+          if (audience.has(view) && player.bufferedAmount > PLAYER_BACKLOG_LIMIT) {
             player.close(CLOSE_AGAIN, 'fell behind, reconnect');
-          } else {
-            player.send(data, { binary: false });
+          } else if (audience.has(view)) {
+            player.send(message, { binary: false });
           }
         }
       }
     });
   });
 
-  playerSockets.on('connection', (socket) => {
+  playerSockets.on('connection', (socket: WebSocket, view: string) => {
     watch(socket);
     playersChanged();
-    socket.on('close', playersChanged);
+    socket.on('close', () => {
+      players.delete(socket);
+      playersChanged();
+    });
     socket.on('message', (data: RawData, isBinary: boolean) => {
       const hello = isBinary ? null : playerHello(data.toString());
       if (hello === null) {
         socket.close(CLOSE_POLICY, 'players may only send hello');
       } else {
-        tellDms(hello);
+        tellDms(viewFrame([view], hello));
       }
     });
   });
@@ -359,16 +422,20 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
     const url = new URL(request.url ?? '/', 'http://relay');
     const protocols = (request.headers['sec-websocket-protocol'] ?? '').split(',').map((p) => p.trim());
     const asDm = protocols[0] === RELAY_DM_PROTOCOL;
-    const allowed = asDm
-      ? secretMatches(dmKey, protocols[1] ?? '')
-      : secretMatches(token, url.searchParams.get('token') ?? '');
-    const target = asDm ? dmSockets : playerSockets;
+    const token = url.searchParams.get('token') ?? '';
+    const view = links.get(token);
     if (url.pathname !== '/ws') {
       reject(socket, 404, 'Not Found');
-    } else if (!allowed) {
-      reject(socket, 401, 'Unauthorized');
+    } else if (asDm && secretMatches(dmKey, protocols[1] ?? '')) {
+      dmSockets.handleUpgrade(request, socket, head, (ws) => dmSockets.emit('connection', ws, request));
+    } else if (!asDm && view !== undefined) {
+      playerSockets.handleUpgrade(request, socket, head, (ws) => {
+        // Registered before 'connection', so its status frame counts it.
+        players.set(ws, { token, view });
+        playerSockets.emit('connection', ws, view);
+      });
     } else {
-      target.handleUpgrade(request, socket, head, (ws) => target.emit('connection', ws, request));
+      reject(socket, 401, 'Unauthorized');
     }
   });
 

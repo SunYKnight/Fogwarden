@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { AreaMarker, BattleMap, Combatant, OpeningState } from '@/core/model';
 import type { CameraState } from '@/render/CameraRig';
 
-export const SYNC_PROTOCOL_VERSION = 1;
+export const SYNC_PROTOCOL_VERSION = 2;
 
 /** Combatant fields players may see; hidden combatants are never sent. */
 export type PlayerCombatant = Pick<
@@ -42,7 +42,9 @@ export type SyncPayload =
   | { type: 'map'; revision: number; map: BattleMap | null }
   | { type: 'encounter'; encounter: PlayerEncounter | null }
   | { type: 'fog'; fog: PlayerFog | null }
-  | { type: 'camera'; camera: CameraState | null };
+  | { type: 'camera'; camera: CameraState | null }
+  /** Whose eyes the receiver sees through: a player character's name or "Party". */
+  | { type: 'view'; name: string };
 
 export interface SyncMessage {
   protocol: typeof SYNC_PROTOCOL_VERSION;
@@ -65,4 +67,20 @@ export interface SyncTransport {
   /** Calls `handler` for messages sent by the other side only. */
   subscribe(handler: (payload: SyncPayload) => void): () => void;
   close(): void;
+}
+
+/**
+ * DM side of a link to player views (`PARTY_VIEW` or a player character's combatant id): every view gets only
+ * its own messages.
+ */
+export interface DmTransport {
+  /** Sends `payload` to the receivers of `views`; views without receivers on this transport are skipped. */
+  send(views: readonly string[], payload: SyncPayload): void;
+  /**
+   * Calls `handler` with a view whose receivers need everything again (a player's hello), or with null when all
+   * receivers of this transport do (the transport itself reconnected).
+   */
+  onResend(handler: (view: string | null) => void): () => void;
+  /** Calls `handler` with the views that have receivers: now and on every change. */
+  watchViews(handler: (views: ReadonlySet<string>) => void): () => void;
 }

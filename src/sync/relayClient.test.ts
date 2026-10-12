@@ -77,8 +77,26 @@ describe('relayBaseUrl', () => {
   });
 });
 
+describe('fetchRelaySession', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('asks to update a relay from before per-view links', async () => {
+    // Version 1 answered with its single player token and no version.
+    vi.stubGlobal('fetch', async () => Response.json({ token: 'abc', players: 0 }));
+    await expect(fetchRelaySession('https://relay.test', 'k')).rejects.toThrow(/outdated.*run the setup again/);
+  });
+
+  it('asks to update the app for a newer relay', async () => {
+    vi.stubGlobal('fetch', async () => Response.json({ api: 99, players: 0 }));
+    await expect(fetchRelaySession('https://relay.test', 'k')).rejects.toThrow('update the app');
+  });
+});
+
 describe('RelayUploader against the relay', () => {
   const DM_KEY = 'k'.repeat(64);
+  const PLAYER_TOKEN = 'player_0123456789abcdef';
   let dataDir: string;
   let relay: Relay;
   let base: string;
@@ -106,6 +124,14 @@ describe('RelayUploader against the relay', () => {
   const readAsset = (ref: AssetRef) => Promise.resolve(files[`${ref.area}/${ref.path}`] ?? new Uint8Array());
   const puts = (spy: { mock: { calls: Parameters<typeof fetch>[] } }) =>
     spy.mock.calls.filter(([, init]) => init?.method === 'PUT').map(([url]) => String(url).slice(base.length));
+  const addPlayerLink = async () => {
+    const response = await fetch(`${base}/api/links`, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${DM_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ links: { [PLAYER_TOKEN]: 'party' } }),
+    });
+    expect(response.status).toBe(204);
+  };
 
   it('uploads a model with its side files once and skips them on the next connection', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
@@ -117,8 +143,10 @@ describe('RelayUploader against the relay', () => {
       '/api/asset/data/maps/wall.png',
     ]);
 
-    const { token } = await fetchRelaySession(base, DM_KEY);
-    const served = await fetch(`${base}/asset/data/maps/house.bin`, { headers: { cookie: `dmtool-relay=${token}` } });
+    await addPlayerLink();
+    const served = await fetch(`${base}/asset/data/maps/house.bin`, {
+      headers: { cookie: `dmtool-relay=${PLAYER_TOKEN}` },
+    });
     expect(new Uint8Array(await served.arrayBuffer())).toEqual(files['data/maps/house.bin']);
 
     fetchSpy.mockClear();
@@ -144,8 +172,8 @@ describe('RelayUploader against the relay', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await new RelayUploader(base, DM_KEY, readAsset).uploadBundle(readFile);
     expect(puts(fetchSpy)).toEqual(['/api/bundle/assets/player-1.js', '/api/bundle/player.html']);
-    const { token } = await fetchRelaySession(base, DM_KEY);
-    expect(await (await fetch(`${base}/?t=${token}`)).text()).toContain('player-1.js');
+    await addPlayerLink();
+    expect(await (await fetch(`${base}/?t=${PLAYER_TOKEN}`)).text()).toContain('player-1.js');
 
     fetchSpy.mockClear();
     await new RelayUploader(base, DM_KEY, readAsset).uploadBundle(readFile);

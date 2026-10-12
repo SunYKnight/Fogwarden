@@ -27,6 +27,7 @@ pub fn run() {
             storage::storage_list_folder,
             storage::storage_import_file,
             lan::lan_start,
+            lan::lan_set_links,
             lan::lan_stop,
             lan::lan_status,
             frontend::frontend_file,

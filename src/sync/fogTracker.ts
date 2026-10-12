@@ -1,7 +1,7 @@
 import type { BitSet } from '@/core/binary';
-import type { BattleMap, Encounter } from '@/core/model';
+import type { BattleMap, Encounter, Fog } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
-import { accumulateExplored, composeFog, fogSize, readEncounterFog, readFogBits } from '@/core/vision/fog';
+import { exploreBySource, fogSize, readEncounterFog, readFogBits, viewFog, type FogSources } from '@/core/vision/fog';
 import type { VisionState } from '@/core/vision/visibility';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
 import { useAppStore } from '@/state/appStore';
@@ -27,9 +27,10 @@ function visionState(encounter: Encounter): VisionState {
 
 /**
  * Keeps the open encounter's fog up to date: visibility runs in a worker whenever tokens, doors, senses
- * or the map change (a burst of changes collapses into the latest request), the result is merged with
- * the stored explored cells and DM overrides into `useFogViewStore.fog`, and newly explored cells are
- * written back to `encounter.fog.explored` at most once per second.
+ * or the map change (a burst of changes collapses into the latest request), each vision source's result is
+ * merged into its own explored cells, the party's fog (all sources with the DM overrides) goes to
+ * `useFogViewStore.fog` and the per-source parts to `useFogViewStore.sources`, and newly explored cells are
+ * written back to `encounter.fog.exploredBy` at most once per second.
  */
 export function startFogTracker(): () => void {
   const worker = new Worker(new URL('../workers/visibility.worker.ts', import.meta.url), { type: 'module' });
@@ -39,11 +40,12 @@ export function startFogTracker(): () => void {
   let nextId = 1;
   let inFlight: { id: number; key: string } | null = null;
   let pending: { key: string; state: VisionState } | null = null;
-  let visible: { key: string; cells: Uint8Array; ms: number } | null = null;
-  // Explored cells of `exploredKey`, ahead of the document until persisted.
-  let explored: BitSet | null = null;
+  let visible: { key: string; cells: Map<string, Uint8Array>; ms: number } | null = null;
+  // Explored cells per source of `exploredKey`, ahead of the document until
+  // persisted; `written` is the document's record they were read from.
+  let explored = new Map<string, BitSet>();
   let exploredKey = '';
-  let written = '';
+  let written: Fog['exploredBy'] | null = null;
   let persistTimer: number | undefined;
   let lastPersist = 0;
   let composed: { visible: unknown; fog: unknown; key: string } = { visible: null, fog: null, key: '' };
@@ -62,12 +64,12 @@ export function startFogTracker(): () => void {
   const persist = () => {
     persistTimer = undefined;
     const { encounter } = useEncounterStore.getState();
-    if (explored && encounter && exploredKey.startsWith(`${encounter.id}:`)) {
-      const value = explored.toBase64();
+    if (encounter && exploredKey.startsWith(`${encounter.id}:`)) {
+      const value = Object.fromEntries([...explored].map(([id, bits]) => [id, bits.toBase64()]));
       written = value;
       lastPersist = performance.now();
       useEncounterStore.getState().update((draft) => {
-        draft.fog.explored = value;
+        draft.fog.exploredBy = value;
       });
     }
   };
@@ -82,25 +84,26 @@ export function startFogTracker(): () => void {
     const { encounter, map } = useEncounterStore.getState();
     const size = encounter && map ? fogSize(map.grid, encounter.fog.cellsPerSquare) : null;
     const key = encounter && size ? `${encounter.id}:${size.cellsX}x${size.cellsY}` : '';
-    if (encounter && size && (key !== exploredKey || encounter.fog.explored !== written)) {
+    if (encounter && size && (key !== exploredKey || encounter.fog.exploredBy !== written)) {
       clearTimeout(persistTimer);
       persistTimer = undefined;
-      explored = readFogBits(encounter.fog.explored, size.cellsX * size.cellsY);
+      const stored = Object.entries(encounter.fog.exploredBy);
+      explored = new Map(stored.map(([id, bits]) => [id, readFogBits(bits, size.cellsX * size.cellsY)]));
       exploredKey = key;
-      written = encounter.fog.explored;
+      written = encounter.fog.exploredBy;
     }
     const inputsChanged = composed.visible !== visible || composed.fog !== encounter?.fog || composed.key !== key;
     composed = { visible, fog: encounter?.fog, key };
-    if (inputsChanged && encounter && size && explored && visible?.key.startsWith(`${key}|`)) {
+    if (inputsChanged && encounter && size && visible?.key.startsWith(`${key}|`)) {
       const { revealed, hidden } = readEncounterFog(encounter.fog, size);
-      if (accumulateExplored(explored, visible.cells, hidden)) {
+      if (exploreBySource(explored, visible.cells, hidden)) {
         schedulePersist();
       }
-      useFogViewStore
-        .getState()
-        .setFog({ size, cells: composeFog(visible.cells, explored, revealed, hidden) }, visible.ms);
+      const sources: FogSources = { size, visible: visible.cells, explored, revealed, hidden };
+      const party = new Set([...visible.cells.keys(), ...explored.keys()]);
+      useFogViewStore.getState().setFog(viewFog(sources, party), sources, visible.ms);
     } else if (inputsChanged) {
-      useFogViewStore.getState().setFog(null, null);
+      useFogViewStore.getState().setFog(null, null, null);
     }
   };
 
@@ -160,6 +163,6 @@ export function startFogTracker(): () => void {
       persist();
     }
     worker.terminate();
-    useFogViewStore.getState().setFog(null, null);
+    useFogViewStore.getState().setFog(null, null, null);
   };
 }

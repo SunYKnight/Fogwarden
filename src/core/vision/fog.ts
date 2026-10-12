@@ -67,6 +67,24 @@ export function accumulateExplored(explored: BitSet, visible: Uint8Array, hidden
   return changed;
 }
 
+/**
+ * Adds each vision source's visible cells to its own explored set, created on its first result, except
+ * cells the DM hides; returns whether any set grew.
+ */
+export function exploreBySource(
+  explored: Map<string, BitSet>,
+  visible: ReadonlyMap<string, Uint8Array>,
+  hidden: BitSet,
+): boolean {
+  let grew = false;
+  for (const [id, cells] of visible) {
+    const bits = explored.get(id) ?? new BitSet(cells.length);
+    explored.set(id, bits);
+    grew = accumulateExplored(bits, cells, hidden) || grew;
+  }
+  return grew;
+}
+
 /** Final fog per cell: DM-hidden cells stay unknown, DM-revealed cells count as explored. */
 export function composeFog(visible: Uint8Array, explored: BitSet, revealed: BitSet, hidden: BitSet): Uint8Array {
   const cells = new Uint8Array(visible.length);
@@ -76,6 +94,37 @@ export function composeFog(visible: Uint8Array, explored: BitSet, revealed: BitS
     cells[i] = hidden.get(i) ? FOG_UNKNOWN : seen;
   }
   return cells;
+}
+
+/** Visibility and memory of every vision source plus the DM overrides: enough to compose any view's fog. */
+export interface FogSources {
+  size: FogSize;
+  /** Cells each vision source sees now (FOG_VISIBLE or 0), by combatant id. */
+  visible: ReadonlyMap<string, Uint8Array>;
+  /** Cells each vision source has explored, by combatant id. */
+  explored: ReadonlyMap<string, BitSet>;
+  revealed: BitSet;
+  hidden: BitSet;
+}
+
+/** Fog of the vision sources `ids` together: cells any of them sees now or has explored. */
+export function viewFog(sources: FogSources, ids: Iterable<string>): FogCells {
+  const { size } = sources;
+  const count = size.cellsX * size.cellsY;
+  const visible = new Uint8Array(count);
+  const explored = new BitSet(count);
+  for (const id of ids) {
+    // FOG_VISIBLE is all ones and the other value 0, so OR is the union.
+    const seen = sources.visible.get(id) ?? [];
+    for (let i = 0; i < seen.length; i++) {
+      visible[i] = visible[i]! | seen[i]!;
+    }
+    const known = sources.explored.get(id)?.bytes ?? [];
+    for (let i = 0; i < known.length; i++) {
+      explored.bytes[i] = explored.bytes[i]! | known[i]!;
+    }
+  }
+  return { size, cells: composeFog(visible, explored, sources.revealed, sources.hidden) };
 }
 
 /** Sets every cell whose centre lies within `radiusFt` of `center` to `value`. */
@@ -93,11 +142,10 @@ export function paintFogCircle(bits: BitSet, center: Vec2, radiusFt: number, siz
   }
 }
 
-/** The three stored fog bitsets of an encounter, decoded for `size`. */
-export function readEncounterFog(fog: Fog, size: FogSize): { explored: BitSet; revealed: BitSet; hidden: BitSet } {
+/** The DM's reveal and hide bitsets of an encounter, decoded for `size`. */
+export function readEncounterFog(fog: Fog, size: FogSize): { revealed: BitSet; hidden: BitSet } {
   const count = size.cellsX * size.cellsY;
   return {
-    explored: readFogBits(fog.explored, count),
     revealed: readFogBits(fog.revealedByDm, count),
     hidden: readFogBits(fog.hiddenByDm, count),
   };

@@ -1,8 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { create } from 'zustand';
 import type { AssetRef } from '@/core/model';
-import { RELAY_LINK_PARAM } from '@/sync/relayApi';
-import { fetchRelaySession, relayBaseUrl, RelayTransport, RelayUploader } from '@/sync/relayClient';
+import { fetchRelaySession, pushRelayLinks, relayBaseUrl, RelayTransport, RelayUploader } from '@/sync/relayClient';
+import { linkTable, useViewLinksStore } from '@/sync/views';
 import { useAppStore } from './appStore';
 
 /** `connecting`: checking the key and uploading the player page; `reconnecting`: the socket dropped. */
@@ -11,8 +11,8 @@ export type RelayLink = 'off' | 'connecting' | 'online' | 'reconnecting';
 interface RelayState {
   link: RelayLink;
   players: number;
-  /** Link players open; null while disconnected. */
-  playerUrl: string | null;
+  /** Relay origin player links start with; null while disconnected. */
+  baseUrl: string | null;
   lastError: string | null;
   /** DM side of the relay while connected; the publisher fans out to it. */
   transport: RelayTransport | null;
@@ -39,40 +39,56 @@ async function readFrontendFile(path: string): Promise<Uint8Array<ArrayBuffer>> 
   return new Uint8Array(await invoke<ArrayBuffer>('frontend_file', { path }));
 }
 
-export const useRelayStore = create<RelayState>((set, get) => ({
-  link: 'off',
-  players: 0,
-  playerUrl: null,
-  lastError: null,
-  transport: null,
-  connect: async (url, dmKey) => {
-    get().disconnect();
-    set({ link: 'connecting', lastError: null });
-    try {
-      const baseUrl = relayBaseUrl(url);
-      const session = await fetchRelaySession(baseUrl, dmKey);
-      const uploader = new RelayUploader(baseUrl, dmKey, readAsset);
-      await uploader.uploadBundle(readFrontendFile);
-      const transport = new RelayTransport(baseUrl, dmKey, uploader, {
-        status: ({ relay }) => set({ players: relay.players }),
-        uploadFailed: (error) => {
-          set({ lastError: errorText(error) });
-          useAppStore.getState().reportError(error);
-        },
-      });
-      transport.watchConnection((open) => {
-        if (get().transport === transport) {
-          set({ link: open ? 'online' : 'reconnecting' });
-        }
-      });
-      set({ transport, players: session.players, playerUrl: `${baseUrl}/?${RELAY_LINK_PARAM}=${session.token}` });
-    } catch (error) {
-      set({ link: 'off', lastError: errorText(error) });
-      throw error;
-    }
-  },
-  disconnect: () => {
-    get().transport?.close();
-    set({ link: 'off', players: 0, playerUrl: null, transport: null });
-  },
-}));
+export const useRelayStore = create<RelayState>((set, get) => {
+  let unsubscribers: (() => void)[] = [];
+
+  const reportError = (error: unknown) => {
+    set({ lastError: errorText(error) });
+    useAppStore.getState().reportError(error);
+  };
+
+  return {
+    link: 'off',
+    players: 0,
+    baseUrl: null,
+    lastError: null,
+    transport: null,
+    connect: async (url, dmKey) => {
+      get().disconnect();
+      set({ link: 'connecting', lastError: null });
+      try {
+        const baseUrl = relayBaseUrl(url);
+        const session = await fetchRelaySession(baseUrl, dmKey);
+        const uploader = new RelayUploader(baseUrl, dmKey, readAsset);
+        await uploader.uploadBundle(readFrontendFile);
+        await pushRelayLinks(baseUrl, dmKey, linkTable(useViewLinksStore.getState()));
+        const transport = new RelayTransport(baseUrl, dmKey, uploader, reportError);
+        unsubscribers = [
+          transport.watchConnection((open) => {
+            if (get().transport === transport) {
+              set({ link: open ? 'online' : 'reconnecting' });
+            }
+          }),
+          transport.watchStatus(({ players }) => set({ players })),
+          useViewLinksStore.subscribe((state, previous) => {
+            if (state.tokens !== previous.tokens || state.views !== previous.views) {
+              pushRelayLinks(baseUrl, dmKey, linkTable(state)).catch(reportError);
+            }
+          }),
+        ];
+        set({ transport, players: session.players, baseUrl });
+      } catch (error) {
+        set({ link: 'off', lastError: errorText(error) });
+        throw error;
+      }
+    },
+    disconnect: () => {
+      get().transport?.close();
+      for (const unsubscribe of unsubscribers) {
+        unsubscribe();
+      }
+      unsubscribers = [];
+      set({ link: 'off', players: 0, baseUrl: null, transport: null });
+    },
+  };
+});

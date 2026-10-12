@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { defaultRemoteSettings, defaultSettings, settingsSchema } from '@/core/model';
+import {
+  createEncounter,
+  defaultPlayerLinks,
+  defaultRemoteSettings,
+  defaultSettings,
+  encounterSchema,
+  PARTY_VIEW,
+  settingsSchema,
+} from '@/core/model';
+import { createPc } from '@/state/encounterActions';
 import { migrate, MigrationError } from './migrations';
 import { MemoryStorage } from './memoryStorage';
 import { Repository } from './repository';
@@ -18,7 +27,7 @@ describe('settings migration', () => {
     const migrated = settingsSchema.parse(migrate('settings', V1_SETTINGS));
     expect(migrated).toEqual({
       ...defaultSettings(),
-      playerWindow: { monitorName: 'DISPLAY2', fullscreen: false },
+      playerWindow: { monitorName: 'DISPLAY2', fullscreen: false, view: PARTY_VIEW },
       diagonalRule: '5-10-5',
       lan: { port: 8000 },
     });
@@ -58,5 +67,42 @@ describe('settings migration', () => {
     expect(migrated.remote.url).toBe('');
     expect(migrated.tokenStandees).toBe(false);
     expect(migrated.lan.port).toBe(9000);
+  });
+
+  it('adds the party view and unset player links to v5 settings', () => {
+    const { playerLinks: _unused, ...v5 } = defaultSettings();
+    const playerWindow = { monitorName: 'DISPLAY2', fullscreen: false };
+    const migrated = settingsSchema.parse(migrate('settings', { ...v5, version: 5, playerWindow }));
+    expect(migrated.playerWindow).toEqual({ ...playerWindow, view: PARTY_VIEW });
+    expect(migrated.playerLinks).toEqual(defaultPlayerLinks());
+  });
+});
+
+describe('encounter migration', () => {
+  const pc = (name: string, visionSource: boolean) =>
+    createPc({ name, armorClass: 10, maxHp: 10, senses: {}, visionSource });
+
+  function v1Encounter(explored: string) {
+    const encounter = createEncounter('e', 'c1', null);
+    const { exploredBy: _unused, ...fog } = encounter.fog;
+    const thorin = pc('Thorin', true);
+    const blind = pc('Elara', false);
+    const owl = { ...pc('Owl', true), side: 'ally' as const };
+    const goblin = { ...pc('Goblin', false), side: 'enemy' as const };
+    const doc = { ...encounter, version: 1, combatants: [thorin, blind, owl, goblin], fog: { ...fog, explored } };
+    return { doc, thorin, blind, owl };
+  }
+
+  it('gives every player character and vision source the shared explored cells of a v1 encounter', () => {
+    const { doc, thorin, blind, owl } = v1Encounter('/w==');
+    const migrated = encounterSchema.parse(migrate('encounter', doc));
+    expect(migrated.version).toBe(2);
+    expect(migrated.fog.exploredBy).toEqual({ [thorin.id]: '/w==', [blind.id]: '/w==', [owl.id]: '/w==' });
+    expect('explored' in migrated.fog).toBe(false);
+  });
+
+  it('starts with nobody having explored anything when the v1 encounter had no explored cells', () => {
+    const migrated = encounterSchema.parse(migrate('encounter', v1Encounter('').doc));
+    expect(migrated.fog.exploredBy).toEqual({});
   });
 });

@@ -1,22 +1,23 @@
 import { z } from 'zod';
+import { bytesToHex } from '@/core/binary';
 import { assetRefSchema, type AssetRef } from '@/core/model';
-import type { SyncPayload, SyncTransport } from './protocol';
+import type { SyncPayload } from './protocol';
 import {
   assetTarget,
   bundleTarget,
   fileExtension,
   PLAYER_BUNDLE_MANIFEST,
   playerBundleSchema,
+  RELAY_API_VERSION,
   RELAY_DM_PROTOCOL,
   RELAY_HASH_HEADER,
   relayMissingResponseSchema,
   relaySessionSchema,
-  relayStatusSchema,
+  type RelayLinks,
   type RelayMissingRequest,
   type RelaySession,
-  type RelayStatus,
 } from './relayApi';
-import { WebSocketTransport } from './wsTransport';
+import { ViewSocketTransport } from './wsTransport';
 
 /** Reads a stored asset or a built frontend file as bytes. */
 export type ReadBytes<T> = (source: T) => Promise<Uint8Array<ArrayBuffer>>;
@@ -46,10 +47,33 @@ async function relayFetch(baseUrl: string, dmKey: string, path: string, init: Re
   return response;
 }
 
-/** Checks the DM key and returns the player join token. */
+/**
+ * Checks the DM key and the relay's contract version. Relays before version 2 know only one player link, so they
+ * would show every player the party view.
+ */
 export async function fetchRelaySession(baseUrl: string, dmKey: string): Promise<RelaySession> {
   const response = await relayFetch(baseUrl, dmKey, '/api/session');
-  return relaySessionSchema.parse(await response.json());
+  const session = relaySessionSchema.parse(await response.json());
+  if (session.api < RELAY_API_VERSION) {
+    throw new Error(
+      `The relay on ${baseUrl} is outdated (version ${session.api}, the app needs ${RELAY_API_VERSION}). Update ` +
+        'it: Server page, Set up a server, run the setup again.',
+    );
+  }
+  if (session.api > RELAY_API_VERSION) {
+    throw new Error(`The relay on ${baseUrl} is newer than this app (version ${session.api}); update the app.`);
+  }
+  return session;
+}
+
+/** Replaces the relay's player links: token → view. */
+export async function pushRelayLinks(baseUrl: string, dmKey: string, links: Record<string, string>): Promise<void> {
+  const body: RelayLinks = { links };
+  await relayFetch(baseUrl, dmKey, '/api/links', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
 /** Connection test: the relay answers its public health check, then accepts the DM key. */
@@ -64,7 +88,7 @@ export async function testRelay(url: string, dmKey: string): Promise<RelaySessio
 
 async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
-  return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
+  return bytesToHex(digest);
 }
 
 const exactAssetRef = assetRefSchema.strict();
@@ -200,56 +224,28 @@ export class RelayUploader {
   }
 }
 
-export interface RelayTransportEvents {
-  status(status: RelayStatus): void;
-  uploadFailed(error: unknown): void;
-}
-
 /**
- * DM side of the internet relay: a `WebSocketTransport` (reconnects, resend on reconnect) whose messages
+ * DM side of the internet relay: a `ViewSocketTransport` (reconnects, resend on reconnect) whose messages
  * wait until the assets they reference are uploaded. An upload failure is reported and the message still
  * goes out, so players keep getting updates while one asset is broken.
  */
-export class RelayTransport implements SyncTransport {
-  private readonly socket: WebSocketTransport;
+export class RelayTransport extends ViewSocketTransport {
   private queue: Promise<void> = Promise.resolve();
 
   constructor(
     baseUrl: string,
     dmKey: string,
     private readonly uploader: RelayUploader,
-    private readonly events: RelayTransportEvents,
+    private readonly uploadFailed: (error: unknown) => void,
   ) {
-    const url = `${baseUrl.replace(/^http/, 'ws')}/ws`;
-    this.socket = new WebSocketTransport(url, 'dm', (u) => {
-      const socket = new WebSocket(u, [RELAY_DM_PROTOCOL, dmKey]);
-      socket.addEventListener('message', (event: MessageEvent<unknown>) => {
-        const status = typeof event.data === 'string' ? relayStatusSchema.safeParse(JSON.parse(event.data)) : null;
-        if (status?.success) {
-          events.status(status.data);
-        }
-      });
-      return socket;
-    });
+    super(`${baseUrl.replace(/^http/, 'ws')}/ws`, (u) => new WebSocket(u, [RELAY_DM_PROTOCOL, dmKey]));
   }
 
-  send(payload: SyncPayload): void {
+  override send(views: readonly string[], payload: SyncPayload): void {
     const refs = collectAssetRefs(payload);
     this.queue = this.queue
       .then(() => this.uploader.ensure(refs))
-      .catch((error: unknown) => this.events.uploadFailed(error))
-      .then(() => this.socket.send(payload));
-  }
-
-  subscribe(handler: (payload: SyncPayload) => void): () => void {
-    return this.socket.subscribe(handler);
-  }
-
-  watchConnection(handler: (open: boolean) => void): () => void {
-    return this.socket.watchConnection(handler);
-  }
-
-  close(): void {
-    this.socket.close();
+      .catch((error: unknown) => this.uploadFailed(error))
+      .then(() => super.send(views, payload));
   }
 }

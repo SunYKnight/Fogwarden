@@ -159,8 +159,10 @@ The calibration tool remains in the editor for later corrections, but under _Map
 
 ### 4.8 Player window
 
-- Unchanged principle (shows only what the DM sends) plus: a small unobtrusive status corner when disconnected or
-  waiting; a big readable initiative ribbon optional (DM toggle); no DM controls ever.
+- Unchanged principle (shows only what the DM sends) plus: a small unobtrusive status corner with the view's name
+  ("Party" or the character) and, when disconnected, waiting or the link was replaced, the reason; a big readable
+  initiative ribbon optional (DM toggle); no DM controls ever, no view picker for players (the link decides the
+  view; the DM picks the player window's view in the Players popover).
 
 ## 5. Interaction model (all map views)
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { BattleMap } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { fogBrushPointer } from '@/render/fog/fogBrush';
@@ -9,8 +9,8 @@ import { MapView } from '@/render/MapView';
 import { useAppStore } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useDmCameraStore } from '@/sync/cameraStore';
-import { CheckboxField, SliderField } from '../components/fields';
-import { Button, confirmDialog, Popover, ToolButton, type IconName } from '../kit';
+import { CheckboxField, SelectField, SliderField } from '../components/fields';
+import { Button, Dialog, Popover, ToolButton, type IconName } from '../kit';
 import { EncounterOverlay } from './EncounterOverlay';
 import { handleEncounterPointer } from './encounterPointer';
 import { cancelInteraction, chooseTool, startPlacing, useEncounterUi } from './encounterUiStore';
@@ -58,24 +58,61 @@ function ViewportHint() {
   return <div className="viewport-hint">{hints.find(([active]) => active)?.[1] ?? fallback}</div>;
 }
 
+const ALL_CHARACTERS = '';
+
+/** Explored fog is not part of the undo history, so the DM confirms whose memory goes. */
+function ResetExploredDialog({ onClose }: { onClose: () => void }) {
+  const combatants = useEncounterStore((s) => s.encounter?.combatants ?? null);
+  const characters = (combatants ?? []).filter((c) => c.side === 'player' || c.visionSource);
+  const selectedId = useEncounterStore((s) => s.selectedCombatantId);
+  const [chosen, setChosen] = useState(characters.some((c) => c.id === selectedId) ? selectedId! : ALL_CHARACTERS);
+  const name = characters.find((c) => c.id === chosen)?.name;
+  const reset = () => {
+    useEncounterStore.getState().update((d) => {
+      if (chosen === ALL_CHARACTERS) {
+        d.fog.exploredBy = {};
+      } else {
+        delete d.fog.exploredBy[chosen];
+      }
+    });
+    onClose();
+  };
+  return (
+    <Dialog
+      title="Reset explored areas"
+      onClose={onClose}
+      width={440}
+      footer={
+        <>
+          <Button label="Cancel" onClick={onClose} />
+          <Button label="Reset" variant="danger" onClick={reset} />
+        </>
+      }
+    >
+      <SelectField
+        label="Forget what was explored by"
+        value={chosen}
+        options={[ALL_CHARACTERS, ...characters.map((c) => c.id)]}
+        format={(id) => (id === ALL_CHARACTERS ? 'All characters' : (characters.find((c) => c.id === id)?.name ?? id))}
+        onChange={setChosen}
+      />
+      <p>
+        {name === undefined
+          ? 'Every character forgets the areas they have explored'
+          : `${name} forgets the areas they have explored; the party still remembers what the others saw`}
+        . What their tokens see now stays visible.
+      </p>
+    </Dialog>
+  );
+}
+
 function FogPanel() {
   const showFog = useFogViewStore((s) => s.showFogToDm);
   const brush = useFogViewStore((s) => s.brush);
   const radius = useFogViewStore((s) => s.brushRadiusFt);
   const computeMs = useFogViewStore((s) => s.computeMs);
   const { setShowFogToDm, setBrush, setBrushRadius } = useFogViewStore.getState();
-  const reportError = useAppStore((s) => s.reportError);
-
-  // Explored fog is not part of the undo history, so ask first.
-  const resetExplored = async () => {
-    const ok = await confirmDialog({
-      title: 'Reset explored areas',
-      message: 'Players forget every area they have explored; they keep seeing what their tokens see now.',
-      confirmLabel: 'Reset',
-      danger: true,
-    });
-    if (ok) useEncounterStore.getState().update((d) => void (d.fog.explored = ''));
-  };
+  const [resetting, setResetting] = useState(false);
 
   return (
     <div className="fog-panel" role="group" aria-label="Fog">
@@ -116,10 +153,11 @@ function FogPanel() {
         onChange={setBrushRadius}
       />
       <div className="row">
-        <Button icon="undo" label="Reset explored" onClick={() => void resetExplored().catch(reportError)} />
+        <Button icon="undo" label="Reset explored" onClick={() => setResetting(true)} />
         <div className="spacer" />
         <span className="muted small">Visibility {computeMs === null ? '…' : `${Math.round(computeMs)} ms`}</span>
       </div>
+      {resetting && <ResetExploredDialog onClose={() => setResetting(false)} />}
     </div>
   );
 }

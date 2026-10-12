@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-export const SETTINGS_SCHEMA_VERSION = 5;
+export const SETTINGS_SCHEMA_VERSION = 6;
+
+/** View of all player characters together; any other view is one player character's combatant id. */
+export const PARTY_VIEW = 'party';
 
 export const encounterLocatorSchema = z.object({ campaignId: z.string(), encounterId: z.string() });
 export type EncounterLocator = z.infer<typeof encounterLocatorSchema>;
@@ -59,6 +62,18 @@ export function defaultRemoteSettings(): RemoteSettings {
   };
 }
 
+export const playerLinksSchema = z.object({
+  /** Key the link tokens are derived from; empty until the app first needs links. */
+  secret: z.string(),
+  /** How often each view's link was replaced, by view; a view missing here was never replaced. */
+  rotations: z.record(z.string(), z.number().int().nonnegative()),
+});
+export type PlayerLinks = z.infer<typeof playerLinksSchema>;
+
+export function defaultPlayerLinks(): PlayerLinks {
+  return { secret: '', rotations: {} };
+}
+
 export const settingsSchema = z.object({
   schema: z.literal('settings'),
   version: z.number().int().positive(),
@@ -66,6 +81,8 @@ export const settingsSchema = z.object({
     /** Monitor name as reported by the OS; null opens the window on the primary monitor. */
     monitorName: z.string().nullable(),
     fullscreen: z.boolean(),
+    /** What the player window shows: `PARTY_VIEW` or a player character of the open encounter. */
+    view: z.string(),
   }),
   /** 5e default counts every diagonal as 5 ft; the variant alternates 5 and 10 ft. */
   diagonalRule: z.enum(['5-5-5', '5-10-5']),
@@ -77,6 +94,8 @@ export const settingsSchema = z.object({
   tokenStandees: z.boolean(),
   /** Internet relay for remote players (Server page). */
   remote: remoteSettingsSchema,
+  /** Player links per view for the LAN server and the relay. */
+  playerLinks: playerLinksSchema,
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -84,12 +103,13 @@ export function defaultSettings(): Settings {
   return {
     schema: 'settings',
     version: SETTINGS_SCHEMA_VERSION,
-    playerWindow: { monitorName: null, fullscreen: true },
+    playerWindow: { monitorName: null, fullscreen: true, view: PARTY_VIEW },
     diagonalRule: '5-5-5',
     lan: { port: 7717 },
     lastEncounter: null,
     onboarding: defaultOnboarding(),
     tokenStandees: true,
     remote: defaultRemoteSettings(),
+    playerLinks: defaultPlayerLinks(),
   };
 }

@@ -11,6 +11,8 @@ interface PlayerState {
   encounter: PlayerEncounter | null;
   fog: PlayerFog | null;
   camera: CameraState | null;
+  /** Whose eyes this screen sees through, e.g. "Party"; null until the DM says. */
+  viewName: string | null;
   receive(payload: SyncPayload): void;
 }
 
@@ -22,6 +24,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   encounter: null,
   fog: null,
   camera: null,
+  viewName: null,
   receive: (payload) => {
     switch (payload.type) {
       case 'map':
@@ -42,6 +45,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         break;
       case 'camera':
         set({ camera: payload.camera });
+        break;
+      case 'view':
+        set({ viewName: payload.name });
         break;
       case 'hello':
         break;

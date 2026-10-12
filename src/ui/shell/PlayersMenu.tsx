@@ -1,10 +1,12 @@
 import { isTauri } from '@tauri-apps/api/core';
+import { PARTY_VIEW } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLanStore } from '@/state/lanStore';
 import { useRelayStore } from '@/state/relayStore';
 import { useDmCameraStore } from '@/sync/cameraStore';
 import { usePlayerViewStore } from '@/sync/playerViewStore';
+import { useViewLinksStore } from '@/sync/views';
 import { CheckboxField, SelectField } from '../components/fields';
 import { Button, Icon, Popover, Section } from '../kit';
 import { closePlayerWindow, monitorLabel, openPlayerWindow, usePlayerWindowStore } from '../playerWindow';
@@ -48,6 +50,9 @@ function WindowSection() {
   const setSettings = useAppStore((s) => s.setSettings);
   const reportError = useAppStore((s) => s.reportError);
   const windowOpen = usePlayerWindowStore((s) => s.open);
+  const views = useViewLinksStore((s) => s.views);
+  const savedView = settings?.playerWindow.view ?? PARTY_VIEW;
+  const shownView = views.some((v) => v.id === savedView) ? savedView : PARTY_VIEW;
   const { monitors, primary } = useMonitors();
   const toggle = () =>
     (windowOpen ? closePlayerWindow() : settings ? openPlayerWindow(settings) : Promise.resolve()).catch(reportError);
@@ -75,6 +80,17 @@ function WindowSection() {
           disabled={!settings}
           onClick={toggle}
         />
+        {settings && (
+          <SelectField
+            label="Shows"
+            value={shownView}
+            options={views.map((v) => v.id)}
+            format={(id) => views.find((v) => v.id === id)?.name ?? id}
+            onChange={(view) =>
+              setSettings({ ...settings, playerWindow: { ...settings.playerWindow, view } }).catch(reportError)
+            }
+          />
+        )}
         {settings && isTauri() && (
           <>
             <SelectField

@@ -4,31 +4,42 @@ import { request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import {
+  RELAY_API_VERSION,
   RELAY_DM_PROTOCOL,
   RELAY_HASH_HEADER,
+  RELAY_LINK_REVOKED,
   RELAY_MAX_UPLOAD_BYTES,
   relaySessionSchema,
   type RelaySession,
+  type RelayStatus,
 } from '@/sync/relayApi';
 import { createRelay, type Relay } from './relayServer';
 
 const DM_KEY = 'a'.repeat(64);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+const TOKEN_A = 'linkA_0123456789abcdef';
+const TOKEN_B = 'linkB_0123456789abcdef';
+const HELLO = '{"protocol":2,"from":"player","payload":{"type":"hello"}}';
 
 let dataDir: string;
 let relay: Relay;
 let base: string;
 
-beforeEach(async () => {
-  dataDir = mkdtempSync(join(tmpdir(), 'relay-test-'));
+async function start(): Promise<void> {
   relay = await createRelay({ dmKey: DM_KEY, dataDir });
   const { promise, resolve } = Promise.withResolvers<void>();
   relay.server.listen(0, '127.0.0.1', resolve);
   await promise;
   base = `http://127.0.0.1:${(relay.server.address() as AddressInfo).port}`;
+}
+
+beforeEach(async () => {
+  dataDir = mkdtempSync(join(tmpdir(), 'relay-test-'));
+  await start();
 });
 
 afterEach(async () => {
@@ -46,10 +57,21 @@ function put(target: string, body: Buffer, key = DM_KEY, hash = sha256(body)): P
   });
 }
 
+function putLinks(links: Record<string, string>, key = DM_KEY): Promise<Response> {
+  return fetch(`${base}/api/links`, {
+    method: 'PUT',
+    headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ links }),
+  });
+}
+
 async function session(): Promise<RelaySession> {
   const response = await fetch(`${base}/api/session`, { headers: { authorization: `Bearer ${DM_KEY}` } });
   return relaySessionSchema.parse(await response.json());
 }
+
+const statusIs = (relayStatus: RelayStatus['relay']) => (text: string) =>
+  text.startsWith('{') && isDeepStrictEqual(JSON.parse(text), { relay: relayStatus });
 
 /** Opens a socket; `message(check)` resolves with the first text message, past or future, passing `check`. */
 function connect(url: string, protocols?: string[]) {
@@ -79,45 +101,57 @@ function connect(url: string, protocols?: string[]) {
     }
     return promise;
   };
-  return { socket, message, opened: opened.promise, closed: closed.promise };
+  return { socket, messages, message, opened: opened.promise, closed: closed.promise };
 }
 
+const player = (token: string) => connect(`${base}/ws?token=${token}`);
+
 describe('relay sockets', () => {
-  it('forwards DM messages to players and rebuilt hellos to the DM', async () => {
+  it('forwards DM frames only to the addressed views and tags hellos with the view', async () => {
+    expect((await putLinks({ [TOKEN_A]: 'A', [TOKEN_B]: 'B' })).status).toBe(204);
     const dm = connect(`${base}/ws`, [RELAY_DM_PROTOCOL, DM_KEY]);
     await dm.opened;
-    const { token } = await session();
-    const player = connect(`${base}/ws?token=${token}`);
-    await player.opened;
-    await dm.message((m) => m === '{"relay":{"players":1}}');
+    await dm.message(statusIs({ players: 0, views: {} }));
+    const a = player(TOKEN_A);
+    const b = player(TOKEN_B);
+    await Promise.all([a.opened, b.opened]);
+    await dm.message(statusIs({ players: 2, views: { A: 1, B: 1 } }));
 
-    player.socket.send('{"protocol":1,"from":"player","payload":{"type":"hello"}}');
-    expect(await dm.message((m) => m.includes('hello'))).toBe(
-      '{"protocol":1,"from":"player","payload":{"type":"hello"}}',
-    );
+    a.socket.send(HELLO);
+    expect(await dm.message((m) => m.includes('hello'))).toBe(`A\n${HELLO}`);
 
-    const map = '{"protocol":1,"from":"dm","payload":{"type":"map","revision":1,"map":null}}';
-    dm.socket.send(map);
-    await player.message((m) => m === map);
+    dm.socket.send('B\nfor B');
+    dm.socket.send('A,B\nfor both');
+    dm.socket.send('A\nfor A');
+    dm.socket.send('B\nend');
+    await Promise.all([a.message((m) => m === 'for A'), b.message((m) => m === 'end')]);
+    expect(a.messages).toEqual(['for both', 'for A']);
+    expect(b.messages).toEqual(['for B', 'for both', 'end']);
 
-    player.socket.close();
-    await dm.message((m) => m === '{"relay":{"players":0}}');
-    dm.socket.close();
+    a.socket.close();
+    await dm.message(statusIs({ players: 1, views: { B: 1 } }));
+  });
+
+  it('closes a DM socket whose frame lacks a view list', async () => {
+    const dm = connect(`${base}/ws`, [RELAY_DM_PROTOCOL, DM_KEY]);
+    await dm.opened;
+    dm.socket.send('{"protocol":2,"from":"dm","payload":{"type":"map","revision":1,"map":null}}');
+    expect(await dm.closed).toBe(1008);
   });
 
   it('closes a player socket that sends anything but hello', async () => {
-    const { token } = await session();
-    const extra = connect(`${base}/ws?token=${token}`);
+    await putLinks({ [TOKEN_A]: 'A' });
+    const extra = player(TOKEN_A);
     await extra.opened;
-    extra.socket.send('{"protocol":1,"from":"player","payload":{"type":"hello","map":null}}');
+    extra.socket.send('{"protocol":2,"from":"player","payload":{"type":"hello","map":null}}');
     expect(await extra.closed).toBe(1008);
 
-    const dmMessage = connect(`${base}/ws?token=${token}`);
+    const dmMessage = player(TOKEN_A);
     await dmMessage.opened;
-    dmMessage.socket.send('{"protocol":1,"from":"dm","payload":{"type":"map","revision":1,"map":null}}');
+    dmMessage.socket.send('{"protocol":2,"from":"dm","payload":{"type":"map","revision":1,"map":null}}');
     expect(await dmMessage.closed).toBe(1008);
 
-    const garbage = connect(`${base}/ws?token=${token}`);
+    const garbage = player(TOKEN_A);
     await garbage.opened;
     garbage.socket.send('not json');
     expect(await garbage.closed).toBe(1008);
@@ -125,9 +159,81 @@ describe('relay sockets', () => {
 
   it('rejects a wrong DM key and a wrong player token', async () => {
     await expect(connect(`${base}/ws`, [RELAY_DM_PROTOCOL, 'b'.repeat(64)]).opened).rejects.toThrow('HTTP 401');
-    await expect(connect(`${base}/ws?token=wrong`).opened).rejects.toThrow('HTTP 401');
+    await expect(player('wrong').opened).rejects.toThrow('HTTP 401');
     const response = await fetch(`${base}/api/session`, { headers: { authorization: 'Bearer wrong' } });
     expect(response.status).toBe(401);
+  });
+
+  it('reports the API version and player count in the session', async () => {
+    expect(await session()).toEqual({ api: RELAY_API_VERSION, players: 0 });
+  });
+});
+
+describe('relay links', () => {
+  const asset = '/asset/data/library/maps/m1/assets/map.png';
+
+  beforeEach(async () => {
+    await put(`/api${asset}`, PNG);
+    await put('/api/bundle/player.html', Buffer.from('<html></html>'));
+  });
+
+  it('closes the socket of a withdrawn link and refuses its token afterwards', async () => {
+    await putLinks({ [TOKEN_A]: 'A' });
+    expect((await fetch(`${base}/?t=${TOKEN_A}`)).status).toBe(200);
+    const a = player(TOKEN_A);
+    await a.opened;
+
+    expect((await putLinks({ [TOKEN_B]: 'A' })).status).toBe(204);
+    expect(await a.closed).toBe(RELAY_LINK_REVOKED);
+    await expect(player(TOKEN_A).opened).rejects.toThrow('HTTP 401');
+    expect((await fetch(`${base}/?t=${TOKEN_A}`)).status).toBe(401);
+    expect((await fetch(`${base}${asset}?token=${TOKEN_A}`)).status).toBe(401);
+    expect((await fetch(`${base}${asset}`, { headers: { cookie: `dmtool-relay=${TOKEN_A}` } })).status).toBe(401);
+  });
+
+  it('moves a socket whose link changes view to a reconnect into the new view', async () => {
+    await putLinks({ [TOKEN_A]: 'A' });
+    const dm = connect(`${base}/ws`, [RELAY_DM_PROTOCOL, DM_KEY]);
+    await dm.opened;
+    const a = player(TOKEN_A);
+    await a.opened;
+    await dm.message(statusIs({ players: 1, views: { A: 1 } }));
+
+    await putLinks({ [TOKEN_A]: 'B' });
+    expect(await a.closed).toBe(1013);
+    const again = player(TOKEN_A);
+    await again.opened;
+    await dm.message(statusIs({ players: 1, views: { B: 1 } }));
+    dm.socket.send('A\nold view');
+    dm.socket.send('B\nnew view');
+    await again.message((m) => m === 'new view');
+    expect(again.messages).toEqual(['new view']);
+  });
+
+  it('accepts only tokens of the map, not a view name or an altered token', async () => {
+    await putLinks({ [TOKEN_A]: 'party' });
+    const altered = `${TOKEN_A.slice(0, -1)}0`;
+    for (const token of ['party', altered]) {
+      await expect(player(token).opened).rejects.toThrow('HTTP 401');
+      expect((await fetch(`${base}/?t=${token}`)).status).toBe(401);
+      expect((await fetch(`${base}${asset}?token=${token}`)).status).toBe(401);
+    }
+  });
+
+  it('keeps the links across a relay restart', async () => {
+    await putLinks({ [TOKEN_A]: 'A' });
+    await relay.close();
+    await start();
+    const a = player(TOKEN_A);
+    await a.opened;
+    a.socket.close();
+  });
+
+  it('rejects links from anyone but the DM and malformed links', async () => {
+    expect((await putLinks({ [TOKEN_A]: 'A' }, 'b'.repeat(64))).status).toBe(401);
+    expect((await putLinks({ short: 'A' })).status).toBe(400);
+    expect((await putLinks({ [TOKEN_A]: 'a,b' })).status).toBe(400);
+    await expect(player(TOKEN_A).opened).rejects.toThrow('HTTP 401');
   });
 });
 
@@ -176,36 +282,38 @@ describe('relay player access', () => {
 
   it('serves assets with the token in the query or the cookie only', async () => {
     await put(`/api${asset}`, PNG);
-    const { token } = await session();
+    await putLinks({ [TOKEN_A]: 'A' });
     expect((await fetch(`${base}${asset}`)).status).toBe(401);
     expect((await fetch(`${base}${asset}?token=wrong`)).status).toBe(401);
-    const byQuery = await fetch(`${base}${asset}?token=${token}`);
+    const byQuery = await fetch(`${base}${asset}?token=${TOKEN_A}`);
     expect(byQuery.status).toBe(200);
     expect(byQuery.headers.get('content-type')).toBe('image/png');
     expect(Buffer.from(await byQuery.arrayBuffer())).toEqual(PNG);
-    const byCookie = await fetch(`${base}${asset}`, { headers: { cookie: `dmtool-relay=${token}` } });
+    const byCookie = await fetch(`${base}${asset}`, { headers: { cookie: `dmtool-relay=${TOKEN_A}` } });
     expect(byCookie.status).toBe(200);
-    expect((await fetch(`${base}/asset/data/settings.json?token=${token}`)).status).toBe(403);
+    expect((await fetch(`${base}/asset/data/settings.json?token=${TOKEN_A}`)).status).toBe(403);
   });
 
-  it('serves the uploaded player page for the link token and its chunks publicly', async () => {
-    const { token } = await session();
-    expect((await fetch(`${base}/?t=${token}`)).status).toBe(503);
+  it('serves the uploaded player page for a link token and its chunks publicly', async () => {
+    await putLinks({ [TOKEN_A]: 'A', [TOKEN_B]: 'B' });
+    expect((await fetch(`${base}/?t=${TOKEN_A}`)).status).toBe(503);
     const chunk = Buffer.from('console.log(1)');
     expect((await put('/api/bundle/assets/player-abc.js', chunk)).status).toBe(204);
     expect((await put('/api/bundle/player.html', Buffer.from('<html></html>'))).status).toBe(204);
 
     expect((await fetch(`${base}/?t=wrong`)).status).toBe(401);
-    const page = await fetch(`${base}/?t=${token}`);
+    const page = await fetch(`${base}/?t=${TOKEN_B}`);
     expect(page.status).toBe(200);
     expect(await page.text()).toBe('<html></html>');
-    expect(page.headers.get('set-cookie')).toContain(`dmtool-relay=${token}; Path=/asset; HttpOnly`);
+    expect(page.headers.get('set-cookie')).toContain(`dmtool-relay=${TOKEN_B}; Path=/asset; HttpOnly`);
     const script = await fetch(`${base}/assets/player-abc.js`);
     expect(script.headers.get('content-type')).toContain('text/javascript');
     expect(await script.text()).toBe('console.log(1)');
   });
 
-  it('answers the health check without credentials', async () => {
-    expect(await (await fetch(`${base}/health`)).json()).toMatchObject({ ok: true });
+  it('answers the health check without credentials to any origin', async () => {
+    const response = await fetch(`${base}/health`);
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(await response.json()).toMatchObject({ ok: true });
   });
 });

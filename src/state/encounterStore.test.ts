@@ -47,11 +47,11 @@ describe('encounter undo history', () => {
   it('records no step for log-only and fog-only updates', () => {
     const revision = useEncounterStore.getState().revision;
     useEncounterStore.getState().update((d) => addLog(d, 'note', 'The goblins whisper'));
-    useEncounterStore.getState().update((d) => void (d.fog.explored = 'AAAA'));
+    useEncounterStore.getState().update((d) => void (d.fog.exploredBy.pc = 'AAAA'));
     expect(useEncounterStore.getState().revision).toBe(revision + 2);
     expect(useEncounterStore.getState().canUndo).toBe(false);
     expect(useEncounterStore.getState().undo()).toBeNull();
-    expect(useEncounterStore.getState().encounter!.fog.explored).toBe('AAAA');
+    expect(useEncounterStore.getState().encounter!.fog.exploredBy.pc).toBe('AAAA');
   });
 
   it('keeps only the most recent 40 steps', () => {

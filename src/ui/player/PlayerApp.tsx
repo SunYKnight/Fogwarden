@@ -6,7 +6,7 @@ import type { PlayerEncounter, SyncTransport } from '@/sync/protocol';
 import type { WebSocketTransport } from '@/sync/wsTransport';
 import { usePlayerStore } from './playerStore';
 
-type Link = 'connecting' | 'open' | 'reconnecting';
+type Link = 'connecting' | 'open' | 'reconnecting' | 'revoked';
 
 /** Turn order as big readable names; the current turn is highlighted. */
 function InitiativeRibbon({ encounter }: { encounter: PlayerEncounter }) {
@@ -37,6 +37,7 @@ export function PlayerApp({ transport, lan }: { transport: SyncTransport; lan: W
   const mapRevision = usePlayerStore((s) => s.mapRevision);
   const camera = usePlayerStore((s) => s.camera);
   const encounter = usePlayerStore((s) => s.encounter);
+  const viewName = usePlayerStore((s) => s.viewName);
   const [link, setLink] = useState<Link>(lan ? 'connecting' : 'open');
 
   useEffect(() => {
@@ -46,18 +47,25 @@ export function PlayerApp({ transport, lan }: { transport: SyncTransport; lan: W
   }, [transport]);
 
   useEffect(
-    () => lan?.watchConnection((open) => setLink((prev) => (open ? 'open' : prev === 'open' ? 'reconnecting' : prev))),
+    () =>
+      lan?.watchConnection((open) => {
+        const revoked = !open && lan.revoked;
+        if (revoked) {
+          // A withdrawn link must not keep showing what it showed.
+          usePlayerStore.setState({ map: null, terrain: null, encounter: null, fog: null, viewName: null });
+        }
+        setLink((prev) => (open ? 'open' : revoked ? 'revoked' : prev === 'open' ? 'reconnecting' : prev));
+      }),
     [lan],
   );
 
-  const status =
-    link === 'connecting'
-      ? 'Connecting to the DM…'
-      : link === 'reconnecting'
-        ? 'Connection lost, reconnecting…'
-        : map
-          ? null
-          : 'Waiting for the DM to show a map';
+  const linkStatus: Record<Link, string | null> = {
+    connecting: 'Connecting to the DM…',
+    reconnecting: 'Connection lost, reconnecting…',
+    revoked: 'This link no longer works; ask the DM for the new one',
+    open: map ? null : 'Waiting for the DM to show a map',
+  };
+  const corner = [viewName, linkStatus[link]].filter((part) => part !== null).join(' · ');
   const ribbon = encounter && encounter.showTurnOrder && encounter.round > 0 && encounter.combatants.length > 0;
 
   return (
@@ -79,9 +87,9 @@ export function PlayerApp({ transport, lan }: { transport: SyncTransport; lan: W
         </MapView>
       )}
       {ribbon && <InitiativeRibbon encounter={encounter} />}
-      {status && (
+      {corner && (
         <div className="player-status" role="status">
-          {status}
+          {corner}
         </div>
       )}
     </div>

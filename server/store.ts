@@ -100,16 +100,21 @@ export class FileStore {
     }
   }
 
-  /** Reads a small text file, creating it with `create()` on first use. */
-  async readOrCreate(name: string, create: () => string): Promise<string> {
-    const file = this.file(name);
-    const existing = await readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => missingAsNull(error));
-    const text = existing ?? create();
-    if (existing === null) {
-      await mkdir(dirname(file), { recursive: true });
-      await writeFile(file, text, { mode: 0o600 });
+  /** Reads a small text file; null if it does not exist yet. */
+  async readText(name: string): Promise<string | null> {
+    return readFile(this.file(name), 'utf8').catch((error: NodeJS.ErrnoException) => missingAsNull(error));
+  }
+
+  /** Replaces a small private text file through a temporary file, so a crash never leaves it half written. */
+  async writeText(name: string, text: string): Promise<void> {
+    const temp = this.file('tmp', randomBytes(8).toString('hex'));
+    await mkdir(dirname(temp), { recursive: true });
+    try {
+      await writeFile(temp, text, { mode: 0o600 });
+      await rename(temp, this.file(name));
+    } finally {
+      await rm(temp, { force: true });
     }
-    return text;
   }
 }
 

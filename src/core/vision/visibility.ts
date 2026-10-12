@@ -202,11 +202,16 @@ function bounds(map: VisionMap, blockers: Blocker[], points: Vec2[]): Bounds {
 }
 
 /**
- * Cells currently seen by the vision sources (FOG_VISIBLE, else 0), row-major from the north-west corner
- * at `cellsPerSquare` cells per grid square. A cell is seen when the ray from a source's eye to the cell
- * passes walls and terrain and the source can perceive the cell's light level at that distance.
+ * Cells each vision source sees now (FOG_VISIBLE, else 0) by combatant id, row-major from the north-west
+ * corner at `cellsPerSquare` cells per grid square. A cell is seen when the ray from the source's eye to the
+ * cell passes walls and terrain and the source can perceive the cell's light level at that distance. Light
+ * is shared: a torch carried by one source lights cells for every source that has line of sight to them.
  */
-export function computeVisibility(map: VisionMap, terrain: HeightField, state: VisionState): Uint8Array {
+export function computeVisibility(
+  map: VisionMap,
+  terrain: HeightField,
+  state: VisionState,
+): Map<string, Uint8Array<ArrayBuffer>> {
   const size = fogSize(map.grid, state.cellsPerSquare);
   const count = size.cellsX * size.cellsY;
   const ground = groundHeights(map, terrain, size);
@@ -218,8 +223,9 @@ export function computeVisibility(map: VisionMap, terrain: HeightField, state: V
   const sight = new RayGrid(bounds(map, sightBlockers, points), BUCKET_FT, terrain, sightBlockers);
   const light = new RayGrid(bounds(map, lightBlockers, points), BUCKET_FT, terrain, lightBlockers);
   const levels = lightLevels(map, size, ground, lights, light);
-  const visible = new Uint8Array(count);
+  const bySource = new Map<string, Uint8Array<ArrayBuffer>>();
   for (const source of sources) {
+    const visible = new Uint8Array(count);
     const { x, y, elevationFt } = source.position!;
     const eye = elevationFt + EYE_HEIGHT_FT[source.size];
     // A missing or 0 ft sense must not cover the viewer's own cell.
@@ -229,23 +235,22 @@ export function computeVisibility(map: VisionMap, terrain: HeightField, state: V
     const onGround = elevationFt - groundAt(map, terrain, { x, y }) <= ON_GROUND_FT;
     const tremorsense = onGround ? source.senses.tremorsense || -1 : -1;
     for (let i = 0; i < count; i++) {
-      if (visible[i] !== FOG_VISIBLE) {
-        const cx = ((i % size.cellsX) + 0.5) * size.cellFt;
-        const cy = (Math.floor(i / size.cellsX) + 0.5) * size.cellFt;
-        const d = Math.sqrt((cx - x) * (cx - x) + (cy - y) * (cy - y));
-        const level = levels[i];
-        const perceived =
-          blindsight >= d ||
-          tremorsense >= d ||
-          level === BRIGHT ||
-          level === DIM ||
-          (level === DARK && (darkvision >= d || truesight >= d)) ||
-          (level === MAGICAL_DARK && truesight >= d);
-        if (perceived && !sight.blocked(x, y, eye, cx, cy, ground[i]! + TARGET_LIFT_FT)) {
-          visible[i] = FOG_VISIBLE;
-        }
+      const cx = ((i % size.cellsX) + 0.5) * size.cellFt;
+      const cy = (Math.floor(i / size.cellsX) + 0.5) * size.cellFt;
+      const d = Math.sqrt((cx - x) * (cx - x) + (cy - y) * (cy - y));
+      const level = levels[i];
+      const perceived =
+        blindsight >= d ||
+        tremorsense >= d ||
+        level === BRIGHT ||
+        level === DIM ||
+        (level === DARK && (darkvision >= d || truesight >= d)) ||
+        (level === MAGICAL_DARK && truesight >= d);
+      if (perceived && !sight.blocked(x, y, eye, cx, cy, ground[i]! + TARGET_LIFT_FT)) {
+        visible[i] = FOG_VISIBLE;
       }
     }
+    bySource.set(source.id, visible);
   }
-  return visible;
+  return bySource;
 }

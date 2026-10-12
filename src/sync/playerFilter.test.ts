@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { BitSet } from '@/core/binary';
 import { createEncounter, createMap, type BattleMap, type Combatant, type Encounter } from '@/core/model';
-import { FOG_EXPLORED, FOG_VISIBLE, fogSize, type FogCells } from '@/core/vision/fog';
+import { HeightField } from '@/core/terrain/heightfield';
+import {
+  exploreBySource,
+  FOG_EXPLORED,
+  FOG_VISIBLE,
+  fogSize,
+  viewFog,
+  type FogCells,
+  type FogSources,
+} from '@/core/vision/fog';
+import { computeVisibility } from '@/core/vision/visibility';
 import { filterEncounterForPlayers, filterMapForPlayers, healthBand, playerMapInputs } from './playerFilter';
 
 function combatant(id: string, extra: Partial<Combatant> = {}): Combatant {
@@ -182,5 +193,68 @@ describe('healthBand', () => {
     expect(healthBand({ current: 6, max: 10, temp: 0 })).toBe('hurt');
     expect(healthBand({ current: 5, max: 10, temp: 0 })).toBe('bloodied');
     expect(healthBand({ current: 0, max: 10, temp: 0 })).toBe('down');
+  });
+});
+
+describe('per-character views', () => {
+  // Four squares in a row, one fog cell each; a wall at x = 10 splits them.
+  const map: BattleMap = {
+    ...createMap({ name: 'm', image: null, squaresX: 4, squaresY: 1, pxPerSquare: 50 }),
+    walls: [
+      {
+        id: 'w1',
+        points: [
+          { x: 10, y: 0 },
+          { x: 10, y: 5 },
+        ],
+        closed: false,
+        heightFt: 10,
+        thicknessFt: 0.5,
+        baseFt: null,
+        material: 'stone',
+        blocksSight: true,
+        blocksMovement: true,
+        blocksLight: true,
+      },
+    ],
+  };
+  const terrain = HeightField.fromMap(map);
+  const size = fogSize(map.grid, 1);
+  const at = (x: number) => ({ x, y: 2.5, elevationFt: 0 });
+  const pc = (id: string, x: number) => combatant(id, { side: 'player', visionSource: true, position: at(x) });
+
+  function look(encounter: Encounter, explored: Map<string, BitSet>) {
+    const state = { openingStates: {}, combatants: encounter.combatants, cellsPerSquare: 1 };
+    const visible = computeVisibility(map, terrain, state);
+    exploreBySource(explored, visible, new BitSet(4));
+    const sources: FogSources = { size, visible, explored, revealed: new BitSet(4), hidden: new BitSet(4) };
+    const view = (ids: string[]) => {
+      const fog = viewFog(sources, ids);
+      return {
+        cells: Array.from(fog.cells),
+        ids: filterEncounterForPlayers(encounter, map, fog).combatants.map((c) => c.id),
+      };
+    };
+    return { thorin: view(['thorin']), elara: view(['elara']), party: view(['thorin', 'elara']) };
+  }
+
+  it('shows a character only what it sees and the party what anyone sees', () => {
+    const goblin = combatant('goblin', { position: at(12.5) });
+    const seen = look(encounterWith([pc('thorin', 2.5), pc('elara', 17.5), goblin]), new Map());
+    expect(seen.thorin).toEqual({ cells: [FOG_VISIBLE, FOG_VISIBLE, 0, 0], ids: ['thorin', 'elara'] });
+    expect(seen.elara).toEqual({ cells: [0, 0, FOG_VISIBLE, FOG_VISIBLE], ids: ['thorin', 'elara', 'goblin'] });
+    expect(seen.party.cells).toEqual([FOG_VISIBLE, FOG_VISIBLE, FOG_VISIBLE, FOG_VISIBLE]);
+    expect(seen.party.ids).toEqual(['thorin', 'elara', 'goblin']);
+  });
+
+  it('remembers explored cells per character and gives the party their union', () => {
+    const explored = new Map<string, BitSet>();
+    const goblin = combatant('goblin', { position: at(12.5) });
+    look(encounterWith([pc('thorin', 2.5), pc('elara', 17.5), goblin]), explored);
+    const later = look(encounterWith([pc('thorin', 2.5), pc('elara', 7.5), goblin]), explored);
+    expect(later.thorin.cells).toEqual([FOG_VISIBLE, FOG_VISIBLE, 0, 0]);
+    expect(later.elara.cells).toEqual([FOG_VISIBLE, FOG_VISIBLE, FOG_EXPLORED, FOG_EXPLORED]);
+    expect(later.party.cells).toEqual([FOG_VISIBLE, FOG_VISIBLE, FOG_EXPLORED, FOG_EXPLORED]);
+    expect(later.party.ids).toEqual(['thorin', 'elara']);
   });
 });
