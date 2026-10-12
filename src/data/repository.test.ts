@@ -150,6 +150,7 @@ describe('Repository maps', () => {
     const copy = await repository.duplicateMap({ area: 'data', id: map.id }, 'Tavern copy');
     await repository.remove('map', map.id);
 
+    expect(copy.id).toBe('tavern-copy');
     expect(copy.image!.asset).toEqual(mapAssetRef(copy.id, 'tavern map.jpg'));
     expect(storage.files.data.get(copy.image!.asset.path)).toEqual(new Uint8Array([1, 2, 3]));
     expect((await repository.list('map')).entries.map((e) => e.doc.name)).toEqual(['Tavern copy']);
@@ -170,6 +171,33 @@ describe('Repository maps', () => {
     const { repository } = setup();
     const ref = await repository.importMapAsset('m1', '../evil/name?.png', new Uint8Array([0]));
     expect(ref.path).toBe('library/maps/m1/assets/.._evil_name_.png');
+  });
+});
+
+describe('Repository new document ids', () => {
+  it('skips ids of user files, pictures and shipped documents, ignoring case', async () => {
+    const { storage, repository } = setup();
+    storage.files.content.set('creatures/goblin.txt', '');
+    storage.files.data.set('library/creatures/Goblin-2.txt', '');
+    storage.files.data.set('library/creatures/goblin-3.token.png', new Uint8Array([1]));
+    expect(await repository.newLibraryId('creature', 'Goblin')).toBe('goblin-4');
+    expect(await repository.newLibraryId('marker', '')).toBe('area');
+  });
+
+  it('counts up among campaigns and among the encounters of one campaign', async () => {
+    const { repository } = setup();
+    const saga = { ...createCampaign('Saga'), id: await repository.newCampaignId('Saga') };
+    await repository.saveCampaign(saga);
+    expect(saga.id).toBe('saga');
+    expect(await repository.newCampaignId('Saga')).toBe('saga-2');
+    const ambush = {
+      ...createEncounter('Ambush', 'saga', null),
+      id: await repository.newEncounterId('saga', 'Ambush'),
+    };
+    await repository.saveEncounter(ambush);
+    expect(ambush.id).toBe('ambush');
+    expect(await repository.newEncounterId('saga', 'Ambush')).toBe('ambush-2');
+    expect(await repository.newEncounterId('other', 'Ambush')).toBe('ambush');
   });
 });
 

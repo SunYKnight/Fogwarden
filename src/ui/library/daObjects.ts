@@ -9,9 +9,11 @@ import {
   type PlacedKind,
 } from '@/core/import/damObjects';
 import { parseJsonFile, parseOrThrow } from '@/core/import/importedMap';
-import type { AssetRef, Grid, Prop } from '@/core/model';
+import type { AssetRef, Grid, MapImage, Prop, Vec2 } from '@/core/model';
+import { fitSquaresToImage, type GridCalibration } from '@/core/terrain/calibration';
 import { mapAssetRef, type Repository } from '@/data/repository';
 import { importFile, listFolder, readFileText } from '@/data/tauriStorage';
+import { worldToImagePx } from '@/render/projection';
 import { modelSideFiles } from '@/sync/relayClient';
 
 /** Models the DM picked for Dungeon Alchemist objects, one folder per model with its side files. */
@@ -175,4 +177,24 @@ export function damPropsFor(
     );
     return damProps(project, margin, grid.feetPerSquare, kinds);
   };
+}
+
+/**
+ * Image pixels of every object of the kind on the export's picture placed with `calibration`, so
+ * the DM sees where the kind stands before choosing a model for it.
+ */
+export function damObjectPixels(
+  project: DamProject,
+  blockId: string,
+  image: Pick<MapImage, 'widthPx' | 'heightPx'>,
+  calibration: GridCalibration,
+): Vec2[] {
+  const margin = damMargin(project, fitSquaresToImage(image, calibration.pxPerSquare));
+  // A Dungeon Alchemist unit is one square, so its feet are the map's.
+  const grid = { ...calibration, feetPerSquare: DA_UNIT_FT };
+  return project.objects
+    .filter((o) => o.blockId === blockId)
+    .map((o) =>
+      worldToImagePx(grid, { x: o.position.x + margin.x * DA_UNIT_FT, y: o.position.y + margin.y * DA_UNIT_FT }),
+    );
 }

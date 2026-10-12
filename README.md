@@ -81,6 +81,10 @@ encounter. The player window picks its view under Players > _Shows_.
 
 ## Import from the old WPF tool
 
+In the app: Home > First steps > **Import…** or Settings > Data > **Import from the old WPF tool…**, then choose the
+`240722_DnD_DMTool_Data` folder. The dialog lists what it found before anything is written; running it again replaces
+earlier imports. Developers can run the same importer from the project folder:
+
 ```sh
 # creatures, maps (images, tile heights, walls) and markers from the legacy data folder
 pnpm tsx tools/import-legacy.ts "<path>/240722_DnD_DMTool_Data" [--data-root <path>]
@@ -109,6 +113,9 @@ the app. Settings > Data shows and changes the folder.
 
 - File names are the ids. A new `.txt` stat block in `library/creatures/` shows up in the Compendium; a picture named
   after a creature id pictures it, shipped ones too (`srd-goblin.jpg` for the SRD goblin).
+- A new document's id comes from its name when it is created: "Goblin Boss" becomes `goblin-boss`, a second one
+  `goblin-boss-2`. Renaming a document in the app keeps its id, so its file or folder name stays. Documents created
+  by older versions keep their 26-character ids.
 - `terrain.png` is a 16-bit grayscale heightmap: height in feet = `baseFt + value * feetPerUnit` from `map.json`.
 - Fog masks have one pixel per fog cell: white = explored (or revealed/hidden by you in `revealed.png`/`hidden.png`).
 - `settings.json` holds secrets: the relay DM key and the player link secret. Don't share it.

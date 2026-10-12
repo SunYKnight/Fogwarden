@@ -40,6 +40,12 @@ between modules.
   stamps `updatedAt`), `store*` (write as given; migration), `remove`, `duplicateMap`, `importMapAsset`,
   `importCreaturePicture`, `storeCreaturePictures`, campaigns/encounters, settings. Content documents with the same
   id as a user document are shadowed by it. File formats: see "Data formats" below.
+- New document ids: factories give a ULID placeholder; every create path (new, duplicate, import, first save of a
+  new creature) takes `newLibraryId(kind, name)`, `newCampaignId(name)` or `newEncounterId(campaignId, name)`
+  instead. They apply `freeDocumentId` (`src/core/import/ids.ts`: slug cut to 60 characters, fallback for an empty
+  slug, `-2`, `-3` … while the folder has that id in any case or it is a Windows device name such as `con`) to the
+  folder listing; library ids also skip shipped ids and picture file names. Renames keep the id. Existing ULID
+  documents keep theirs: encounters (campaign, map, creature refs) and settings refer to them.
 - `Storage` (`src/data/storage.ts`): area `'data'` (user data root) or `'content'` (shipped). Implementations:
   `TauriStorage` (desktop), `BrowserStorage` (IndexedDB, dev in a browser), `MemoryStorage` (tests),
   `NodeStorage` (`tools/nodeStorage.ts`, CLI tools; same path rules and atomic writes as the Rust side).
@@ -49,8 +55,9 @@ between modules.
   get pictures without a user copy. Token picture precedence `resolveTokenAsset`: combatant token > creature token >
   creature image; `creaturePortrait` (compendium) prefers the image. `combatantToken`/`useCombatantToken`
   (`libraryStore.ts`) resolve live, so new pictures reach running encounters. Desktop-only file access outside the
-  roots: `listFolder(path)`, `importFile(path, to)`, `readFileText(path)` (`tauriStorage.ts`, Rust
-  `storage_list_folder`/`_import_file`/`_read_file_text`; absolute paths the user picked, files or folders only).
+  roots: `listFolder(path)`, `importFile(path, to)`, `readFileText(path)`, `readFileBytes(path)` (`tauriStorage.ts`,
+  Rust `storage_list_folder`/`_import_file`/`_read_file_text`/`_read_file_bytes`; absolute paths the user picked,
+  files or folders only).
 - Assets are `AssetRef {area, path}`; display them with `repository.storage.assetUrl(ref)` or `<AssetImage>`.
 - PNG: `src/core/png.ts` (`encodePng`/`decodePng`/`readPngSize`, dependency-free, `CompressionStream` deflate,
   every color type and bit depth, Adam7), `src/core/terrain/heightmap.ts`, `src/core/vision/fogMask.ts`.
@@ -150,6 +157,14 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
 - `src/core/import/statblock.ts`: `parseStatBlock(text, meta)` reads stat blocks in the legacy raw file layout and
   throws `StatBlockError` naming the failing line. `legacy.ts` converts the WPF app's JSON (creatures, tile maps,
   markers). Imported documents get readable stable ids (`slugId`), so re-imports overwrite.
+- `src/data/legacyImport.ts`: the one legacy importer for app and CLI, reading through a `LegacySource`
+  (`list`/`readText`/`readBytes` on absolute paths: Node fs in `tools/import-legacy.ts`, `listFolder`/`readFileText`
+  /`readFileBytes` in the app). `planLegacyImport(source, folder)` checks the folder (`LegacyFolderError` names the
+  missing folders), reads and converts everything without writing and resolves pictures like Windows (case and
+  separators ignored; legacy paths are relative to the program folder above the data folder, then by file name in
+  the folders the old tool used). `runLegacyImport(plan, source, repository, onProgress)` writes through the
+  repository and reports imported counts, skipped files and warnings by file name. UI: `LegacyImportDialog`
+  (First steps, Settings > Data). `src/core/imageSize.ts` reads PNG/JPEG pixel sizes from the header.
 - `src/core/import/portraitMatch.ts`: `matchPortraits(fileNames, creatures)` pairs picture files with creatures by
   `portraitKey` (slug without extension and `source--` prefixes): id beats name beats family name ("Werewolf, Human
   Form" → "werewolf"); a file fits all creatures sharing the key, the first sorted file wins per creature.
@@ -185,11 +200,16 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   - `damObjects.ts`: `damObjectKinds`, `damProps` (props at the object positions, Y turn negated because three.js
     turns counter-clockwise, `unitFt × scale`, no sight or movement blocking; the export's walls do that).
   - UI: `mapImport.ts` `saveImportedMap` (content, terrain, `props(mapId, grid)`; terrain fit is checked before any
-    file is written), `daObjects.ts` (choices file, library models, `CC0_MODELS` from `content/models/cc0`,
-    `damPropsFor` copies each chosen model with its glTF side files to `assets/models/<folder>/`),
+    file is written; `writeImage` returns the stored picture's size and the calibration is scaled to it, squares
+    stay those of the original), `storeMapImage` (pictures above `MAX_TEXTURE_PX` are stored reduced to it:
+    `reducedImageSize`/`scaleCalibration` in `calibration.ts`, `OffscreenCanvas`, JPEG, PNG if any pixel is
+    transparent; players never download more than the 3D view shows), `daObjects.ts` (choices file, library
+    models, `CC0_MODELS` from `content/models/cc0`, `damPropsFor` copies each chosen model with its glTF side files
+    to `assets/models/<folder>/`, `damObjectPixels` places a kind's objects on the export picture),
     `DamObjectsPanel` (one row per kind: CC0 stand-in, own file, a file from a picked folder such as Dungeon
-    Alchemist's custom models, or Skip), `DaFolderImport.tsx` (Maps page, desktop: reads every floor up front;
-    terrain and objects go to the lowest floor).
+    Alchemist's custom models, or Skip; beside it the picture with dots on every object of the hovered or selected
+    kind), `DaFolderImport.tsx` (Maps page, desktop: reads every floor up front and checks each project fits its
+    lowest floor; terrain and objects go to the lowest floor).
 - CLI (`pnpm tsx tools/<script>.ts`, default data root = the desktop app's, override with `--data-root`):
   `import-statblocks.ts <folder> [--source <name>]`, `import-legacy.ts <240722_DnD_DMTool_Data folder>`,
   `build-srd.ts [--input <5e-SRD-Monsters.json>]` regenerates `content/creatures` and `content/markers`

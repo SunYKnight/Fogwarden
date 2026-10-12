@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState } from 'react';
-import { createCampaign, newId, nowIso, type Campaign, type Encounter } from '@/core/model';
+import { createCampaign, nowIso, type Campaign, type Encounter } from '@/core/model';
 import type { LoadProblem } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
@@ -95,7 +95,8 @@ export function CampaignList() {
   }, [repository, reportError]);
 
   const create = async (name: string) => {
-    const campaign = await repository.saveCampaign(createCampaign(name));
+    const id = await repository.newCampaignId(name);
+    const campaign = await repository.saveCampaign({ ...createCampaign(name), id });
     navigate({ page: 'campaigns', campaignId: campaign.id });
   };
 
@@ -158,7 +159,9 @@ function EncounterRow({ encounter, onChanged }: { encounter: Encounter; onChange
 
   const duplicate = async () => {
     const at = nowIso();
-    const copy = { ...encounter, id: newId(), name: `${encounter.name} copy`, createdAt: at, updatedAt: at };
+    const name = `${encounter.name} copy`;
+    const id = await repository.newEncounterId(encounter.campaignId, name);
+    const copy = { ...encounter, id, name, createdAt: at, updatedAt: at };
     await repository.saveEncounter(copy);
     useAppStore.getState().notify(`Created "${copy.name}"`);
     onChanged();

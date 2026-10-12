@@ -1,11 +1,19 @@
 import { damTerrainField, type DamProject } from '@/core/import/damProject';
 import type { ImportedContent } from '@/core/import/importedMap';
-import { createMap, type AssetRef, type BattleMap, type Grid, type MapImage, type Prop, type Vec2 } from '@/core/model';
-import { fitSquaresToImage, type GridCalibration } from '@/core/terrain/calibration';
+import { createMap, type BattleMap, type Grid, type MapImage, type Prop, type Vec2 } from '@/core/model';
+import {
+  fitSquaresToImage,
+  reducedImageSize,
+  scaleCalibration,
+  type GridCalibration,
+} from '@/core/terrain/calibration';
 import type { Repository } from '@/data/repository';
+import { MAX_TEXTURE_PX } from '@/render/loadImageTexture';
 
 /** Battlemap exports commonly use 70 px per square when the file name gives no grid size. */
 const DEFAULT_PX_PER_SQUARE = 70;
+// Keeps grid lines and lettering of painted battlemaps free of artefacts.
+const JPEG_QUALITY = 0.9;
 
 export type ImageSize = Pick<MapImage, 'widthPx' | 'heightPx'>;
 
@@ -76,30 +84,90 @@ export interface ImportedMapOptions {
   content?: ImportedContent;
   /** Dungeon Alchemist project whose ground heights become the terrain. */
   project?: DamProject | null;
-  /** Stores the battlemap picture in the new map's asset folder. */
-  writeImage: (mapId: string) => Promise<AssetRef>;
+  /** Stores the battlemap picture in the new map's asset folder; the size is the stored picture's. */
+  writeImage: (mapId: string) => Promise<MapImage>;
   /** Props placed on the new map; their models go to its asset folder. */
   props?: (mapId: string, grid: Grid) => Promise<Prop[]>;
 }
 
-/** Saves a new map for an image with the grid already placed, so it opens calibrated. */
+/**
+ * Saves a new map for an image with the grid already placed, so it opens calibrated. A picture
+ * stored smaller than `image` gets the grid scaled along; the squares stay those of `image`.
+ */
 export async function saveImportedMap(repository: Repository, options: ImportedMapOptions): Promise<BattleMap> {
   const { name, image, calibration, content, project } = options;
   const squares = fitSquaresToImage(image, calibration.pxPerSquare);
-  const map = createMap({ name, image: null, ...squares, pxPerSquare: calibration.pxPerSquare });
-  const grid = { ...map.grid, ...calibration };
+  const id = await repository.newLibraryId('map', name);
+  const map = { ...createMap({ name, image: null, ...squares, pxPerSquare: calibration.pxPerSquare }), id };
   // Terrain first: a misfit project must fail before files are written.
-  const heights = project ? damTerrainField(project, grid, map.terrain.samplesPerSquare).encode() : null;
-  const asset = await options.writeImage(map.id);
+  const heights = project ? damTerrainField(project, map.grid, map.terrain.samplesPerSquare).encode() : null;
+  const stored = await options.writeImage(map.id);
+  const scale = Math.max(stored.widthPx, stored.heightPx) / Math.max(image.widthPx, image.heightPx);
+  const grid = { ...map.grid, ...scaleCalibration(calibration, scale) };
   const props = options.props ? await options.props(map.id, grid) : [];
   return repository.save('map', {
     ...map,
     ...content,
-    image: { asset, ...image },
+    image: stored,
     grid,
     terrain: heights === null ? map.terrain : { ...map.terrain, heights },
     props,
   });
+}
+
+/** True when any pixel of the RGBA data is not fully opaque. */
+export function hasTransparency(rgba: Uint8ClampedArray): boolean {
+  let found = false;
+  for (let i = 3; i < rgba.length && !found; i += 4) {
+    found = rgba[i]! < 255;
+  }
+  return found;
+}
+
+/** The picture scaled to `size`: PNG where it is transparent, else the much smaller JPEG. */
+async function encodeReduced(source: Blob, size: ImageSize): Promise<{ bytes: Uint8Array; extension: string }> {
+  const { widthPx, heightPx } = size;
+  const bitmap = await createImageBitmap(source, {
+    resizeWidth: widthPx,
+    resizeHeight: heightPx,
+    resizeQuality: 'high',
+  });
+  const canvas = new OffscreenCanvas(widthPx, heightPx);
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('This system cannot draw images off screen to reduce the battlemap');
+  }
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const transparent = hasTransparency(context.getImageData(0, 0, widthPx, heightPx).data);
+  const blob = await canvas.convertToBlob(
+    transparent ? { type: 'image/png' } : { type: 'image/jpeg', quality: JPEG_QUALITY },
+  );
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), extension: transparent ? 'png' : 'jpg' };
+}
+
+/**
+ * Stores the battlemap picture `source` of size `image` for a new map. Pictures larger than the 3D
+ * view ever shows are stored reduced, so players download and decode only what they can see.
+ */
+export async function storeMapImage(
+  repository: Repository,
+  mapId: string,
+  fileName: string,
+  source: Blob,
+  image: ImageSize,
+): Promise<MapImage> {
+  const reduced = reducedImageSize(image, MAX_TEXTURE_PX);
+  let stored: MapImage;
+  if (reduced) {
+    const { bytes, extension } = await encodeReduced(source, reduced);
+    const asset = await repository.importMapAsset(mapId, `${fileName.replace(/\.[^.]*$/, '')}.${extension}`, bytes);
+    stored = { asset, ...reduced };
+  } else {
+    const asset = await repository.importMapAsset(mapId, fileName, new Uint8Array(await source.arrayBuffer()));
+    stored = { asset, ...image };
+  }
+  return stored;
 }
 
 /** Saves a new map for the image file with the grid already placed. */
@@ -110,6 +178,6 @@ export function createCalibratedMap(
 ): Promise<BattleMap> {
   return saveImportedMap(repository, {
     ...options,
-    writeImage: async (mapId) => repository.importMapAsset(mapId, file.name, new Uint8Array(await file.arrayBuffer())),
+    writeImage: (mapId) => storeMapImage(repository, mapId, file.name, file, options.image),
   });
 }

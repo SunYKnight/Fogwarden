@@ -307,6 +307,7 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
       <DamObjectsPanel
         project={draft.source.project}
         choices={draft.source.objects}
+        preview={{ url: draft.url, image: draft.image, calibration: draft.calibration }}
         onChange={(objects) => setDraft({ ...draft, source: { ...source, objects } })}
       />
     );
@@ -320,16 +321,27 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
   }
   if (step === 'done' && created) {
     const placed = created.props.length > 0 ? `, ${created.props.length} objects` : '';
+    const stored = created.image;
+    const reduced =
+      draft && stored && (stored.widthPx !== draft.image.widthPx || stored.heightPx !== draft.image.heightPx);
     body = (
       <div className="wizard-done">
         <Icon name="check" size={32} />
-        <p>
-          <strong>{created.name}</strong> is ready: {created.grid.squaresX} × {created.grid.squaresY} squares with a
-          calibrated grid.{' '}
-          {draft?.source
-            ? `Imported ${exportSummary(draft.source.content)}${draft.source.project ? `, terrain${placed}` : ''}.`
-            : 'Walls, doors and terrain are added in the editor.'}
-        </p>
+        <div>
+          <p>
+            <strong>{created.name}</strong> is ready: {created.grid.squaresX} × {created.grid.squaresY} squares with a
+            calibrated grid.{' '}
+            {draft?.source
+              ? `Imported ${exportSummary(draft.source.content)}${draft.source.project ? `, terrain${placed}` : ''}.`
+              : 'Walls, doors and terrain are added in the editor.'}
+          </p>
+          {reduced && (
+            <p className="muted">
+              Reduced from {draft.image.widthPx} × {draft.image.heightPx} to {stored.widthPx} × {stored.heightPx} px;
+              the 3D view never shows more. Your original file is unchanged.
+            </p>
+          )}
+        </div>
       </div>
     );
     footer = (

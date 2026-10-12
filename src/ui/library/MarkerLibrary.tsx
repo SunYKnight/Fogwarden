@@ -119,7 +119,8 @@ export function MarkerLibrary() {
   const entries = listing.entries.filter((e) => e.doc.name.toLowerCase().includes(needle));
 
   const create = async () => {
-    const stored = await repository.save('marker', createMarkerTemplate('New area'));
+    const id = await repository.newLibraryId('marker', 'New area');
+    const stored = await repository.save('marker', { ...createMarkerTemplate('New area'), id });
     await refresh('marker');
     setSelectedId(stored.id);
   };

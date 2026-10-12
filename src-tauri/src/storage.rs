@@ -296,15 +296,26 @@ pub fn storage_import_file(state: State<'_, StorageState>, from: String, to: Str
     import_file(&state.root(Area::Data)?, Path::new(&from), &to)
 }
 
-/// Text of a file the user picked (absolute path) outside the storage roots.
-#[tauri::command]
-pub fn storage_read_file_text(path: String) -> Result<String, StorageError> {
-    let file = PathBuf::from(&path);
+/// A file the user picked (absolute path) outside the storage roots.
+fn picked_file(path: &str) -> Result<PathBuf, StorageError> {
+    let file = PathBuf::from(path);
     if file.is_absolute() && file.is_file() {
-        Ok(fs::read_to_string(&file)?)
+        Ok(file)
     } else {
         Err(StorageError(format!("not a file: {path}")))
     }
+}
+
+/// Text of a file the user picked (absolute path) outside the storage roots.
+#[tauri::command]
+pub fn storage_read_file_text(path: String) -> Result<String, StorageError> {
+    Ok(fs::read_to_string(picked_file(&path)?)?)
+}
+
+/// Bytes of a file the user picked (absolute path) outside the storage roots, as a raw response.
+#[tauri::command]
+pub fn storage_read_file_bytes(path: String) -> Result<Response, StorageError> {
+    Ok(Response::new(fs::read(picked_file(&path)?)?))
 }
 
 #[tauri::command]

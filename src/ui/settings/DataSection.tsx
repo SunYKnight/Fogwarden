@@ -6,6 +6,7 @@ import { copyDataRootTo, openDataRootFolder } from '@/data/tauriStorage';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { Field } from '../components/fields';
+import { LegacyImportDialog } from '../home/LegacyImportDialog';
 import { Button, confirmDialog, Section } from '../kit';
 
 /** Loads everything from the new data root and ticks the Home page's "Choose data folder" step there. */
@@ -59,6 +60,7 @@ export function DataSection() {
   const roots = useAppStore((s) => s.roots);
   const reportError = useAppStore((s) => s.reportError);
   const [busy, setBusy] = useState(false);
+  const [legacyOpen, setLegacyOpen] = useState(false);
   const desktop = isTauri();
 
   const run = (action: (current: string) => Promise<void>) => {
@@ -84,6 +86,12 @@ export function DataSection() {
               disabled={busy}
               onClick={() => run(copyToNewFolder)}
             />
+            <Button
+              icon="upload"
+              label="Import from the old WPF tool…"
+              disabled={busy}
+              onClick={() => setLegacyOpen(true)}
+            />
           </div>
         ) : (
           <p className="muted">
@@ -96,6 +104,7 @@ export function DataSection() {
           read from <code>{roots?.contentRoot}</code>.
         </p>
       </div>
+      {legacyOpen && <LegacyImportDialog onClose={() => setLegacyOpen(false)} />}
     </Section>
   );
 }

@@ -44,3 +44,23 @@ export function fitSquaresToImage(
     squaresY: Math.max(1, Math.round(image.heightPx / pxPerSquare)),
   };
 }
+
+/** The image's size with its long edge at most `maxEdgePx`, aspect kept; null when it already fits. */
+export function reducedImageSize(
+  image: Pick<MapImage, 'widthPx' | 'heightPx'>,
+  maxEdgePx: number,
+): Pick<MapImage, 'widthPx' | 'heightPx'> | null {
+  const scale = maxEdgePx / Math.max(image.widthPx, image.heightPx);
+  return scale < 1
+    ? {
+        widthPx: Math.max(1, Math.round(image.widthPx * scale)),
+        heightPx: Math.max(1, Math.round(image.heightPx * scale)),
+      }
+    : null;
+}
+
+/** The same grid on the image stored `scale` times as large: pixel lengths scale, the turn stays. */
+export function scaleCalibration(calibration: GridCalibration, scale: number): GridCalibration {
+  const { pxPerSquare, rotationDeg, offsetPx } = calibration;
+  return { pxPerSquare: pxPerSquare * scale, rotationDeg, offsetPx: { x: offsetPx.x * scale, y: offsetPx.y * scale } };
+}

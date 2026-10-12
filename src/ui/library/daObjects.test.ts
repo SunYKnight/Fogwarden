@@ -6,6 +6,7 @@ import { createMap } from '@/core/model';
 import { MemoryStorage } from '@/data/memoryStorage';
 import { Repository } from '@/data/repository';
 import {
+  damObjectPixels,
   damPropsFor,
   importModelFiles,
   listLibraryModels,
@@ -99,5 +100,14 @@ describe('Dungeon Alchemist object choices', () => {
     expect(storage.files.data.get(`library/maps/${map.id}/assets/models/cc0/Textures/colormap.png`)).toEqual(
       new Uint8Array([7]),
     );
+  });
+
+  it('marks every object of a kind on the calibrated picture, export margin included', () => {
+    const calibration = { pxPerSquare: 100, rotationDeg: 0, offsetPx: { x: 10, y: -10 } };
+    const pixels = damObjectPixels(project(), 'chest', { widthPx: 300, heightPx: 300 }, calibration);
+    expect(pixels.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }))).toEqual([
+      { x: 160, y: 140 },
+      { x: 130, y: 170 },
+    ]);
   });
 });

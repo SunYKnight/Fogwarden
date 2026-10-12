@@ -28,6 +28,7 @@ pub fn run() {
             storage::storage_list_folder,
             storage::storage_import_file,
             storage::storage_read_file_text,
+            storage::storage_read_file_bytes,
             lan::lan_start,
             lan::lan_set_links,
             lan::lan_stop,

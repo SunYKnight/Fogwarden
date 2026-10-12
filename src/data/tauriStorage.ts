@@ -78,3 +78,8 @@ export function importFile(absolutePath: string, to: string): Promise<void> {
 export function readFileText(absolutePath: string): Promise<string> {
   return invoke<string>('storage_read_file_text', { path: absolutePath });
 }
+
+/** Bytes of the picked file `absolutePath` (desktop only). */
+export async function readFileBytes(absolutePath: string): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(await invoke<ArrayBuffer>('storage_read_file_bytes', { path: absolutePath }));
+}

@@ -9,6 +9,7 @@ import {
   createCalibratedMap,
   gridFromFileName,
   guessCalibration,
+  hasTransparency,
   mapNameFromFileName,
   roundCalibration,
   saveImportedMap,
@@ -107,7 +108,11 @@ describe('saveImportedMap', () => {
       calibration: { pxPerSquare: 100, rotationDeg: 0, offsetPx: { x: 0, y: 0 } },
       content,
       project,
-      writeImage: (mapId) => repository.importMapAsset(mapId, 'cellar.jpg', new Uint8Array([1])),
+      writeImage: async (mapId) => ({
+        asset: await repository.importMapAsset(mapId, 'cellar.jpg', new Uint8Array([1])),
+        widthPx: 300,
+        heightPx: 300,
+      }),
     });
     const loaded = await repository.load('map', { area: 'data', id: map.id });
     expect(loaded).toMatchObject({ ambientLight: 'dim', notes: content.notes });
@@ -122,9 +127,42 @@ describe('saveImportedMap', () => {
       image: { widthPx: 50, heightPx: 50 },
       calibration: { pxPerSquare: 100, rotationDeg: 0, offsetPx: { x: 0, y: 0 } },
       project: { ...project, width: 4 },
-      writeImage: (mapId) => repository.importMapAsset(mapId, 'tiny.jpg', new Uint8Array([1])),
+      writeImage: async (mapId) => ({
+        asset: await repository.importMapAsset(mapId, 'tiny.jpg', new Uint8Array([1])),
+        widthPx: 50,
+        heightPx: 50,
+      }),
     });
     await expect(save).rejects.toThrow(/"cellar.dam" is 4 × 1 squares, larger than the map/);
     expect(storage.files.data.size).toBe(0);
+  });
+
+  it('scales the grid to a picture stored reduced and keeps the squares', async () => {
+    const repository = new Repository(new MemoryStorage());
+    const map = await saveImportedMap(repository, {
+      name: 'Huge',
+      image: { widthPx: 15600, heightPx: 14700 },
+      calibration: { pxPerSquare: 70, rotationDeg: 1.5, offsetPx: { x: 39, y: -78 } },
+      writeImage: async (mapId) => ({
+        asset: await repository.importMapAsset(mapId, 'huge.jpg', new Uint8Array([1])),
+        widthPx: 3900,
+        heightPx: 3675,
+      }),
+    });
+    expect(map.image).toMatchObject({ widthPx: 3900, heightPx: 3675 });
+    expect(map.grid).toMatchObject({
+      pxPerSquare: 17.5,
+      rotationDeg: 1.5,
+      offsetPx: { x: 9.75, y: -19.5 },
+      squaresX: 223,
+      squaresY: 210,
+    });
+  });
+});
+
+describe('hasTransparency', () => {
+  it('finds any pixel that is not fully opaque', () => {
+    expect(hasTransparency(new Uint8ClampedArray([0, 0, 0, 255, 9, 9, 9, 255]))).toBe(false);
+    expect(hasTransparency(new Uint8ClampedArray([0, 0, 0, 255, 9, 9, 9, 254]))).toBe(true);
   });
 });

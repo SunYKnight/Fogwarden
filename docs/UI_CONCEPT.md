@@ -153,9 +153,9 @@ The calibration tool remains in the editor for later corrections, but under _Map
 
 ### 4.7 Settings
 
-- Sections: _Data_ (folder picker dialog, "open folder", "copy my data to new folder"), _Player view_ (monitor
-  thumbnails with "identify" flash and "test window"), _LAN_ (port), _Rules_ (diagonals), _About_ (version, revision,
-  licenses).
+- Sections: _Data_ (folder picker dialog, "open folder", "copy my data to new folder", "import from the old WPF
+  tool"), _Player view_ (monitor thumbnails with "identify" flash and "test window"), _LAN_ (port), _Rules_
+  (diagonals), _About_ (version, revision, licenses).
 
 ### 4.8 Player window
 

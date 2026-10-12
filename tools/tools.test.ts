@@ -1,13 +1,13 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { imageSize } from '../src/core/imageSize';
 import { encounterSchema } from '../src/core/model';
 import { HeightField } from '../src/core/terrain/heightfield';
 import { Repository } from '../src/data/repository';
 import { StorageError } from '../src/data/storage';
 import { createSampleEncounter, SAMPLE_GOBLIN, SAMPLE_MAP } from '../src/ui/home/sampleContent';
 import { CONTENT_ROOT, PROJECT_ROOT } from './cli';
-import { imageSize } from './imageSize';
 import { NodeStorage } from './nodeStorage';
 
 const scratchParent = join(PROJECT_ROOT, 'data-local');

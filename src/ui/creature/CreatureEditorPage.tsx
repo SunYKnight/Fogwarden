@@ -23,9 +23,9 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
   const reportError = useAppStore((s) => s.reportError);
   const setLeaveGuard = useAppStore((s) => s.setLeaveGuard);
   const refresh = useLibraryStore((s) => s.refresh);
-  const entry = useLibraryStore((s) => s.listings.creature.entries.find((e) => e.ref.id === creature.id));
   const [saved, setSaved] = useState(creature);
   const [draft, setDraft] = useState(creature);
+  const entry = useLibraryStore((s) => s.listings.creature.entries.find((e) => e.ref.id === saved.id));
   const [busy, setBusy] = useState(false);
   const dirty = draft !== saved;
   const shipped = entry?.ref.area === 'content';
@@ -48,7 +48,13 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
         await refresh('creature');
         useAppStore.getState().notify(`Saved the pictures of "${draft.name}"; the creature stays shipped`);
       } else {
-        const stored = await repository.save('creature', draft);
+        // Ids outlive renames, so a new one comes from the first saved name.
+        const id = entry ? draft.id : await repository.newLibraryId('creature', draft.name);
+        const stored = await repository.save('creature', { ...draft, id });
+        if (id !== draft.id) {
+          // Pictures picked before saving were stored under the draft id.
+          await repository.storeCreaturePictures(draft.id, { image: null, token: null });
+        }
         setSaved(stored);
         setDraft(stored);
         await refresh('creature');

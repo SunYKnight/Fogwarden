@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { calibrateFromSquare, fitSquaresToImage, type GridCalibration } from './calibration';
+import {
+  calibrateFromSquare,
+  fitSquaresToImage,
+  reducedImageSize,
+  scaleCalibration,
+  type GridCalibration,
+} from './calibration';
 
 /** Image pixel of grid corner (i, j) for a known calibration, same formula as the projection. */
 function cornerPx(grid: GridCalibration, i: number, j: number) {
@@ -50,5 +56,35 @@ describe('calibrateFromSquare', () => {
 describe('fitSquaresToImage', () => {
   it('rounds the image size to whole squares', () => {
     expect(fitSquaresToImage({ widthPx: 3500, heightPx: 2480 }, 70)).toEqual({ squaresX: 50, squaresY: 35 });
+  });
+});
+
+describe('reducedImageSize', () => {
+  it('fits the long edge into the limit and keeps the aspect', () => {
+    expect(reducedImageSize({ widthPx: 15600, heightPx: 14700 }, 4096)).toEqual({ widthPx: 4096, heightPx: 3860 });
+    expect(reducedImageSize({ widthPx: 3000, heightPx: 9000 }, 4096)).toEqual({ widthPx: 1365, heightPx: 4096 });
+  });
+
+  it('leaves images within the limit alone', () => {
+    expect(reducedImageSize({ widthPx: 4096, heightPx: 2000 }, 4096)).toBeNull();
+  });
+});
+
+describe('scaleCalibration', () => {
+  const calibration: GridCalibration = { pxPerSquare: 70, rotationDeg: 1.5, offsetPx: { x: 12, y: -8 } };
+
+  it('scales square size and offset, not the turn', () => {
+    expect(scaleCalibration(calibration, 0.25)).toEqual({
+      pxPerSquare: 17.5,
+      rotationDeg: 1.5,
+      offsetPx: { x: 3, y: -2 },
+    });
+  });
+
+  it('keeps the square count of a reduced battlemap', () => {
+    const image = { widthPx: 15600, heightPx: 14700 };
+    const reduced = reducedImageSize(image, 4096)!;
+    const scaled = scaleCalibration(calibration, reduced.widthPx / image.widthPx);
+    expect(fitSquaresToImage(reduced, scaled.pxPerSquare)).toEqual(fitSquaresToImage(image, calibration.pxPerSquare));
   });
 });

@@ -22,7 +22,10 @@ export function worldToUvMatrix(grid: Grid, image: Pick<MapImage, 'widthPx' | 'h
 }
 
 /** Image pixel under a map plane point. */
-export function worldToImagePx(grid: Grid, point: Vec2): Vec2 {
+export function worldToImagePx(
+  grid: Pick<Grid, 'feetPerSquare' | 'pxPerSquare' | 'rotationDeg' | 'offsetPx'>,
+  point: Vec2,
+): Vec2 {
   const scale = grid.pxPerSquare / grid.feetPerSquare;
   const rad = (grid.rotationDeg * Math.PI) / 180;
   const x = point.x * scale;

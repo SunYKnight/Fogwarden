@@ -44,7 +44,7 @@
   places unplaced combatants one after another; undo/redo (Ctrl+Z/Ctrl+Y) for moves, HP, conditions, initiative,
   areas and doors.
 - Home page (start screen): Continue card for the last encounter, the 6 most recent maps and encounters, first
-  steps (data folder, legacy import instructions, map from an image, sample encounter) and a drop zone for battlemap
+  steps (data folder, legacy import, map from an image, sample encounter) and a drop zone for battlemap
   images and `.txt` stat blocks.
 - New map wizard (image, grid, done): live grid overlay, drag one square or click two corners, sliders for size,
   offset and rotation; maps are saved calibrated. Opens from Home, the Maps page's "New map" and image drops.
@@ -72,6 +72,25 @@
   punctuation, `legacy--` prefixes ignored; `-hotd` suffixes stay distinct; "Werewolf" fits all werewolf forms),
   previews matched and unmatched files, copies the pictures into the data root and replaces existing images only
   when ticked. The compendium shows portraits as list thumbnails and above the stat block.
+- Readable ids: new creatures, maps, area templates, campaigns and encounters (created, duplicated or imported)
+  get their id, and so their file or folder name, from their name (`goblin-boss`, then `goblin-boss-2`; at most 60
+  characters; Windows device names such as `con` get a number). Renaming keeps the id; existing documents keep
+  their ULID ids.
+- Map imports store battlemaps larger than the 3D view's 4096 px texture limit reduced to it (aspect kept, grid
+  calibration scaled along; JPEG, PNG when the picture has transparency), in the New map wizard (also Universal VTT)
+  and the Dungeon Alchemist folder import; the wizard names both sizes. A 15600 × 14700 px export no longer makes
+  every player download and decode 37 MB. The original file stays untouched. New desktop command
+  `storage_read_file_bytes` for picked files.
+- Dungeon Alchemist objects step: a map picture beside the table marks every object of the hovered or selected
+  kind; clicking a row selects it. Columns "ft/unit" and "Turn" are now "Size" (tooltip explains the scale) and
+  "Rotate". The folder import checks up front that each project fits its lowest floor.
+- Stat block import parses while typing (300 ms after the last key) and shows the stat block or the failing line
+  live; the "Check" button is gone.
+- Import from the old WPF tool runs in the app (First steps "Import…", Settings > Data "Import from the old WPF
+  tool…", desktop): pick the `240722_DnD_DMTool_Data` folder, see the counts of creatures, maps, area templates and
+  pictures found plus what is skipped, then import with progress and a summary of skipped files and problems by
+  file name. A wrong folder says which folders are missing. Pictures are found regardless of case. App and
+  `tools/import-legacy.ts` share one importer (`src/data/legacyImport.ts`); the terminal instructions are gone.
 
 ## 0.1.0
 

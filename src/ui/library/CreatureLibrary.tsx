@@ -1,5 +1,5 @@
 import { useMemo, useState, type MouseEvent } from 'react';
-import { CREATURE_TYPES, creaturePortrait, newId, nowIso, type Creature } from '@/core/model';
+import { CREATURE_TYPES, creaturePortrait, nowIso, type Creature } from '@/core/model';
 import { formatCr } from '@/core/rules/abilities';
 import type { LibraryEntry } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
@@ -142,7 +142,9 @@ export function CreatureLibrary() {
 
   const duplicate = async (creature: Creature) => {
     const at = nowIso();
-    const copy = { ...creature, id: newId(), name: `${creature.name} copy`, createdAt: at, updatedAt: at };
+    const name = `${creature.name} copy`;
+    const id = await repository.newLibraryId('creature', name);
+    const copy = { ...creature, id, name, createdAt: at, updatedAt: at };
     const stored = await repository.save('creature', copy);
     await refresh('creature');
     setSelectedId(stored.id);

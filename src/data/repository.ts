@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { base64ToBytes, float32ToBase64 } from '@/core/binary';
 import { formatCreatureFile, parseCreatureFile } from '@/core/import/creatureFile';
+import { freeDocumentId } from '@/core/import/ids';
 import {
   campaignFileSchema,
   campaignSchema,
@@ -12,7 +13,6 @@ import {
   mapFileSchema,
   mapSchema,
   markerTemplateSchema,
-  newId,
   nowIso,
   settingsSchema,
   type AssetRef,
@@ -48,6 +48,8 @@ const LIBRARY_DIRS: Record<LibraryKind, { data: string; content: string }> = {
   marker: { data: 'library/markers', content: 'markers' },
   map: { data: 'library/maps', content: 'maps' },
 };
+
+const NEW_ID_FALLBACK: Record<LibraryKind, string> = { creature: 'creature', marker: 'area', map: 'map' };
 
 const SETTINGS_PATH = 'settings.json';
 const TERRAIN_FILE = 'terrain.png';
@@ -139,6 +141,11 @@ function errorMessage(error: unknown): string {
 
 function extensionOf(path: string): string {
   return path.slice(path.lastIndexOf('.') + 1).toLowerCase();
+}
+
+/** Ids used in a folder, lower-cased: Windows file names ignore case. Pictures count, so none goes astray. */
+function takenIds(entries: DirEntry[]): Set<string> {
+  return new Set(entries.map((e) => e.name.split('.')[0]!.toLowerCase()));
 }
 
 /** A bitset that addresses the cells of `size`; others belong to a resized map and read as empty anyway. */
@@ -444,10 +451,19 @@ export class Repository {
     return ref;
   }
 
+  /** Id for a new library document named `name`; shipped ids count as taken, a user copy would shadow them. */
+  async newLibraryId(kind: LibraryKind, name: string): Promise<string> {
+    const [data, content] = await Promise.all([
+      this.storage.list('data', LIBRARY_DIRS[kind].data),
+      this.storage.list('content', LIBRARY_DIRS[kind].content),
+    ]);
+    return freeDocumentId(name, NEW_ID_FALLBACK[kind], takenIds([...data, ...content]));
+  }
+
   /** Copies a map and the assets in its folder; the copy no longer depends on the source map. */
   async duplicateMap(ref: DocRef, name: string): Promise<BattleMap> {
     const source = await this.load('map', ref);
-    const id = newId();
+    const id = await this.newLibraryId('map', name);
     const fromDir = `${mapDir(ref.area, ref.id)}/assets`;
     const toDir = `${mapDir('data', id)}/assets`;
     if ((await this.storage.list(ref.area, fromDir)).length > 0) {
@@ -503,6 +519,10 @@ export class Repository {
     await this.storage.writeText(campaignNotesPath(parsed.id), parsed.notes);
     await this.writeJson(campaignPath(parsed.id), campaignFileSchema.parse(parsed));
     return parsed;
+  }
+
+  async newCampaignId(name: string): Promise<string> {
+    return freeDocumentId(name, 'campaign', takenIds(await this.storage.list('data', 'campaigns')));
   }
 
   saveCampaign(campaign: Campaign): Promise<Campaign> {
@@ -593,6 +613,11 @@ export class Repository {
 
   saveEncounter(encounter: Encounter): Promise<Encounter> {
     return this.storeEncounter({ ...encounter, updatedAt: nowIso() });
+  }
+
+  async newEncounterId(campaignId: string, name: string): Promise<string> {
+    const entries = await this.storage.list('data', `campaigns/${campaignId}/encounters`);
+    return freeDocumentId(name, 'encounter', takenIds(entries));
   }
 
   removeEncounter(campaignId: string, id: string): Promise<void> {

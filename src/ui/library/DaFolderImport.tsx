@@ -1,17 +1,17 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useState } from 'react';
-import { parseDamProject, type DamProject } from '@/core/import/damProject';
+import { damMargin, parseDamProject, type DamProject } from '@/core/import/damProject';
 import type { DamObjectChoices } from '@/core/import/damObjects';
 import { collectDaMaps, daFloorName, parseDaFloor, type DaFloor } from '@/core/import/dungeonAlchemist';
-import { mapAssetRef } from '@/data/repository';
-import { importFile, listFolder, readFileText } from '@/data/tauriStorage';
+import { fitSquaresToImage } from '@/core/terrain/calibration';
+import { listFolder, readFileBytes, readFileText } from '@/data/tauriStorage';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { CheckboxField } from '../components/fields';
 import { Button, Dialog } from '../kit';
 import { damPropsFor, loadDamObjectChoices, saveDamObjectChoices } from './daObjects';
-import { choicesForProject, DamObjectsPanel } from './DamObjectsPanel';
-import { saveImportedMap } from './mapImport';
+import { choicesForProject, DamObjectsPanel, type DamPreview } from './DamObjectsPanel';
+import { saveImportedMap, storeMapImage } from './mapImport';
 
 interface FloorPlan {
   name: string;
@@ -50,6 +50,11 @@ async function planFolder(folder: string): Promise<FolderPlan> {
       ),
     })),
   );
+  maps.forEach(({ project, floors: [ground] }) => {
+    if (project && ground) {
+      damMargin(project, fitSquaresToImage(ground.floor.image, ground.floor.calibration.pxPerSquare));
+    }
+  });
   return { folder, maps };
 }
 
@@ -76,6 +81,7 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
   const [busy, setBusy] = useState(false);
   const projects = plan.maps.flatMap((m) => (m.project ? [m.project] : []));
   const withObjects = projects.filter((p) => p.objects.length > 0);
+  const [previews, setPreviews] = useState<Record<string, DamPreview>>({});
 
   const count = plan.maps.reduce((n, m) => n + m.floors.length, 0);
 
@@ -87,6 +93,28 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
         .catch(reportError);
     }
   }, [plan, repository, reportError]);
+
+  // The lowest floor's picture shows where each object kind stands.
+  useEffect(() => {
+    const urls: string[] = [];
+    let mounted = true;
+    plan.maps.forEach(({ project, floors: [ground] }) => {
+      if (project && project.objects.length > 0 && ground) {
+        readFileBytes(ground.imagePath).then((bytes) => {
+          if (mounted) {
+            const url = URL.createObjectURL(new Blob([bytes]));
+            urls.push(url);
+            const { image, calibration } = ground.floor;
+            setPreviews((all) => ({ ...all, [project.fileName]: { url, image, calibration } }));
+          }
+        }, reportError);
+      }
+    });
+    return () => {
+      mounted = false;
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [plan, reportError]);
 
   const run = async () => {
     setBusy(true);
@@ -105,11 +133,14 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
             content: f.floor.content,
             project: ground,
             props: ground && choices ? damPropsFor(repository, ground, choices) : undefined,
-            writeImage: async (mapId) => {
-              const ref = mapAssetRef(mapId, f.imageName.replace(/[^\w.\- ]+/g, '_'));
-              await importFile(f.imagePath, ref.path);
-              return ref;
-            },
+            writeImage: async (mapId) =>
+              storeMapImage(
+                repository,
+                mapId,
+                f.imageName,
+                new Blob([await readFileBytes(f.imagePath)]),
+                f.floor.image,
+              ),
           });
         }
       }
@@ -164,7 +195,13 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
         {useProjects &&
           choices &&
           withObjects.map((p) => (
-            <DamObjectsPanel key={p.fileName} project={p} choices={choices} onChange={setChoices} />
+            <DamObjectsPanel
+              key={p.fileName}
+              project={p}
+              choices={choices}
+              preview={previews[p.fileName] ?? null}
+              onChange={setChoices}
+            />
           ))}
       </div>
     </Dialog>

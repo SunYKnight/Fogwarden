@@ -10,6 +10,34 @@ import { Button, Dialog, Icon } from '../kit';
 import { AttachPortraitsDialog } from './AttachPortraitsDialog';
 import { closeCompendiumDialog, useCompendiumDialogStore } from './compendiumUi';
 
+// Long enough to wait out a burst of typing, short enough to feel live.
+const PARSE_DELAY_MS = 300;
+
+interface ParseResult {
+  text: string;
+  source: string;
+  license: string;
+  creature: Creature | null;
+  problem: string | null;
+}
+
+/** A stat block that doesn't parse is a user input problem shown in place; other errors are reported. */
+function checkStatBlock(
+  text: string,
+  source: string,
+  license: string,
+  reportError: (error: unknown) => void,
+): ParseResult {
+  const result: ParseResult = { text, source, license, creature: null, problem: null };
+  try {
+    result.creature = text.trim() === '' ? null : parseStatBlock(text, { source, license });
+  } catch (error) {
+    if (!(error instanceof StatBlockError)) reportError(error);
+    result.problem = error instanceof StatBlockError ? error.message : null;
+  }
+  return result;
+}
+
 function CreatureImportDialog({ initialText }: { initialText: string }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
@@ -17,23 +45,22 @@ function CreatureImportDialog({ initialText }: { initialText: string }) {
   const [text, setText] = useState(initialText);
   const [source, setSource] = useState('Custom');
   const [license, setLicense] = useState('');
-  const [parsed, setParsed] = useState<Creature | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [result, setResult] = useState<ParseResult | null>(null);
 
-  // A stat block that doesn't parse is a user input problem shown in place.
-  const parse = () => {
-    try {
-      setParsed(parseStatBlock(text, { source, license }));
-      setProblem(null);
-    } catch (error) {
-      setParsed(null);
-      setProblem(error instanceof StatBlockError ? error.message : null);
-      if (!(error instanceof StatBlockError)) reportError(error);
-    }
-  };
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setResult(checkStatBlock(text, source, license, reportError)),
+      PARSE_DELAY_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [text, source, license, reportError]);
+  // Saving waits for the parse of exactly what the fields show.
+  const current = result?.text === text && result.source === source && result.license === license;
+  const parsed = current ? result.creature : null;
 
   const save = async (creature: Creature) => {
-    const stored = await repository.save('creature', creature);
+    const id = await repository.newLibraryId('creature', creature.name);
+    const stored = await repository.save('creature', { ...creature, id });
     await refresh('creature');
     closeCompendiumDialog();
     useAppStore.getState().notify(`Imported "${stored.name}"`);
@@ -48,7 +75,6 @@ function CreatureImportDialog({ initialText }: { initialText: string }) {
       footer={
         <>
           <Button label="Cancel" onClick={closeCompendiumDialog} />
-          <Button icon="check" label="Check" disabled={text.trim() === ''} onClick={parse} />
           <Button
             icon="upload"
             label="Save and edit"
@@ -65,21 +91,22 @@ function CreatureImportDialog({ initialText }: { initialText: string }) {
             rows={20}
             value={text}
             placeholder="Paste a stat block (name, size/type line, Armor Class, Hit Points, ...)"
-            onChange={(e) => {
-              setText(e.target.value);
-              setParsed(null);
-            }}
+            onChange={(e) => setText(e.target.value)}
           />
           <TextField label="Source" value={source} onChange={setSource} />
           <TextField label="License" value={license} onChange={setLicense} />
-          {problem && (
-            <div className="error-text" role="alert">
-              <Icon name="alert" size={16} /> {problem}
+          {result?.problem && (
+            <div className="error-text" role="status">
+              <Icon name="alert" size={16} /> {result.problem}
             </div>
           )}
         </div>
         <div className="creature-preview">
-          {parsed ? <StatBlock creature={parsed} /> : <p className="muted">Check the text to see the stat block.</p>}
+          {result?.creature ? (
+            <StatBlock creature={result.creature} />
+          ) : (
+            <p className="muted">Paste or type a stat block to see it here.</p>
+          )}
         </div>
       </div>
     </Dialog>
@@ -115,10 +142,14 @@ function NewEncounterDialog({ campaignId, initialMap }: { campaignId: string | n
   const create = async () => {
     setBusy(true);
     try {
-      const targetId = creatingCampaign
-        ? (await repository.saveCampaign(createCampaign(campaignName.trim()))).id
-        : chosenCampaign;
-      const encounter = await repository.saveEncounter(createEncounter(name.trim(), targetId, map));
+      let targetId = chosenCampaign;
+      if (creatingCampaign) {
+        const campaign = { ...createCampaign(campaignName.trim()), id: await repository.newCampaignId(campaignName) };
+        targetId = (await repository.saveCampaign(campaign)).id;
+      }
+      const draft = createEncounter(name.trim(), targetId, map);
+      const encounterId = await repository.newEncounterId(targetId, draft.name);
+      const encounter = await repository.saveEncounter({ ...draft, id: encounterId });
       closeCompendiumDialog();
       await useAppStore.getState().openEncounter({ campaignId: targetId, encounterId: encounter.id });
     } finally {

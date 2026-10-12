@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import type { OnboardingStep } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
-import { useLibraryStore } from '@/state/libraryStore';
-import { Button, Dialog, Icon, type IconName } from '../kit';
+import { Button, Icon, type IconName } from '../kit';
 import { openNewMapWizard } from '../library/NewMapWizard';
+import { LegacyImportDialog } from './LegacyImportDialog';
 import { completeOnboardingStep, dismissFirstSteps, openSampleEncounter } from './onboarding';
 
 interface StepSpec {
@@ -27,7 +27,7 @@ const STEPS: StepSpec[] = [
     icon: 'upload',
     title: 'Import from the old WPF tool',
     text: 'Bring over creatures, tile maps and area templates from the previous DM tool.',
-    action: 'How to import',
+    action: 'Import…',
   },
   {
     id: 'mapFromImage',
@@ -44,63 +44,6 @@ const STEPS: StepSpec[] = [
     action: 'Open sample',
   },
 ];
-
-function LegacyImportDialog({ onClose }: { onClose: () => void }) {
-  const roots = useAppStore((s) => s.roots);
-  const reportError = useAppStore((s) => s.reportError);
-  const dataRoot = roots ? ` --data-root "${roots.dataRoot}"` : '';
-  const command = `pnpm tsx tools/import-legacy.ts "<path to 240722_DnD_DMTool_Data>"${dataRoot}`;
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(command);
-    useAppStore.getState().notify('Command copied');
-  };
-  const finish = async () => {
-    await useLibraryStore.getState().refreshAll();
-    await completeOnboardingStep('legacyImport');
-    onClose();
-  };
-
-  return (
-    <Dialog
-      title="Import from the old WPF tool"
-      onClose={onClose}
-      width={620}
-      footer={
-        <>
-          <Button label="Close" onClick={onClose} />
-          <Button
-            label="Imported, refresh library"
-            icon="check"
-            variant="primary"
-            onClick={() => finish().catch(reportError)}
-          />
-        </>
-      }
-    >
-      <div className="col">
-        <p>
-          The import runs as a command in the project folder of this app. It converts creatures, tile maps and area
-          templates from the old tool's data folder (<code>240722_DnD_DMTool_Data</code>) into this app's data folder.
-          Running it again overwrites earlier imports instead of duplicating them.
-        </p>
-        <ol>
-          <li>Open a terminal in the project folder.</li>
-          <li>Run the command below with the path to the old data folder.</li>
-          <li>Come back and refresh the library.</li>
-        </ol>
-        <div className="command-line">
-          <code>{command}</code>
-          <Button icon="copy" label="Copy" onClick={() => copy().catch(reportError)} />
-        </div>
-        <p className="muted">
-          Raw stat block files are imported the same way with <code>tools/import-statblocks.ts</code>, or one at a time
-          by dropping the <code>.txt</code> file on the Home page.
-        </p>
-      </div>
-    </Dialog>
-  );
-}
 
 /** Next actions for a new user; hidden once dismissed or all done. */
 export function FirstSteps() {
