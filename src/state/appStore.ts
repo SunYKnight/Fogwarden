@@ -51,6 +51,8 @@ interface AppState {
 let nextNoticeId = 1;
 // Errors stay until dismissed; confirmations fade on their own.
 const NOTICE_MS = 4000;
+// Settings writes run one after another so the file ends with the last edit.
+let settingsWrites: Promise<unknown> = Promise.resolve();
 
 export const useAppStore = create<AppState>((set, get) => ({
   repository: new Repository(isTauri() ? new TauriStorage() : new BrowserStorage()),
@@ -98,8 +100,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     window.setTimeout(() => get().dismissNotice(id), NOTICE_MS);
   },
   dismissNotice: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
+  // The store changes before the async save: edits made while a save is
+  // pending build on this value instead of the stale one and keep both.
   setSettings: async (settings) => {
-    set({ settings: await get().repository.saveSettings(settings) });
+    set({ settings });
+    const write = settingsWrites.then(() => get().repository.saveSettings(settings));
+    // The queue only orders writes; the caller still gets this write's error.
+    settingsWrites = write.catch(() => undefined);
+    const saved = await write;
+    if (get().settings === settings) {
+      set({ settings: saved });
+    }
   },
   init: async () => {
     const repository = get().repository;
