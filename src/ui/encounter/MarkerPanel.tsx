@@ -3,6 +3,7 @@ import { addLog } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { Button, Section } from '../kit';
+import { AreaTargets } from './AreaTargets';
 import { startAreaPlacement, useEncounterUi } from './encounterUiStore';
 
 /** Area templates as buttons; picking one waits for its origin click on the map. */
@@ -38,13 +39,16 @@ export function AreaTemplatePicker({ onPick }: { onPick?: () => void }) {
 /** Areas tab: placed markers with player visibility and removal, plus the template picker. */
 export function MarkerPanel({ encounter }: { encounter: Encounter }) {
   const update = useEncounterStore((s) => s.update);
+  const targetsId = useEncounterUi((s) => s.areaTargetsId);
+  const selected = encounter.markers.find((m) => m.id === targetsId);
 
   return (
     <div className="col">
+      {selected && <AreaTargets key={selected.id} marker={selected} encounter={encounter} />}
       <Section title={`On the map (${encounter.markers.length})`}>
         <div className="list">
           {encounter.markers.map((m) => (
-            <div key={m.id} className="list-item">
+            <div key={m.id} className={m.id === targetsId ? 'list-item selected' : 'list-item'}>
               <span className="swatch" style={{ background: m.color }} />
               <span className="grow">
                 {m.label}{' '}
@@ -52,6 +56,14 @@ export function MarkerPanel({ encounter }: { encounter: Encounter }) {
                   {m.shape} {m.sizeFt} ft
                 </span>
               </span>
+              <Button
+                icon="users"
+                label={m.id === targetsId ? 'Hide targets' : 'Targets, saves and damage'}
+                iconOnly
+                variant="ghost"
+                active={m.id === targetsId}
+                onClick={() => useEncounterUi.setState({ areaTargetsId: m.id === targetsId ? null : m.id })}
+              />
               <Button
                 icon={m.visibleToPlayers ? 'eye' : 'eyeOff'}
                 label={m.visibleToPlayers ? 'Visible to players' : 'Hidden from players'}

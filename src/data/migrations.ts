@@ -1,10 +1,14 @@
 import {
   CAMPAIGN_SCHEMA_VERSION,
   CREATURE_SCHEMA_VERSION,
+  defaultAtmosphere,
+  defaultAudioSettings,
   defaultOnboarding,
+  defaultPackSettings,
   defaultPlayerLinks,
   defaultRemoteSettings,
   ENCOUNTER_SCHEMA_VERSION,
+  freshCombatState,
   MAP_SCHEMA_VERSION,
   MARKER_SCHEMA_VERSION,
   PARTY_VIEW,
@@ -39,6 +43,11 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
   map: [
     // v2: terrain heights moved from base64 into terrain.png.
     LAYOUT,
+    // v3: sound regions carry an ambient loop.
+    (doc) => ({
+      ...doc,
+      regions: (doc.regions as Record<string, unknown>[]).map((region) => ({ ...region, sound: null })),
+    }),
   ],
   marker: [],
   campaign: [
@@ -51,6 +60,16 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     exploredPerCharacter,
     // v3: encounter folders with fog bitsets as PNG masks.
     LAYOUT,
+    // v4: music, time of day and weather of the scene.
+    (doc) => ({ ...doc, atmosphere: defaultAtmosphere() }),
+    // v5: levels, timed effects, concentration, death saves, monster resources
+    // and carried lights; old encounters knew none of them.
+    (doc) => ({
+      ...doc,
+      combatants: (doc.combatants as Record<string, unknown>[]).map((c) => ({ ...c, ...freshCombatState(null) })),
+    }),
+    // v6: players may move their own tokens; off until the DM allows it.
+    (doc) => ({ ...doc, playersMoveTokens: false }),
   ],
   settings: [
     // v2: the never-used lastCampaignId became lastEncounter.
@@ -67,6 +86,11 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
       playerWindow: { ...(doc.playerWindow as Record<string, unknown>), view: PARTY_VIEW },
       playerLinks: defaultPlayerLinks(),
     }),
+    // v7: content packs, all enabled; `packMigration.ts` moves the data root's
+    // documents into packs while settings.json is older than this version.
+    (doc) => ({ ...doc, packs: defaultPackSettings() }),
+    // v8: sound volumes.
+    (doc) => ({ ...doc, audio: defaultAudioSettings() }),
   ],
 };
 

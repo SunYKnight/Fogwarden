@@ -1,6 +1,7 @@
 import { Canvas, type ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import type { Object3D } from 'three';
+import { daylight, skyTint } from '@/core/atmosphere/timeOfDay';
 import type { BattleMap, LightLevel } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { CameraRig, type CameraMode, type CameraState } from './CameraRig';
@@ -55,6 +56,8 @@ interface MapViewProps {
   camera: CameraMode;
   /** Lighting level used for the scene; editors pass 'bright' so the whole map stays visible. */
   ambient: LightLevel;
+  /** In-game minute of the day dimming and tinting the light; null or missing keeps `ambient` as is. */
+  minute?: number | null;
   followCamera?: CameraState | null;
   onCameraChange?: (state: CameraState) => void;
   onPointer?: (event: MapPointerEvent) => void;
@@ -87,7 +90,11 @@ export function MapView(props: MapViewProps) {
     return () => window.removeEventListener('pointerup', up);
   }, [onPointer]);
 
-  const intensity = AMBIENT_INTENSITY[ambient];
+  const minute = props.minute ?? null;
+  // Daylight fades smoothly between the levels so the slider looks continuous.
+  const daylit = minute === null ? 1 : AMBIENT_INTENSITY.darkness + (1 - AMBIENT_INTENSITY.darkness) * daylight(minute);
+  const intensity = Math.min(AMBIENT_INTENSITY[ambient], daylit);
+  const tint = minute === null ? '#ffffff' : skyTint(minute);
   return (
     <Canvas
       shadows="percentage"
@@ -104,8 +111,12 @@ export function MapView(props: MapViewProps) {
           follow={props.followCamera}
           onChange={props.onCameraChange}
         />
-        <hemisphereLight args={['#ffffff', '#444444', 1.2 * intensity]} />
-        <directionalLight position={[width * 0.3, Math.max(width, depth), depth * 0.1]} intensity={1.4 * intensity} />
+        <hemisphereLight color={tint} groundColor="#444444" intensity={1.2 * intensity} />
+        <directionalLight
+          position={[width * 0.3, Math.max(width, depth), depth * 0.1]}
+          color={tint}
+          intensity={1.4 * intensity}
+        />
         <group
           onPointerDown={(e) => {
             e.stopPropagation();

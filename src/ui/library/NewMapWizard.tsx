@@ -155,12 +155,25 @@ function projectSummary(project: DamProject): string {
   return `ground heights ${min.toFixed(1)} to ${max.toFixed(1)} ft${objects}`;
 }
 
-type Step = 'image' | 'grid' | 'objects' | 'done';
+type Step = 'image' | 'project' | 'grid' | 'objects' | 'done';
 
-const STEP_LABELS: Record<Step, string> = { image: 'Image', grid: 'Grid', objects: 'Objects', done: 'Done' };
+const STEP_LABELS: Record<Step, string> = {
+  image: 'Image',
+  project: 'Project',
+  grid: 'Grid',
+  objects: 'Objects',
+  done: 'Done',
+};
+
+// Only Dungeon Alchemist writes .dd2vtt, so only it has a matching project.
+function hasProjectStep(draft: Draft | null): boolean {
+  return draft?.source?.fileName.toLowerCase().endsWith('.dd2vtt') ?? false;
+}
 
 function stepsFor(draft: Draft | null): Step[] {
-  return draft?.source?.objects ? ['image', 'grid', 'objects', 'done'] : ['image', 'grid', 'done'];
+  const project: Step[] = hasProjectStep(draft) ? ['project'] : [];
+  const objects: Step[] = draft?.source?.objects ? ['objects'] : [];
+  return ['image', ...project, 'grid', ...objects, 'done'];
 }
 
 function StepTrail({ steps, step }: { steps: Step[]; step: Step }) {
@@ -249,30 +262,75 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
   ) : (
     createButton
   );
+  const removeProject = (from: Draft): Draft =>
+    from.source ? { ...from, source: { ...from.source, project: null, objects: null } } : from;
+  const projectFiles = (files: File[]) => {
+    const file = files.find(isDamFile);
+    if (!draft || !file) {
+      reportError(new Error('Choose a Dungeon Alchemist project file (.dam)'));
+    } else {
+      withProject(draft, file).then(setDraft, reportError);
+    }
+  };
+  const projectStep = hasProjectStep(draft);
+  const backFromLater: Step = projectStep ? 'project' : 'image';
   let body = (
     <ImageStep
       draft={draft}
       onFiles={(files) => readFiles(files, draft).then(setDraft, reportError)}
       onRename={(name) => draft && setDraft({ ...draft, name })}
-      onRemoveProject={() =>
-        draft?.source && setDraft({ ...draft, source: { ...draft.source, project: null, objects: null } })
-      }
     />
   );
+  let exportActions = (
+    <>
+      <Button label="Check grid" icon="grid" disabled={busy} onClick={() => setStep('grid')} />
+      {exportNext}
+    </>
+  );
+  if (projectStep) {
+    exportActions = <Button label="Next" icon="chevronRight" variant="primary" onClick={() => setStep('project')} />;
+  }
   let footer = (
     <>
       <Button label="Cancel" onClick={closeNewMapWizard} />
       <div className="spacer" />
       {draft?.source ? (
-        <>
-          <Button label="Check grid" icon="grid" disabled={busy} onClick={() => setStep('grid')} />
-          {exportNext}
-        </>
+        exportActions
       ) : (
         <Button label="Next" icon="chevronRight" variant="primary" disabled={!draft} onClick={() => setStep('grid')} />
       )}
     </>
   );
+  if (step === 'project' && draft) {
+    body = <ProjectStep draft={draft} onFiles={projectFiles} onRemove={() => setDraft(removeProject(draft))} />;
+    const hasProject = Boolean(draft.source?.project);
+    footer = (
+      <>
+        <Button label="Back" disabled={busy} onClick={() => setStep('image')} />
+        <div className="spacer" />
+        <Button label="Check grid" icon="grid" disabled={busy} onClick={() => setStep('grid')} />
+        <Button
+          label="Skip"
+          disabled={busy}
+          title="Creates the map without terrain and objects"
+          onClick={() => {
+            const plain = removeProject(draft);
+            setDraft(plain);
+            createMap(plain, plain.calibration).catch(reportError);
+          }}
+        />
+        <Button
+          label={busy ? 'Creating…' : 'Continue'}
+          icon="chevronRight"
+          variant="primary"
+          disabled={busy || !hasProject}
+          onClick={() =>
+            draft.source?.objects ? setStep('objects') : createMap(draft, draft.calibration).catch(reportError)
+          }
+        />
+      </>
+    );
+  }
   if (step === 'grid' && draft) {
     body = (
       <GridStep
@@ -283,7 +341,7 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
     );
     footer = (
       <>
-        <Button label="Back" disabled={busy} onClick={() => setStep('image')} />
+        <Button label="Back" disabled={busy} onClick={() => setStep(backFromLater)} />
         <div className="spacer" />
         {draft.source ? (
           exportNext
@@ -313,7 +371,7 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
     );
     footer = (
       <>
-        <Button label="Back" disabled={busy} onClick={() => setStep('image')} />
+        <Button label="Back" disabled={busy} onClick={() => setStep(backFromLater)} />
         <div className="spacer" />
         {createButton}
       </>
@@ -367,41 +425,20 @@ interface ImageStepProps {
   draft: Draft | null;
   onFiles: (files: File[]) => void;
   onRename: (name: string) => void;
-  onRemoveProject: () => void;
 }
 
-function ImageStep({ draft, onFiles, onRename, onRemoveProject }: ImageStepProps) {
+function ImageStep({ draft, onFiles, onRename }: ImageStepProps) {
   const input = useRef<HTMLInputElement>(null);
-  const projectInput = useRef<HTMLInputElement>(null);
   const { dragging, handlers } = useFileDrop(onFiles);
   const fromName = draft && gridFromFileName(draft.file.name);
   const source = draft?.source ?? null;
   let details = null;
   if (draft && source) {
     details = (
-      <>
-        <p className="muted">
-          {source.fileName}: {draft.image.widthPx} × {draft.image.heightPx} px at {draft.calibration.pxPerSquare} px per
-          square · {exportSummary(source.content)}
-        </p>
-        <div className="row">
-          {source.project ? (
-            <>
-              <span className="muted">
-                {source.project.fileName}: {projectSummary(source.project)}
-              </span>
-              <Button label="Remove" icon="close" onClick={onRemoveProject} />
-            </>
-          ) : (
-            <Button
-              label="Add Dungeon Alchemist project (.dam)…"
-              icon="upload"
-              title="Ground heights and object positions from the project the export was made from"
-              onClick={() => projectInput.current?.click()}
-            />
-          )}
-        </div>
-      </>
+      <p className="muted">
+        {source.fileName}: {draft.image.widthPx} × {draft.image.heightPx} px at {draft.calibration.pxPerSquare} px per
+        square · {exportSummary(source.content)}
+      </p>
     );
   } else if (draft) {
     details = (
@@ -441,8 +478,52 @@ function ImageStep({ draft, onFiles, onRename, onRemoveProject }: ImageStepProps
             e.target.value = '';
           }}
         />
+      </div>
+      {draft && (
+        <>
+          <TextField label="Name" value={draft.name} onChange={onRename} />
+          {details}
+        </>
+      )}
+    </div>
+  );
+}
+
+interface ProjectStepProps {
+  draft: Draft;
+  onFiles: (files: File[]) => void;
+  onRemove: () => void;
+}
+
+function ProjectStep({ draft, onFiles, onRemove }: ProjectStepProps) {
+  const input = useRef<HTMLInputElement>(null);
+  const { dragging, handlers } = useFileDrop(onFiles);
+  const project = draft.source?.project ?? null;
+  return (
+    <div className="col">
+      <h3>Dungeon Alchemist project (optional)</h3>
+      <p className="muted">
+        The .dd2vtt export holds the picture, walls and lights but no 3D objects or terrain. The matching .dam project
+        file adds ground heights and object positions.
+      </p>
+      <div className={dragging ? 'drop-zone dragging' : 'drop-zone'} {...handlers}>
+        {project ? (
+          <div className="row">
+            <Icon name="check" size={20} />
+            <span>
+              {project.fileName}: {projectSummary(project)}
+            </span>
+            <Button label="Remove" icon="close" onClick={onRemove} />
+          </div>
+        ) : (
+          <>
+            <Icon name="upload" size={32} />
+            <span>Drop the .dam file here</span>
+            <Button label="Choose .dam file" icon="upload" onClick={() => input.current?.click()} />
+          </>
+        )}
         <input
-          ref={projectInput}
+          ref={input}
           type="file"
           accept=".dam"
           hidden
@@ -452,12 +533,6 @@ function ImageStep({ draft, onFiles, onRename, onRemoveProject }: ImageStepProps
           }}
         />
       </div>
-      {draft && (
-        <>
-          <TextField label="Name" value={draft.name} onChange={onRename} />
-          {details}
-        </>
-      )}
     </div>
   );
 }

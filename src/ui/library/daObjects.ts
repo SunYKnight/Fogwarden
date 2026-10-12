@@ -34,7 +34,7 @@ export interface ModelOption {
 }
 
 /**
- * Shipped CC0 stand-ins (`content/models/cc0`, sources in its LICENSE.md). Kenney models use small
+ * Shipped CC0 stand-ins (pack `content/packs/cc0-models`, sources in its LICENSE.md). Kenney models use small
  * abstract units, so each scale gives a believable size: trees about 22-25 ft, a table 2.5 ft high.
  */
 export const CC0_MODELS: ModelOption[] = [
@@ -51,7 +51,7 @@ export const CC0_MODELS: ModelOption[] = [
   { label: 'Chest', file: 'chest.glb', unitFt: 1.75 },
 ].map(({ label, file, unitFt }): ModelOption => ({
   label,
-  model: { area: 'content', path: `models/cc0/${file}` },
+  model: { area: 'content', path: `packs/cc0-models/models/${file}` },
   unitFt,
 }));
 

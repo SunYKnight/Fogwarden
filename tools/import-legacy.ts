@@ -1,7 +1,13 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { planLegacyImport, runLegacyImport, type LegacyProblem, type LegacySource } from '../src/data/legacyImport';
+import {
+  LEGACY_PACK,
+  planLegacyImport,
+  runLegacyImport,
+  type LegacyProblem,
+  type LegacySource,
+} from '../src/data/legacyImport';
 import { openRepository } from './cli';
 
 /** Usage: pnpm tsx tools/import-legacy.ts <legacy data folder> [--data-root <path>] */
@@ -20,7 +26,7 @@ const source: LegacySource = {
 const plan = await planLegacyImport(source, resolve(positionals[0]));
 const { imported, skipped, warnings } = await runLegacyImport(plan, source, repository);
 const lines = (problems: LegacyProblem[]) => problems.map((p) => `\n  ${p.file}: ${p.message}`).join('');
-console.log(`Data root: ${dataRoot}`);
+console.log(`Data root: ${dataRoot} (pack "${LEGACY_PACK.name}" in packs/${LEGACY_PACK.id})`);
 console.log(
   `Imported: ${imported.creatures} creatures, ${imported.maps} maps, ${imported.areaTemplates} area templates`,
 );

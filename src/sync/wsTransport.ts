@@ -1,12 +1,13 @@
 import {
   SYNC_PROTOCOL_VERSION,
   type DmTransport,
+  type PlayerRequest,
   type SyncMessage,
   type SyncPayload,
   type SyncTransport,
 } from './protocol';
 import { parseViewFrame, RELAY_LINK_REVOKED, relayStatusSchema, viewFrame, type RelayStatus } from './relayApi';
-import { accept } from './transports';
+import { accept, isPlayerRequest } from './transports';
 
 /** Waits before reconnect attempt 1, 2, 3, …; the last value repeats. */
 export const RECONNECT_DELAYS_MS = [500, 1000, 2000, 5000];
@@ -139,12 +140,13 @@ export class WebSocketTransport implements SyncTransport {
 type RelayCounts = RelayStatus['relay'];
 
 /**
- * DM side of the LAN server's or the relay's `/ws`: messages go out as view frames, players' hellos come back
- * per view, and status frames tell which views have players. The first status after every (re)connect asks
- * for a resend to all of them, since players may have missed messages while the DM was away.
+ * DM side of the LAN server's or the relay's `/ws`: messages go out as view frames, players' hellos and requests
+ * come back per view, and status frames tell which views have players. The first status after every (re)connect
+ * asks for a resend to all of them, since players may have missed messages while the DM was away.
  */
 export class ViewSocketTransport implements DmTransport {
   private readonly resendHandlers = new Set<(view: string | null) => void>();
+  private readonly requestHandlers = new Set<(view: string, request: PlayerRequest) => void>();
   private readonly viewHandlers = new Set<(views: ReadonlySet<string>) => void>();
   private readonly statusHandlers = new Set<(status: RelayCounts) => void>();
   private readonly socket: ReconnectingSocket;
@@ -169,8 +171,13 @@ export class ViewSocketTransport implements DmTransport {
   private receive(data: string): void {
     const frame = parseViewFrame(data);
     const message = frame ? (JSON.parse(frame.message) as SyncMessage) : null;
-    if (frame && message && accept(message, 'dm') && message.payload.type === 'hello') {
+    const payload = frame && message && accept(message, 'dm') ? message.payload : null;
+    if (frame && payload?.type === 'hello') {
       this.resend(frame.views[0]!);
+    } else if (frame && payload && isPlayerRequest(payload)) {
+      for (const handler of this.requestHandlers) {
+        handler(frame.views[0]!, payload);
+      }
     } else if (!frame) {
       this.setStatus(relayStatusSchema.parse(JSON.parse(data)).relay);
       if (this.reconnected) {
@@ -212,6 +219,11 @@ export class ViewSocketTransport implements DmTransport {
   onResend(handler: (view: string | null) => void): () => void {
     this.resendHandlers.add(handler);
     return () => this.resendHandlers.delete(handler);
+  }
+
+  onPlayerRequest(handler: (view: string, request: PlayerRequest) => void): () => void {
+    this.requestHandlers.add(handler);
+    return () => this.requestHandlers.delete(handler);
   }
 
   watchViews(handler: (views: ReadonlySet<string>) => void): () => void {

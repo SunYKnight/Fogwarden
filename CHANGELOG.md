@@ -2,6 +2,76 @@
 
 ## Unreleased
 
+- Content packs (settings schema v7): a pack is a folder or `.zip` with `pack.json` (id, name, version, author,
+  license, description, url) and the library folders. Compendium tab **Packs** lists My content and every pack with
+  its counts and "overridden by …", switches packs on and off, reorders them by drag (or Alt+Up/Down), exports any
+  pack (also My content) to `.zip`, removes imported packs and imports new ones (Import pack… for a `.zip`, Import
+  folder… in the desktop app). My content always wins, then the packs in the shown order. Switched-off packs vanish
+  from the Compendium, Maps and the Add dialog; running encounters keep their combatants and the inspector names the
+  switched-off pack holding a stat block. Shipped content now comes as packs in `content/packs/` (SRD 5.1, CC0
+  models, Sample map); the legacy import writes into the pack "Legacy DM Tool" and `import-statblocks.ts` takes
+  `--pack <id>`. On first start, legacy imports move from `library/` into that pack and references to shipped files
+  follow them (each file compared before the old one is deleted). ZIP support is built in (no new dependency).
+- Compendium: the tab bar stays put on the left; each tab's actions follow it.
+- Sound and atmosphere (encounter schema v4, map schema v3, settings schema v8): Play canvas toolbar **Sound**
+  plays music by mood (Exploration, Tavern, Combat, Boss and your own) with crossfades, Play/Pause and Next, adds
+  MP3/OGG/WAV/M4A files to a mood and one-shot effects to a sound board; Start combat switches to the encounter's
+  combat mood ("In combat"), End combat back. Players hear music, effects and ambience in the player window, over
+  the LAN and the relay at the DM's master volume times their own (slider in the player page corner; "Tap to
+  enable sound" when the browser blocks autoplay). Editor step Areas: region kind **Sound** loops a file at full
+  volume inside and fading to silence a set distance beyond, judged by the party's nearest character (in a
+  character's link by that character). Map settings › Battlemap replaces the picture with another or with a
+  looping MP4/WebM video (grid kept). Toolbar **Scene**: time of day (slider, Dawn/Day/Dusk/Night; follows the
+  campaign calendar) dims and tints the light and darkens open maps for vision at night; weather Rain, Snow or Fog
+  over DM and player views. Interlude videos play fullscreen for players (from Show). Settings › Audio holds the
+  master and this window's volume. Moods and effects live in `library/sounds/sounds.json`; the relay and LAN
+  serve audio and video (relay: byte ranges, uploads up to 1 GiB; run Set up a server again for the nginx limit).
+- Map export: _Export…_ in a map card's menu (Maps page) and in the map editor's header saves the map, through the
+  save dialog, as a 3D model (`.glb` in meters: terrain with the battlemap, walls with their materials, closed doors,
+  windows and bars, room floors and roofs, props, lights optional; opens in Blender), as Universal VTT (`.dd2vtt`:
+  picture, grid, sight-blocking walls, doors and windows as portals, lights, ambient light; reads back through the
+  app's own importer) or as an image (`.png` cut to the grid, grid lines optional). Files go outside the app's data
+  and content folders only.
+- Players' devices (encounter schema v6, relay API 3: update the relay with Set up a server): a character's player
+  link shows that character's sheet (hit points with temporary ones, AC, speed, conditions, concentration, death
+  saves, spell slots) as a side panel, on phones as a bottom sheet, with dice the DM rolls and logs ("Thorin rolls
+  Perception 1d20+3: …"); the result comes back to the sheet. When that character's turn starts the player page
+  shows "Your turn" and phones vibrate. Holding the map (players) or Alt+click on the Play canvas (DM) pings the
+  spot for 3 s for the DM and every view whose fog shows it. Play canvas toolbar Show: pictures, videos and text
+  files from the campaign's `handouts/` folder (Add files) shown to everyone or one view, hidden again with Hide,
+  closable by players; videos also play as interludes. Play header "Players move" lets players drag their own
+  token: the move is snapped and measured like the DM's, logged and undoable. The LAN server and the relay accept
+  these player messages only validated, for the link's own character, and at most 10 at once then 2 per second.
+- Combat rules (encounter schema v5): the Add combatants dialog and the Play header rate the encounter Trivial, Easy,
+  Medium, Hard or Deadly for the party (DMG 2014 thresholds and monster-count multipliers; numbers in the tooltip);
+  player characters have a level (PC form, Creature tab). Area templates may carry a saving throw (ability, DC,
+  damage, type, half on success); after placing one, the Areas tab lists every token inside it, rolls their saves
+  with their own bonuses and applies one damage roll with resistances, immunities and vulnerabilities from the stat
+  blocks as one undo step. Creature tab: timed effects (rounds, until the start or end of someone's next turn) that
+  expire on Next turn with a log line, concentration with a CON save prompt (DC 10 or half the damage) on damage
+  and an automatic end at 0 HP; legendary actions (reset at the creature's turn), recharge abilities (d6 rolled at
+  turn start), spell slots and per-day uses read from the stat block, a lair action reminder on initiative 20;
+  death saves for player characters at 0 HP (pips, roll with natural 1 and 20 rules, Stabilize, damage at 0 HP
+  fails one); "Carries light" (candle, torch, lantern, Light) follows the token, lights the fog for players and is
+  sent to their view. End combat opens a dialog: XP of the defeated enemies split among the player characters, and
+  loot typed in or rolled on a random table, written to the log and the session journal.
+- Campaign tools: the campaign page has tabs Encounters · Journal · People & places · Quests · Calendar. Journal:
+  one Markdown entry per session (`journal/<date>-session-<n>.md`, Write/Preview, linked encounters with Play);
+  Play appends combat start and end, fallen combatants, XP, loot and deaths to the current session under
+  "## Timeline". People & places: NPCs and locations with picture, kind, tags, notes and the encounters they appear
+  in (linked or named in the encounter). Quests: open, done or failed, with notes. Calendar (`calendar.json`):
+  Harptos or Gregorian months, editable month names and lengths, current date and time with +10 min, +1 h, Short
+  rest, Long rest, +1 day and Undo, events; the Scene's time of day follows it. All as readable files in the
+  campaign folder.
+- Random tables: Compendium tab Tables with plain text tables (`library/tables/<id>.txt`, one entry per line,
+  `weight: text` or dice ranges like `1-3: text`, `[other table]` and `[2d6]` inside entries); Roll shows the result
+  with Add to log and Add to journal. `rollTable(tableRef)` rolls for other features (End combat loot).
+- Compendium images: creatures without a picture show an icon of their creature type (14 types plus swarms; icons
+  by Lorc and Delapouite from game-icons.net, CC BY 3.0, credited in Settings > About) in the Compendium list and
+  preview and in the Add combatants dialog; tokens without a picture show that icon in the side color with the
+  combatant's number (players get it too; ad-hoc combatants keep initials). Area template rows show their shape.
+- New map wizard: `.dd2vtt` exports get a separate "Dungeon Alchemist project (optional)" step to pick or drop the
+  matching `.dam` (terrain and 3D objects), with Skip and Continue; a `.dam` dropped with the export is preselected.
 - Map maker imports: Universal VTT files (`.dd2vtt`, `.df2vtt`, `.uvtt` from Dungeon Alchemist, Dungeondraft,
   DungeonFog, Arkenforge, MapForge) become calibrated maps with walls (joined across doors, closed loops kept),
   doors, windows, lights and ambient light, from the New map wizard (grid step skipped, "Check grid" optional,

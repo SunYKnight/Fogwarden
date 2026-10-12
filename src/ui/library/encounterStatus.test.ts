@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createEncounter, newId, nowIso, type Combatant, type Encounter } from '@/core/model';
+import { createEncounter, freshCombatState, newId, nowIso, type Combatant, type Encounter } from '@/core/model';
 import { COMBAT_ENDED_TEXT, encounterStatus, statusLabel } from './encounterStatus';
 
 function combatant(side: Combatant['side'], hp: number): Combatant {
@@ -20,6 +20,7 @@ function combatant(side: Combatant['side'], hp: number): Combatant {
     hiddenFromPlayers: false,
     token: null,
     notes: '',
+    ...freshCombatState(null),
   };
 }
 

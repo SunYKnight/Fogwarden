@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { BitSet } from '@/core/binary';
 import { formatCreatureFile } from '@/core/import/creatureFile';
-import { createCampaign, createCreature, createEncounter, createMap, type AssetRef } from '@/core/model';
+import {
+  createCampaign,
+  createCreature,
+  createEncounter,
+  createMap,
+  ENCOUNTER_SCHEMA_VERSION,
+  MAP_SCHEMA_VERSION,
+  type AssetRef,
+} from '@/core/model';
 import { HeightField } from '@/core/terrain/heightfield';
 import { fogSize } from '@/core/vision/fog';
 import { createPc } from '@/state/encounterActions';
@@ -21,7 +29,8 @@ function oldDataRoot() {
   files.set('library/creatures/legacy--orc.json', json(orc));
   files.set(ORC_ASSET.path, new Uint8Array([1, 2, 3]));
   const goblin = { ...createCreature('Goblin'), id: 'srd-goblin' };
-  storage.files.content.set('creatures/srd-goblin.txt', formatCreatureFile(goblin));
+  storage.files.content.set('packs/srd/pack.json', json({ id: 'srd', name: 'SRD 5.1' }));
+  storage.files.content.set('packs/srd/creatures/srd-goblin.txt', formatCreatureFile(goblin));
   files.set(GOBLIN_ASSET.path, new Uint8Array([4, 5]));
   const portraits = { 'srd-goblin': { image: GOBLIN_ASSET, token: null } };
   files.set('library/portraits.json', json({ schema: 'portraits', version: 1, portraits }));
@@ -72,7 +81,7 @@ describe('migrateDataRoot', () => {
     expect(goblin.doc.image).toEqual({ area: 'data', path: 'library/creatures/srd-goblin.png' });
 
     const loadedMap = await repository.load('map', { area: 'data', id: 'm1' });
-    expect({ ...loadedMap, terrain: null }).toEqual({ ...map, version: 2, terrain: null });
+    expect({ ...loadedMap, terrain: null }).toEqual({ ...map, version: MAP_SCHEMA_VERSION, terrain: null });
     expect(HeightField.fromMap(loadedMap).data).toEqual(field.data);
 
     const { campaigns } = await repository.listCampaigns();
@@ -80,7 +89,7 @@ describe('migrateDataRoot', () => {
     const loadedEncounter = await repository.loadEncounter('c1', 'e1');
     expect(loadedEncounter.combatants[0]!.token).toEqual(orcRef);
     expect(loadedEncounter.fog).toEqual(encounter.fog);
-    expect(loadedEncounter.version).toBe(3);
+    expect(loadedEncounter.version).toBe(ENCOUNTER_SCHEMA_VERSION);
 
     expect(await migrateDataRoot(repository)).toEqual([]);
     expect([...storage.files.data.keys()].sort()).toEqual(keys);

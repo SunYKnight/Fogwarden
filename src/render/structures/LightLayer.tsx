@@ -3,7 +3,7 @@ import type { MapLight } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { useMapRender, type HitTag } from '../mapRenderContext';
 import { circlePoints, drapedPath } from './drape';
-import { noRaycast, useCombatantPositions, useLayerVisible } from './hooks';
+import { noRaycast, useCarriedLights, useCombatantPositions, useLayerVisible } from './hooks';
 
 // Each shadowed point light renders six depth maps; more stall weak GPUs.
 const MAX_SHADOWED_LIGHTS = 8;
@@ -61,7 +61,8 @@ export function LightLayer() {
   const { map, terrain, mode } = useMapRender();
   const visible = useLayerVisible('lights');
   const combatants = useCombatantPositions();
-  const placed = map.lights.flatMap((light) => {
+  const carried = useCarriedLights();
+  const placed = [...map.lights, ...carried].flatMap((light) => {
     const carrier = light.attachedTo && mode !== 'editor' ? combatants[light.attachedTo] : undefined;
     const position: WorldPoint = carrier
       ? [carrier.x, carrier.elevationFt + CARRIED_HEIGHT_FT, carrier.y]

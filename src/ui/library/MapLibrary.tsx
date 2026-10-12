@@ -1,12 +1,15 @@
-import type { MouseEvent } from 'react';
+import { useState, type MouseEvent } from 'react';
 import type { DocRef } from '@/core/model';
+import { HeightField } from '@/core/terrain/heightfield';
+import { MY_CONTENT } from '@/data/packs';
 import type { LibraryEntry } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
-import { useLibraryStore } from '@/state/libraryStore';
+import { packName, useLibraryStore } from '@/state/libraryStore';
 import { AssetImage } from '../components/AssetImage';
 import { Button, confirmDialog, EmptyState, Icon, openContextMenu, type MenuItem } from '../kit';
 import { openNewEncounter } from './compendiumUi';
 import { openNewMapWizard } from './NewMapWizard';
+import { MapExportDialog } from './MapExportDialog';
 
 async function duplicateMap(ref: DocRef, name: string): Promise<void> {
   const { repository, notify } = useAppStore.getState();
@@ -15,15 +18,16 @@ async function duplicateMap(ref: DocRef, name: string): Promise<void> {
   notify(`Created "${copy.name}"`);
 }
 
-/** Deleting a user copy of a shipped map brings the shipped version back. */
+/** Deleting a user copy of a pack's map brings the pack's version back. */
 async function deleteMap(entry: LibraryEntry<'map'>): Promise<void> {
   const { name } = entry.doc;
+  const edited = entry.overrides.length > 0;
   const ok = await confirmDialog({
-    title: entry.overridesContent ? 'Delete edited copy' : 'Delete map',
-    message: entry.overridesContent
-      ? `Your edits to "${name}" are deleted with their images and models; the shipped version comes back.`
+    title: edited ? 'Delete edited copy' : 'Delete map',
+    message: edited
+      ? `Your edits to "${name}" are deleted with their images and models; the pack's version comes back.`
       : `"${name}" is deleted with its images and models. Encounters using it will have no map.`,
-    confirmLabel: entry.overridesContent ? 'Delete copy' : 'Delete map',
+    confirmLabel: edited ? 'Delete copy' : 'Delete map',
     danger: true,
   });
   if (ok) {
@@ -37,11 +41,17 @@ async function deleteMap(entry: LibraryEntry<'map'>): Promise<void> {
 function MapCard({ entry }: { entry: LibraryEntry<'map'> }) {
   const navigate = useAppStore((s) => s.navigate);
   const reportError = useAppStore((s) => s.reportError);
-  const { ref, doc, overridesContent } = entry;
-  const shipped = ref.area === 'content';
+  const { ref, doc, pack, overrides } = entry;
+  const shipped = pack !== MY_CONTENT;
+  const fromPack = useLibraryStore((s) => packName(s.packs, pack));
   const edit = () => navigate({ page: 'map-editor', map: ref });
   const duplicate = () => duplicateMap(ref, doc.name).catch(reportError);
   const remove = () => deleteMap(entry).catch(reportError);
+  const [exporting, setExporting] = useState(false);
+  const loadForExport = async () => {
+    const map = await useAppStore.getState().repository.load('map', ref);
+    return { map, terrain: HeightField.fromMap(map) };
+  };
 
   const onContextMenu = (e: MouseEvent) => {
     e.preventDefault();
@@ -49,43 +59,47 @@ function MapCard({ entry }: { entry: LibraryEntry<'map'> }) {
       { label: 'Edit', icon: 'edit', run: edit },
       { label: 'Duplicate', icon: 'copy', run: duplicate },
       { label: 'Use in a new encounter', icon: 'swords', run: () => openNewEncounter(null, ref) },
+      { label: 'Export…', icon: 'download', run: () => setExporting(true) },
       { label: 'Delete', icon: 'trash', danger: true, disabled: shipped, run: remove },
     ];
     openContextMenu(e.clientX, e.clientY, items);
   };
 
   return (
-    <div className="card map-card" onContextMenu={onContextMenu}>
-      <button type="button" className="map-card-thumb" onClick={edit} aria-label={`Edit ${doc.name}`}>
-        <AssetImage asset={doc.image?.asset ?? null} alt={doc.name} />
-      </button>
-      <div className="body">
-        <div className="row">
-          <strong className="row-name" title={doc.name}>
-            {doc.name}
-          </strong>
-          {shipped && (
-            <span className="badge" title="Shipped with the app; editing creates your copy">
-              <Icon name="lock" size={12} /> Shipped
-            </span>
-          )}
-          {overridesContent && (
-            <span className="badge data" title="Your copy of a shipped map">
-              Edited
-            </span>
-          )}
-        </div>
-        <span className="muted">
-          {doc.grid.squaresX} × {doc.grid.squaresY} squares
-        </span>
-        <div className="row">
-          <Button icon="edit" label="Edit" onClick={edit} />
-          <Button icon="copy" label="Duplicate" onClick={duplicate} />
-          <div className="spacer" />
-          {!shipped && <Button icon="trash" label="Delete" iconOnly variant="danger" onClick={remove} />}
+    <>
+      <div className="card map-card" onContextMenu={onContextMenu}>
+        <button type="button" className="map-card-thumb" onClick={edit} aria-label={`Edit ${doc.name}`}>
+          <AssetImage asset={doc.image?.asset ?? null} alt={doc.name} />
+        </button>
+        <div className="body">
+          <div className="row">
+            <strong className="row-name" title={doc.name}>
+              {doc.name}
+            </strong>
+            {shipped && (
+              <span className="badge" title={`From the pack "${fromPack}"; editing creates your copy`}>
+                <Icon name="lock" size={12} /> {fromPack}
+              </span>
+            )}
+            {overrides.length > 0 && (
+              <span className="badge data" title="Your copy of a pack's map">
+                Edited
+              </span>
+            )}
+          </div>
+          <span className="muted">
+            {doc.grid.squaresX} × {doc.grid.squaresY} squares
+          </span>
+          <div className="row">
+            <Button icon="edit" label="Edit" onClick={edit} />
+            <Button icon="copy" label="Duplicate" onClick={duplicate} />
+            <div className="spacer" />
+            {!shipped && <Button icon="trash" label="Delete" iconOnly variant="danger" onClick={remove} />}
+          </div>
         </div>
       </div>
-    </div>
+      {exporting && <MapExportDialog name={doc.name} load={loadForExport} onClose={() => setExporting(false)} />}
+    </>
   );
 }
 

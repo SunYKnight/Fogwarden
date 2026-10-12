@@ -1,12 +1,14 @@
 import type { ComponentType } from 'react';
 import { FogLayer } from './fog/FogLayer';
 import { MarkerLayer } from './markers/MarkerLayer';
+import { PingLayer } from './pings/PingLayer';
 import { PropLayer } from './props/PropLayer';
 import { LightLayer } from './structures/LightLayer';
 import { RegionLayer } from './structures/RegionLayer';
 import { RoomLayer } from './structures/RoomLayer';
 import { StructureLayer } from './structures/StructureLayer';
 import { TokenLayer } from './tokens/TokenLayer';
+import { WeatherLayer } from './weather/WeatherLayer';
 
 /**
  * Map layers rendered by every map view (editor, DM, player) after the terrain.
@@ -21,4 +23,6 @@ export const SCENE_LAYERS: { id: string; Component: ComponentType }[] = [
   { id: 'regions', Component: RegionLayer },
   { id: 'lights', Component: LightLayer },
   { id: 'props', Component: PropLayer },
+  { id: 'pings', Component: PingLayer },
+  { id: 'weather', Component: WeatherLayer },
 ];

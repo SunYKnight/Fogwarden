@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import {
   RELAY_API_VERSION,
@@ -139,7 +139,7 @@ describe('relay sockets', () => {
     expect(await dm.closed).toBe(1008);
   });
 
-  it('closes a player socket that sends anything but hello', async () => {
+  it('closes a player socket that sends an invalid message', async () => {
     await putLinks({ [TOKEN_A]: 'A' });
     const extra = player(TOKEN_A);
     await extra.opened;
@@ -155,6 +155,70 @@ describe('relay sockets', () => {
     await garbage.opened;
     garbage.socket.send('not json');
     expect(await garbage.closed).toBe(1008);
+  });
+
+  it("forwards players' rolls, pings and own token moves rebuilt and tagged with the view", async () => {
+    await putLinks({ [TOKEN_A]: 'A', [TOKEN_B]: 'party' });
+    const dm = connect(`${base}/ws`, [RELAY_DM_PROTOCOL, DM_KEY]);
+    await dm.opened;
+    const a = player(TOKEN_A);
+    const party = player(TOKEN_B);
+    await Promise.all([a.opened, party.opened]);
+    const roll =
+      '{"protocol":2,"from":"player","payload":{"type":"roll","dice":"1d20+5","mode":"normal","label":"Hit"}}';
+    a.socket.send(` ${roll.replace('"mode"', ' "mode"')} `);
+    const point = '{"protocol":2,"from":"player","payload":{"type":"point","at":{"x":1.5,"y":2,"elevationFt":0}}}';
+    party.socket.send(point);
+    const move =
+      '{"protocol":2,"from":"player","payload":{"type":"move","combatantId":"A","to":{"x":5,"y":5,"elevationFt":0}}}';
+    a.socket.send(move);
+    expect(await dm.message((m) => m.includes('"roll"'))).toBe(`A\n${roll}`);
+    expect(await dm.message((m) => m.includes('"point"'))).toBe(`party\n${point}`);
+    expect(await dm.message((m) => m.includes('"move"'))).toBe(`A\n${move}`);
+  });
+
+  it("closes a player socket whose request is malformed or for another view's token", async () => {
+    await putLinks({ [TOKEN_A]: 'A', [TOKEN_B]: 'party' });
+    const sends = async (token: string, payload: string) => {
+      const socket = player(token);
+      await socket.opened;
+      socket.socket.send(`{"protocol":2,"from":"player","payload":${payload}}`);
+      return socket.closed;
+    };
+    const to = '"to":{"x":5,"y":5,"elevationFt":0}';
+    expect(await sends(TOKEN_A, `{"type":"move","combatantId":"B",${to}}`)).toBe(1008);
+    expect(await sends(TOKEN_B, `{"type":"move","combatantId":"party",${to}}`)).toBe(1008);
+    expect(await sends(TOKEN_B, '{"type":"roll","dice":"1d20","mode":"normal","label":""}')).toBe(1008);
+    expect(await sends(TOKEN_A, '{"type":"roll","dice":"1d20;rm","mode":"normal","label":""}')).toBe(1008);
+    expect(await sends(TOKEN_A, '{"type":"point","at":{"x":"1","y":2,"elevationFt":0}}')).toBe(1008);
+    expect(await sends(TOKEN_A, '{"type":"point","at":{"x":1,"y":2,"elevationFt":0},"by":"DM"}')).toBe(1008);
+    expect(await sends(TOKEN_A, '{"type":"point","at":{"x":1e9,"y":2,"elevationFt":0}}')).toBe(1008);
+  });
+
+  it('drops player messages beyond the rate limit', async () => {
+    // A frozen clock keeps the bucket from refilling during the burst.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      await putLinks({ [TOKEN_A]: 'A' });
+      const dm = connect(`${base}/ws`, [RELAY_DM_PROTOCOL, DM_KEY]);
+      await dm.opened;
+      const a = player(TOKEN_A);
+      await a.opened;
+      const point = (x: number) =>
+        `{"protocol":2,"from":"player","payload":{"type":"point","at":{"x":${x},"y":0,"elevationFt":0}}}`;
+      for (let x = 0; x < 14; x++) {
+        a.socket.send(point(x));
+      }
+      await dm.message((m) => m.includes('"x":9,'));
+      vi.setSystemTime(Date.now() + 600);
+      a.socket.send(HELLO);
+      await dm.message((m) => m.includes('hello'));
+      const xs = dm.messages.filter((m) => m.includes('"point"')).map((m) => Number(/"x":(\d+)/.exec(m)![1]));
+      expect(xs).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(a.socket.readyState).toBe(WebSocket.OPEN);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('rejects a wrong DM key and a wrong player token', async () => {
@@ -275,6 +339,14 @@ describe('relay uploads', () => {
     expect(await promise).toBe(413);
     oversized.destroy();
   });
+
+  it('takes pictures from shipped and imported packs but never their documents', async () => {
+    expect((await put('/api/asset/content/packs/srd/creatures/srd-goblin.png', PNG)).status).toBe(204);
+    expect((await put('/api/asset/data/packs/mm/maps/m1/assets/map.png', PNG)).status).toBe(204);
+    expect((await put('/api/asset/data/packs/mm/pack.json', PNG)).status).toBe(403);
+    expect((await put('/api/asset/data/packs/mm/creatures/goblin.txt', PNG)).status).toBe(403);
+    expect((await put('/api/asset/data/packs%2F..%2F..%2Fx.png', PNG)).status).toBe(400);
+  });
 });
 
 describe('relay player access', () => {
@@ -292,6 +364,24 @@ describe('relay player access', () => {
     const byCookie = await fetch(`${base}${asset}`, { headers: { cookie: `dmtool-relay=${TOKEN_A}` } });
     expect(byCookie.status).toBe(200);
     expect((await fetch(`${base}/asset/data/settings.json?token=${TOKEN_A}`)).status).toBe(403);
+  });
+
+  it('serves audio and video in byte ranges so every browser can play and seek them', async () => {
+    const track = '/asset/data/library/sounds/tavern.ogg';
+    const bytes = Buffer.from('0123456789');
+    expect((await put(`/api${track}`, bytes)).status).toBe(204);
+    await putLinks({ [TOKEN_A]: 'A' });
+    const url = `${base}${track}?token=${TOKEN_A}`;
+    const whole = await fetch(url);
+    expect(whole.headers.get('content-type')).toBe('audio/ogg');
+    expect(whole.headers.get('accept-ranges')).toBe('bytes');
+    const part = await fetch(url, { headers: { range: 'bytes=2-5' } });
+    expect(part.status).toBe(206);
+    expect(part.headers.get('content-range')).toBe('bytes 2-5/10');
+    expect(await part.text()).toBe('2345');
+    const tail = await fetch(url, { headers: { range: 'bytes=-3' } });
+    expect(await tail.text()).toBe('789');
+    expect((await fetch(url, { headers: { range: 'bytes=20-' } })).status).toBe(416);
   });
 
   it('serves the uploaded player page for a link token and its chunks publicly', async () => {

@@ -5,14 +5,16 @@ import { FOG_VISIBLE, fogSize, viewFog, type FogSources } from '@/core/vision/fo
 import { useFogViewStore } from '@/render/fog/fogViewStore';
 import { createPc } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
+import { usePingStore } from '@/state/pingStore';
 import { startDmPublisher } from './dmPublisher';
-import type { DmTransport, SyncPayload } from './protocol';
+import type { DmTransport, PlayerRequest, SyncPayload } from './protocol';
 import { useViewLinksStore } from './views';
 
 /** Records what goes to which views; `views` are the ones with receivers. */
 class FakeTransport implements DmTransport {
   readonly sent: { views: readonly string[]; payload: SyncPayload }[] = [];
   private resendHandler: (view: string | null) => void = () => undefined;
+  private requestHandler: (view: string, request: PlayerRequest) => void = () => undefined;
 
   constructor(private readonly views: string[]) {}
 
@@ -28,6 +30,11 @@ class FakeTransport implements DmTransport {
     return () => undefined;
   }
 
+  onPlayerRequest(handler: (view: string, request: PlayerRequest) => void): () => void {
+    this.requestHandler = handler;
+    return () => undefined;
+  }
+
   watchViews(handler: (views: ReadonlySet<string>) => void): () => void {
     handler(new Set(this.views));
     return () => undefined;
@@ -35,6 +42,15 @@ class FakeTransport implements DmTransport {
 
   hello(view: string): void {
     this.resendHandler(view);
+  }
+
+  request(view: string, request: PlayerRequest): void {
+    this.requestHandler(view, request);
+  }
+
+  lastOf<T extends SyncPayload['type']>(view: string, type: T): Extract<SyncPayload, { type: T }> | undefined {
+    const sent = this.sent.filter((s) => s.views.includes(view)).map((s) => s.payload);
+    return sent.findLast((p): p is Extract<SyncPayload, { type: T }> => p.type === type);
   }
 
   encounterOf(view: string): string[] {
@@ -99,8 +115,8 @@ describe('startDmPublisher', () => {
     expect(maps.map((s) => s.views)).toEqual([[PARTY_VIEW, thorin.id]]);
     const names = transport.sent.filter((s) => s.payload.type === 'view').map((s) => [s.views, s.payload]);
     expect(names).toEqual([
-      [[PARTY_VIEW], { type: 'view', name: 'Party' }],
-      [[thorin.id], { type: 'view', name: 'Thorin' }],
+      [[PARTY_VIEW], { type: 'view', name: 'Party', combatantId: null }],
+      [[thorin.id], { type: 'view', name: 'Thorin', combatantId: thorin.id }],
     ]);
     // Nobody watches Elara's view, so nothing of it is computed or sent.
     expect(transport.sent.some((s) => s.views.includes(elara.id))).toBe(false);
@@ -113,7 +129,7 @@ describe('startDmPublisher', () => {
     const before = other.sent.length;
     asking.sent.length = 0;
     asking.hello(thorin.id);
-    expect(asking.sent.map((s) => s.payload.type)).toEqual(['map', 'view', 'encounter', 'fog', 'camera']);
+    expect(asking.sent.map((s) => s.payload.type)).toEqual(['map', 'view', 'encounter', 'fog', 'handout', 'camera']);
     expect(asking.sent.every((s) => s.views.length === 1 && s.views[0] === thorin.id)).toBe(true);
     expect(other.sent).toHaveLength(before);
   });
@@ -125,5 +141,52 @@ describe('startDmPublisher', () => {
       d.combatants[2]!.position = at(7.5);
     }, 'Move goblin');
     expect(transport.encounterOf(thorin.id)).toEqual(['Thorin', 'Elara', 'Goblin']);
+  });
+
+  it("sends a character's own sheet to that character's view only", () => {
+    const transport = new FakeTransport([PARTY_VIEW, thorin.id]);
+    stop = startDmPublisher([transport]);
+    expect(transport.lastOf(thorin.id, 'encounter')?.encounter?.sheet).toMatchObject({
+      name: 'Thorin',
+      hp: { current: 10, max: 10, temp: 0 },
+      armorClass: 10,
+    });
+    expect(transport.lastOf(PARTY_VIEW, 'encounter')?.encounter?.sheet).toBeUndefined();
+  });
+
+  it('shows a ping to the view that pointed and to the views that see the spot', () => {
+    const transport = new FakeTransport([PARTY_VIEW, thorin.id, elara.id]);
+    stop = startDmPublisher([transport]);
+    usePingStore.getState().add({ at: at(2.5), by: 'DM', from: null });
+    transport.request(elara.id, { type: 'point', at: at(7.5) });
+    const pings = transport.sent.filter((s) => s.payload.type === 'ping').map((s) => [s.views, s.payload]);
+    expect(pings).toEqual([
+      [[PARTY_VIEW, thorin.id], { type: 'ping', at: at(2.5), by: 'DM' }],
+      [[PARTY_VIEW, thorin.id, elara.id], { type: 'ping', at: at(7.5), by: 'Elara' }],
+    ]);
+  });
+
+  it("applies a player's move with the grid distance as one undo step once the encounter allows it", () => {
+    const transport = new FakeTransport([thorin.id]);
+    stop = startDmPublisher([transport]);
+    const positionOf = () => useEncounterStore.getState().encounter?.combatants[0]?.position;
+    expect(transport.lastOf(thorin.id, 'encounter')?.encounter?.ownMoves).toBeUndefined();
+    useEncounterStore.getState().update((d) => void (d.playersMoveTokens = true), 'Allow moves');
+    expect(transport.lastOf(thorin.id, 'encounter')?.encounter?.ownMoves).toBe('5-5-5');
+    transport.request(thorin.id, { type: 'move', combatantId: thorin.id, to: at(12) });
+    expect(positionOf()).toEqual(at(12.5));
+    expect(useEncounterStore.getState().encounter?.log.at(-1)?.text).toBe('Thorin moved 10 ft (player)');
+    expect(useEncounterStore.getState().undo()).toBe('Move Thorin');
+    expect(positionOf()).toEqual(at(2.5));
+  });
+
+  it("logs a player's roll and answers that view alone", () => {
+    const transport = new FakeTransport([PARTY_VIEW, thorin.id]);
+    stop = startDmPublisher([transport]);
+    transport.request(thorin.id, { type: 'roll', dice: '1d1+2', mode: 'normal', label: 'Perception' });
+    const text = 'Thorin rolls Perception 1d1+2: 3 (1d1 [1] + 2 = 3)';
+    expect(useEncounterStore.getState().encounter?.log.at(-1)?.text).toBe(text);
+    const answers = transport.sent.filter((s) => s.payload.type === 'rolled');
+    expect(answers).toEqual([{ views: [thorin.id], payload: { type: 'rolled', text } }]);
   });
 });

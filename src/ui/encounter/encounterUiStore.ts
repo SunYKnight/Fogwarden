@@ -29,6 +29,11 @@ interface EncounterUiState {
   addDialogOpen: boolean;
   /** Damage or heal amount asked for from the token context menu. */
   hpPrompt: { combatantId: string; change: HpChange } | null;
+  /** Concentration saves owed after damage, oldest first. */
+  concentrationChecks: { combatantId: string; dc: number }[];
+  endCombatOpen: boolean;
+  /** Placed area whose targets the Areas tab lists. */
+  areaTargetsId: string | null;
 }
 
 export const useEncounterUi = create<EncounterUiState>(() => ({
@@ -45,6 +50,9 @@ export const useEncounterUi = create<EncounterUiState>(() => ({
   fogMenuOpen: false,
   addDialogOpen: false,
   hpPrompt: null,
+  concentrationChecks: [],
+  endCombatOpen: false,
+  areaTargetsId: null,
 }));
 
 /** Drops whatever is being placed, dragged or measured; true when something was. */
@@ -84,4 +92,11 @@ export function startAreaPlacement(template: MarkerTemplate): void {
 export function chooseTool(tool: EncounterTool): void {
   useFogViewStore.getState().setBrush('off');
   useEncounterUi.setState({ tool, measure: null, drag: null });
+}
+
+/** Queues the concentration saves `owed` (DC by combatant id) asks for. */
+export function queueConcentrationChecks(owed: Record<string, number>): void {
+  const checks = Object.entries(owed).map(([combatantId, dc]) => ({ combatantId, dc }));
+  if (checks.length > 0)
+    useEncounterUi.setState((s) => ({ concentrationChecks: [...s.concentrationChecks, ...checks] }));
 }

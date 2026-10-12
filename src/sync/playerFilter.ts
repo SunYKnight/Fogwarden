@@ -1,7 +1,9 @@
-import type { AssetRef, BattleMap, Combatant, Encounter } from '@/core/model';
+import type { CreatureIconKey } from '@/core/creatureTypeIcon';
+import type { AssetRef, BattleMap, Combatant, Creature, Encounter } from '@/core/model';
+import { creatureResources } from '@/core/rules/resources';
 import { FOG_VISIBLE, fogCellAt, type FogCells } from '@/core/vision/fog';
 import { currentCombatant } from '@/state/encounterActions';
-import type { PlayerCombatant, PlayerEncounter } from './protocol';
+import type { PlayerCombatant, PlayerEncounter, PlayerSheet } from './protocol';
 
 /** Secret openings players know about: only those standing open right now. */
 function openSecretIds(map: BattleMap, encounter: Encounter): Set<string> {
@@ -43,7 +45,7 @@ function visibleTo(combatant: Combatant, fog: FogCells | null): boolean {
   return cell >= 0 && fog?.cells[cell] === FOG_VISIBLE;
 }
 
-function toPlayer(combatant: Combatant, token: AssetRef | null): PlayerCombatant {
+function toPlayer(combatant: Combatant, token: AssetRef | null, typeIcon: CreatureIconKey | null): PlayerCombatant {
   const { id, name, side, size, position, facingDeg, conditions, visionSource } = combatant;
   return {
     id,
@@ -56,6 +58,8 @@ function toPlayer(combatant: Combatant, token: AssetRef | null): PlayerCombatant
     token,
     visionSource,
     health: side === 'player' ? null : healthBand(combatant.hp),
+    ...(typeIcon ? { typeIcon } : {}),
+    ...(combatant.light ? { light: combatant.light } : {}),
   };
 }
 
@@ -65,9 +69,16 @@ export interface PlayerViewOptions {
   standees: boolean;
   /** Token picture of a combatant; the DM side resolves creature pictures and portraits here. */
   tokenOf: (combatant: Combatant) => AssetRef | null;
+  /** Type icon of a combatant's library creature; null for ad-hoc combatants. */
+  typeIconOf: (combatant: Combatant) => CreatureIconKey | null;
 }
 
-const PLAIN_VIEW: PlayerViewOptions = { showTurnOrder: false, standees: true, tokenOf: (c) => c.token };
+const PLAIN_VIEW: PlayerViewOptions = {
+  showTurnOrder: false,
+  standees: true,
+  tokenOf: (c) => c.token,
+  typeIconOf: () => null,
+};
 
 /**
  * Encounter as players may see it: hidden combatants never, other non-player combatants only while they
@@ -81,7 +92,7 @@ export function filterEncounterForPlayers(
 ): PlayerEncounter {
   const combatants = encounter.combatants
     .filter((c) => !c.hiddenFromPlayers && (c.side === 'player' || visibleTo(c, fog)))
-    .map((c) => toPlayer(c, view.tokenOf(c)));
+    .map((c) => toPlayer(c, view.tokenOf(c), view.typeIconOf(c)));
   const active = currentCombatant(encounter);
   const secret = new Set(map?.openings.filter((o) => o.secret).map((o) => o.id) ?? []);
   const openingStates = Object.fromEntries(
@@ -96,5 +107,23 @@ export function filterEncounterForPlayers(
     standees: view.standees,
     markers: encounter.markers.filter((m) => m.visibleToPlayers),
     openingStates,
+  };
+}
+
+/** A player character's own sheet for its view; speeds and spell slots come from its library creature. */
+export function playerSheet(combatant: Combatant, creature: Creature | null): PlayerSheet {
+  const slots = creature ? creatureResources(creature).slots : {};
+  return {
+    id: combatant.id,
+    name: combatant.name,
+    hp: combatant.hp,
+    armorClass: combatant.armorClass,
+    speeds: creature?.speeds ?? {},
+    conditions: combatant.conditions,
+    concentrating: combatant.concentrating,
+    deathSaves: combatant.hp.current <= 0 ? combatant.deathSaves : null,
+    slots: Object.entries(slots)
+      .map(([level, max]) => ({ level: Number(level), max, used: combatant.resources.slotsUsed[level] ?? 0 }))
+      .sort((a, b) => a.level - b.level),
   };
 }

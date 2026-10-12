@@ -1,11 +1,15 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { useEffect, useState, type ReactNode } from 'react';
 import { PARTY_VIEW } from '@/core/model';
+import { startDmSound } from '@/sound/dmSound';
 import { useAppStore, type Route } from '@/state/appStore';
 import { startAutosave } from '@/state/autosave';
+import { startCalendarSync } from '@/state/calendarStore';
+import { startJournalRecorder } from '@/state/journalRecorder';
 import { useLanStore } from '@/state/lanStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { useRelayStore } from '@/state/relayStore';
+import { startAtmospherePublisher } from '@/sync/atmospherePublisher';
 import { startDmPublisher } from '@/sync/dmPublisher';
 import { startFogTracker } from '@/sync/fogTracker';
 import { createLocalTransport, LocalViewTransport } from '@/sync/transports';
@@ -78,9 +82,16 @@ export function DmApp() {
   useActiveEncounter();
   useEffect(() => startFogTracker(), []);
   useEffect(() => startViewLinks(), []);
+  useEffect(() => startCalendarSync(), []);
+  useEffect(() => startJournalRecorder(), []);
+  useEffect(() => startDmSound(), []);
   // In the browser the window is a tab the app cannot track.
   useEffect(() => local.setView(windowOpen || !isTauri() ? windowView : null), [local, windowOpen, windowView]);
   useEffect(() => startDmPublisher([local, ...(lan ? [lan] : []), ...(relay ? [relay] : [])]), [local, lan, relay]);
+  useEffect(
+    () => startAtmospherePublisher([local, ...(lan ? [lan] : []), ...(relay ? [relay] : [])]),
+    [local, lan, relay],
+  );
   useEffect(() => {
     useLanStore.getState().refresh().catch(reportError);
     refreshPlayerWindowState().catch(reportError);

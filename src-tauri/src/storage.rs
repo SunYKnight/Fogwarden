@@ -236,18 +236,98 @@ pub fn storage_write_text(state: State<'_, StorageState>, path: String, text: St
     write_atomic(&resolve(&state.root(Area::Data)?, &path)?, text.as_bytes())
 }
 
-#[tauri::command]
-pub fn storage_write_bytes(state: State<'_, StorageState>, request: Request<'_>) -> Result<(), StorageError> {
+/// The percent-encoded path a raw-body command carries in its header.
+fn header_path(request: &Request<'_>) -> Result<String, StorageError> {
     let header = request
         .headers()
         .get(PATH_HEADER)
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| StorageError(format!("missing {PATH_HEADER} header")))?;
-    let target = resolve(&state.root(Area::Data)?, &percent_decode(header)?)?;
+    percent_decode(header)
+}
+
+fn raw_body<'a>(request: &'a Request<'_>) -> Result<&'a [u8], StorageError> {
     match request.body() {
-        InvokeBody::Raw(bytes) => write_atomic(&target, bytes),
+        InvokeBody::Raw(bytes) => Ok(bytes),
         InvokeBody::Json(_) => Err(StorageError("expected a binary body".into())),
     }
+}
+
+#[tauri::command]
+pub fn storage_write_bytes(state: State<'_, StorageState>, request: Request<'_>) -> Result<(), StorageError> {
+    let target = resolve(&state.root(Area::Data)?, &header_path(&request)?)?;
+    write_atomic(&target, raw_body(&request)?)
+}
+
+/// File types the app writes outside its roots: map exports and content pack archives.
+const EXPORT_EXTENSIONS: [&str; 4] = ["glb", "dd2vtt", "png", "zip"];
+
+#[cfg(windows)]
+fn system_dirs() -> Vec<PathBuf> {
+    [
+        "SystemRoot",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "ProgramW6432",
+        "ProgramData",
+    ]
+    .iter()
+    .filter_map(std::env::var_os)
+    .map(PathBuf::from)
+    .collect()
+}
+
+#[cfg(not(windows))]
+fn system_dirs() -> Vec<PathBuf> {
+    [
+        "/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/proc", "/sbin", "/sys", "/usr", "/System",
+    ]
+    .iter()
+    .map(PathBuf::from)
+    .collect()
+}
+
+/// Checks a path the user picked in a save dialog: absolute, an export file type, in an existing
+/// folder that lies outside every protected folder (storage roots, system folders).
+fn export_target(path: &str, protected: &[PathBuf]) -> Result<PathBuf, StorageError> {
+    let file = PathBuf::from(path);
+    let extension = file
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    let refused = || StorageError(format!("not a file path the app may export to: {path}"));
+    let name = file.file_name().ok_or_else(refused)?;
+    let parent = file.parent().ok_or_else(refused)?;
+    if !file.is_absolute() || !EXPORT_EXTENSIONS.contains(&extension.as_str()) || file.is_dir() {
+        Err(refused())
+    } else {
+        let folder = fs::canonicalize(parent)?;
+        // A protected folder that does not exist cannot contain the target.
+        let inside = protected
+            .iter()
+            .filter_map(|p| fs::canonicalize(p).ok())
+            .any(|p| folder.starts_with(p));
+        if inside {
+            Err(StorageError(format!(
+                "choose a folder outside the app's data and content folders and system folders: {path}"
+            )))
+        } else {
+            Ok(folder.join(name))
+        }
+    }
+}
+
+/// Writes a raw body to a file the user picked in a save dialog (absolute path in the header).
+#[tauri::command]
+pub fn storage_write_file_bytes(state: State<'_, StorageState>, request: Request<'_>) -> Result<(), StorageError> {
+    let mut protected = system_dirs();
+    protected.push(state.root(Area::Data)?);
+    protected.push(state.root(Area::Content)?);
+    write_atomic(
+        &export_target(&header_path(&request)?, &protected)?,
+        raw_body(&request)?,
+    )
 }
 
 fn list_dir(dir: &Path) -> Result<Vec<Entry>, StorageError> {
@@ -465,6 +545,24 @@ mod tests {
         assert!(import_file(&root, &picked, "x.jpg").is_err());
         assert!(import_file(&root, &picked.join("goblin.jpg"), "../escape.jpg").is_err());
         assert!(!dir.join("escape.jpg").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn accepts_export_targets_outside_protected_folders_only() {
+        let dir = test_dir("export");
+        let root = dir.join("root");
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let protected = [root.clone()];
+        let path = |p: &Path| p.to_string_lossy().into_owned();
+        let target = export_target(&path(&out.join("Chapel.GLB")), &protected).unwrap();
+        assert_eq!(target, fs::canonicalize(&out).unwrap().join("Chapel.GLB"));
+        assert!(export_target(&path(&out.join("map.json")), &protected).is_err());
+        assert!(export_target(&path(&out.join("missing/map.png")), &protected).is_err());
+        assert!(export_target(&path(&root.join("library/maps/m1/assets/map.png")), &protected).is_err());
+        assert!(export_target(&path(&root.join("x.dd2vtt")), &protected).is_err());
+        assert!(export_target("relative.zip", &protected).is_err());
         fs::remove_dir_all(dir).unwrap();
     }
 }

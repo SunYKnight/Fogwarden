@@ -6,6 +6,7 @@ import {
   campaignFileSchema,
   campaignSchema,
   creatureSchema,
+  defaultPackSettings,
   defaultSettings,
   encounterFileSchema,
   encounterSchema,
@@ -24,38 +25,79 @@ import {
   type EncounterFile,
   type Fog,
   type MarkerTemplate,
+  type PackSettings,
   type Settings,
   type StorageArea,
 } from '@/core/model';
 import { readPngSize } from '@/core/png';
+import { formatTableFile, parseTableFile, type RandomTable } from '@/core/tables';
 import { HeightField } from '@/core/terrain/heightfield';
 import { decodeHeightmap, encodeHeightmap } from '@/core/terrain/heightmap';
 import { fogSize, readFogBits, type FogSize } from '@/core/vision/fog';
 import { decodeFogMask, encodeFogMask } from '@/core/vision/fogMask';
 import { migrate } from './migrations';
+import {
+  formatPackManifest,
+  isPackEnabled,
+  MY_CONTENT,
+  MY_CONTENT_SOURCE,
+  orderPacks,
+  PACK_FILE,
+  PACK_ID,
+  packManifestSchema,
+  PACKS_DIR,
+  packSource,
+  writableSource,
+  type InstalledPack,
+  type LibrarySource,
+  type PackManifest,
+} from './packs';
 import type { DirEntry, Storage } from './storage';
 
-export type LibraryKind = 'creature' | 'marker' | 'map';
+export type LibraryKind = 'creature' | 'marker' | 'map' | 'table';
+export const LIBRARY_KINDS: LibraryKind[] = ['creature', 'marker', 'map', 'table'];
 
 export interface LibraryDocs {
   creature: Creature;
   marker: MarkerTemplate;
   map: BattleMap;
+  table: RandomTable;
 }
 
-const LIBRARY_DIRS: Record<LibraryKind, { data: string; content: string }> = {
-  creature: { data: 'library/creatures', content: 'creatures' },
-  marker: { data: 'library/markers', content: 'markers' },
-  map: { data: 'library/maps', content: 'maps' },
+interface KindLayout {
+  /** Folder of the kind inside a pack root. */
+  dir: string;
+  /** What follows the id in the document's path; maps are folders holding `map.json`. */
+  file: string;
+  folder: boolean;
+  /** Id of a new document whose name has no letters or digits. */
+  fallbackId: string;
+}
+
+export const KIND_LAYOUTS: Record<LibraryKind, KindLayout> = {
+  creature: { dir: 'creatures', file: '.txt', folder: false, fallbackId: 'creature' },
+  marker: { dir: 'markers', file: '.json', folder: false, fallbackId: 'area' },
+  map: { dir: 'maps', file: '/map.json', folder: true, fallbackId: 'map' },
+  table: { dir: 'tables', file: '.txt', folder: false, fallbackId: 'table' },
 };
 
-const NEW_ID_FALLBACK: Record<LibraryKind, string> = { creature: 'creature', marker: 'area', map: 'map' };
+/** Reads and writes one kind; `reader` gets the kind folder listings of `sources` in the same order. */
+interface KindCodec<K extends LibraryKind> {
+  reader(
+    sources: LibrarySource[],
+    folders: DirEntry[][],
+  ): (source: LibrarySource, id: string) => Promise<LibraryDocs[K]>;
+  write(target: LibrarySource, doc: LibraryDocs[K]): Promise<LibraryDocs[K]>;
+}
 
 const SETTINGS_PATH = 'settings.json';
 const TERRAIN_FILE = 'terrain.png';
 const PICTURE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
 /** `<id>.<ext>` is a creature's image, `<id>.token.<ext>` its token picture. */
 const PICTURE_FILE = /^(.+?)(\.token)?\.(png|jpe?g|webp)$/i;
+/** A file in the creature folder of My content or a pack. */
+const CREATURE_FOLDER_FILE = /^(?:library|packs\/[a-z0-9-]+)\/creatures\/[^/]+$/;
+const MODEL_FILE = /\.(glb|gltf)$/i;
 
 export type PictureKind = 'image' | 'token';
 type Pictures = Pick<Creature, PictureKind>;
@@ -63,8 +105,10 @@ type Pictures = Pick<Creature, PictureKind>;
 export interface LibraryEntry<K extends LibraryKind> {
   ref: DocRef;
   doc: LibraryDocs[K];
-  /** True when a user copy in the data area shadows a shipped document with the same id. */
-  overridesContent: boolean;
+  /** Pack the document comes from (`MY_CONTENT` for the user's own). */
+  pack: string;
+  /** Enabled packs holding a document with the same id that this one hides, highest precedence first. */
+  overrides: string[];
 }
 
 export interface LoadProblem {
@@ -76,6 +120,17 @@ export interface LoadProblem {
 export interface LibraryListing<K extends LibraryKind> {
   entries: LibraryEntry<K>[];
   problems: LoadProblem[];
+  /** Documents of enabled packs hidden by one with the same id from pack `by`. */
+  shadowed: { id: string; pack: string; by: string }[];
+  /** Documents only disabled packs hold, by the first such pack; encounters may still refer to them. */
+  unavailable: { id: string; pack: string }[];
+}
+
+export interface PackInfo extends InstalledPack {
+  manifest: PackManifest;
+  enabled: boolean;
+  /** Documents per library kind plus 3D models (`.glb`/`.gltf` under `models/`). */
+  counts: Record<LibraryKind | 'model', number>;
 }
 
 export class DataError extends Error {
@@ -89,25 +144,36 @@ export class DataError extends Error {
   }
 }
 
+export function libraryDir(kind: LibraryKind, source: LibrarySource): string {
+  return `${source.root}/${KIND_LAYOUTS[kind].dir}`;
+}
+
 /** Maps are folders so their images, models and heightmap travel with them; creatures are stat block text. */
-export function libraryDocPath(kind: LibraryKind, area: StorageArea, id: string): string {
-  const dir = LIBRARY_DIRS[kind][area];
-  const files: Record<LibraryKind, string> = { creature: `${id}.txt`, marker: `${id}.json`, map: `${id}/map.json` };
-  return `${dir}/${files[kind]}`;
+export function libraryDocPath(kind: LibraryKind, source: LibrarySource, id: string): string {
+  return `${libraryDir(kind, source)}/${id}${KIND_LAYOUTS[kind].file}`;
 }
 
-function mapDir(area: StorageArea, id: string): string {
-  return `${LIBRARY_DIRS.map[area]}/${id}`;
+/** Ids of the documents in a kind folder listing; pictures and other files are skipped. */
+function docIds(kind: LibraryKind, entries: DirEntry[]): string[] {
+  const { file, folder } = KIND_LAYOUTS[kind];
+  return entries
+    .filter((e) => (folder ? e.isDir : !e.isDir && e.name.endsWith(file)))
+    .map((e) => (folder ? e.name : e.name.slice(0, -file.length)));
 }
 
-export function mapAssetRef(mapId: string, fileName: string): AssetRef {
-  return { area: 'data', path: `${mapDir('data', mapId)}/assets/${fileName}` };
+function mapDir(source: LibrarySource, id: string): string {
+  return `${libraryDir('map', source)}/${id}`;
+}
+
+/** Where an asset file of map `mapId` in `pack` (My content by default) is stored. */
+export function mapAssetRef(mapId: string, fileName: string, pack = MY_CONTENT): AssetRef {
+  return { area: 'data', path: `${mapDir(writableSource(pack), mapId)}/assets/${fileName}` };
 }
 
 /** Where a creature's picture of `kind` with the file extension `extension` lives by name convention. */
-export function creaturePictureRef(area: StorageArea, id: string, kind: PictureKind, extension: string): AssetRef {
+export function creaturePictureRef(source: LibrarySource, id: string, kind: PictureKind, extension: string): AssetRef {
   const suffix = kind === 'token' ? '.token' : '';
-  return { area, path: `${LIBRARY_DIRS.creature[area]}/${id}${suffix}.${extension.toLowerCase()}` };
+  return { area: source.area, path: `${libraryDir('creature', source)}/${id}${suffix}.${extension.toLowerCase()}` };
 }
 
 export function campaignPath(id: string): string {
@@ -164,7 +230,7 @@ export function storableFog(fog: Fog, size: FogSize | null): Fog {
 }
 
 /** Pictures found by name in one listing of a creature folder, by creature id. */
-function picturesIn(area: StorageArea, entries: DirEntry[]): Map<string, Pictures> {
+function picturesIn(source: LibrarySource, entries: DirEntry[]): Map<string, Pictures> {
   const pictures = new Map<string, Pictures>();
   for (const entry of entries.filter((e) => !e.isDir)) {
     const match = PICTURE_FILE.exec(entry.name);
@@ -173,11 +239,30 @@ function picturesIn(area: StorageArea, entries: DirEntry[]): Map<string, Picture
       const kind: PictureKind = match[2] ? 'token' : 'image';
       const found = pictures.get(id) ?? { image: null, token: null };
       // Sorted listings make the first extension win when several exist.
-      pictures.set(id, { ...found, [kind]: found[kind] ?? creaturePictureRef(area, id, kind, match[3]!) });
+      pictures.set(id, { ...found, [kind]: found[kind] ?? creaturePictureRef(source, id, kind, match[3]!) });
     }
   }
   return pictures;
 }
+
+/** Pictures by precedence: a picture in My content beats a pack's, so `<id>.png` there pictures any creature. */
+function picturesOf(id: string, bySource: Map<string, Pictures>[]): Pictures {
+  const found = bySource.map((pictures) => pictures.get(id));
+  return {
+    image: found.find((p) => p?.image)?.image ?? null,
+    token: found.find((p) => p?.token)?.token ?? null,
+  };
+}
+
+const MY_CONTENT_MANIFEST: PackManifest = {
+  id: MY_CONTENT,
+  name: 'My content',
+  version: '',
+  author: '',
+  license: '',
+  description: 'Your own creatures, maps and templates. Always on; wins over every pack.',
+  url: '',
+};
 
 export class Repository {
   /**
@@ -185,6 +270,8 @@ export class Repository {
    * untouched and the listings report them.
    */
   layoutProblems: LoadProblem[] = [];
+  /** Pack order and enabled state; follows the settings this repository loads and saves. */
+  packSettings: PackSettings = defaultPackSettings();
 
   constructor(readonly storage: Storage) {}
 
@@ -199,7 +286,7 @@ export class Repository {
     return parsed;
   }
 
-  private readJson<T>(schemaName: 'marker' | 'settings', schema: z.ZodType<T>, area: StorageArea, path: string) {
+  private readJson<T>(schemaName: 'settings', schema: z.ZodType<T>, area: StorageArea, path: string) {
     return this.parseFile(area, path, (text) => schema.parse(migrate(schemaName, JSON.parse(text))));
   }
 
@@ -214,38 +301,129 @@ export class Repository {
     return [...problems.filter((p) => !layout.some((l) => l.path === p.path)), ...layout];
   }
 
+  // --- packs ---
+
+  /**
+   * My content, then every installed pack (a folder under `packs/` with a `pack.json`) by precedence. A user
+   * pack with the id of a shipped one is left out; `listPacks` reports it.
+   */
+  async installedPacks(): Promise<(InstalledPack & { enabled: boolean })[]> {
+    const found = async (area: StorageArea) => {
+      const dirs = (await this.storage.list(area, PACKS_DIR)).filter((e) => e.isDir && PACK_ID.test(e.name));
+      const manifests = await Promise.all(
+        dirs.map((e) => this.storage.exists(area, `${PACKS_DIR}/${e.name}/${PACK_FILE}`)),
+      );
+      return dirs.filter((_e, i) => manifests[i]).map((e) => packSource(area, e.name));
+    };
+    const [shipped, user] = await Promise.all([found('content'), found('data')]);
+    const shippedIds = new Set(shipped.map((s) => s.pack));
+    const packs: InstalledPack[] = [
+      ...shipped.map((source) => ({ source, origin: 'shipped' as const })),
+      ...user
+        .filter((s) => !shippedIds.has(s.pack) && s.pack !== MY_CONTENT)
+        .map((source) => ({ source, origin: 'user' as const })),
+    ];
+    const ordered = [{ source: MY_CONTENT_SOURCE, origin: 'mine' as const }, ...orderPacks(packs, this.packSettings)];
+    return ordered.map((p) => ({ ...p, enabled: isPackEnabled(p.source.pack, this.packSettings) }));
+  }
+
+  /** Where library documents come from, highest precedence first: My content and the enabled packs. */
+  async librarySources(): Promise<LibrarySource[]> {
+    return (await this.installedPacks()).filter((p) => p.enabled).map((p) => p.source);
+  }
+
+  /** Every file below `dir`, as paths relative to the area root, sorted. */
+  async listFiles(area: StorageArea, dir: string): Promise<string[]> {
+    const entries = await this.storage.list(area, dir);
+    const nested = await Promise.all(
+      entries.map((e) => (e.isDir ? this.listFiles(area, `${dir}/${e.name}`) : Promise.resolve([`${dir}/${e.name}`]))),
+    );
+    return nested.flat();
+  }
+
+  private async readManifest(pack: InstalledPack, problems: LoadProblem[]): Promise<PackManifest> {
+    const { source } = pack;
+    const path = `${source.root}/${PACK_FILE}`;
+    let manifest = MY_CONTENT_MANIFEST;
+    if (pack.origin !== 'mine') {
+      try {
+        manifest = await this.parseFile(source.area, path, (t) => packManifestSchema.parse(JSON.parse(t)));
+      } catch (error) {
+        problems.push({ area: source.area, path, message: errorMessage(error) });
+        // The pack's documents still load; the list shows it by folder name.
+        manifest = packManifestSchema.parse({ id: source.pack, name: source.pack });
+      }
+    }
+    return manifest;
+  }
+
+  /** Installed packs with manifest, enabled state and document counts, in precedence order. */
+  async listPacks(): Promise<{ packs: PackInfo[]; problems: LoadProblem[] }> {
+    const problems: LoadProblem[] = [];
+    const installed = await this.installedPacks();
+    const userDirs = (await this.storage.list('data', PACKS_DIR)).filter((e) => e.isDir).map((e) => e.name);
+    for (const id of userDirs.filter((d) => !installed.some((p) => p.origin === 'user' && p.source.pack === d))) {
+      const reason = PACK_ID.test(id) ? 'has no pack.json or the id of a built-in pack' : 'is no valid pack id';
+      const path = `${PACKS_DIR}/${id}`;
+      problems.push({ area: 'data', path, message: `Pack folder "${id}" ${reason}; it is not used` });
+    }
+    const packs = await Promise.all(
+      installed.map(async (pack): Promise<PackInfo> => {
+        const { source } = pack;
+        const lists = await this.kindFoldersOf(source);
+        const models = (await this.listFiles(source.area, `${source.root}/models`)).filter((f) => MODEL_FILE.test(f));
+        const counts = { creature: 0, marker: 0, map: 0, table: 0, model: models.length };
+        LIBRARY_KINDS.forEach((kind, i) => {
+          counts[kind] = docIds(kind, lists[i]!).length;
+        });
+        return { ...pack, manifest: await this.readManifest(pack, problems), counts };
+      }),
+    );
+    return { packs, problems };
+  }
+
+  private kindFoldersOf(source: LibrarySource): Promise<DirEntry[][]> {
+    return Promise.all(LIBRARY_KINDS.map((kind) => this.storage.list(source.area, libraryDir(kind, source))));
+  }
+
+  /** Creates the user pack of `manifest` unless it exists; documents then go in with `save(kind, doc, id)`. */
+  async ensurePack(manifest: PackManifest): Promise<void> {
+    const parsed = packManifestSchema.parse(manifest);
+    const path = `${PACKS_DIR}/${parsed.id}/${PACK_FILE}`;
+    if (parsed.id === MY_CONTENT || (await this.storage.exists('content', path))) {
+      throw new DataError(`"${parsed.id}" is the id of a built-in pack`, 'data', path);
+    }
+    if (!(await this.storage.exists('data', path))) {
+      await this.storage.writeText(path, formatPackManifest(parsed));
+    }
+  }
+
   // --- creatures ---
 
-  private async creatureFolders(): Promise<Record<StorageArea, DirEntry[]>> {
-    const [data, content] = await Promise.all([
-      this.storage.list('data', LIBRARY_DIRS.creature.data),
-      this.storage.list('content', LIBRARY_DIRS.creature.content),
-    ]);
-    return { data, content };
-  }
-
-  /** A data-area picture beats a shipped one, so dropping `<id>.png` into the data root pictures any creature. */
-  private static picturesOf(id: string, folders: Record<StorageArea, Map<string, Pictures>>): Pictures {
-    const data = folders.data.get(id);
-    const content = folders.content.get(id);
-    return { image: data?.image ?? content?.image ?? null, token: data?.token ?? content?.token ?? null };
-  }
-
-  private async readCreature(area: StorageArea, id: string, pictures: Pictures): Promise<Creature> {
-    const creature = await this.parseFile(area, libraryDocPath('creature', area, id), (t) => parseCreatureFile(t, id));
+  private async readCreature(source: LibrarySource, id: string, pictures: Pictures): Promise<Creature> {
+    const path = libraryDocPath('creature', source, id);
+    const creature = await this.parseFile(source.area, path, (t) => parseCreatureFile(t, id));
     return { ...creature, ...pictures };
   }
 
-  /** Copies `wanted` to the creature's convention name unless it already is a picture of this creature. */
-  private async storePicture(id: string, kind: PictureKind, wanted: AssetRef | null): Promise<AssetRef | null> {
+  /** Copies `wanted` into `target` unless it already is this creature's picture in some pack's folder. */
+  private async storePicture(
+    target: LibrarySource,
+    id: string,
+    kind: PictureKind,
+    wanted: AssetRef | null,
+  ): Promise<AssetRef | null> {
     let stored = wanted;
     if (wanted) {
       const extension = extensionOf(wanted.path);
       if (!PICTURE_EXTENSIONS.includes(extension)) {
         throw new DataError('Creature pictures must be PNG, JPEG or WebP', wanted.area, wanted.path);
       }
-      if (wanted.path !== creaturePictureRef(wanted.area, id, kind, extension).path) {
-        stored = creaturePictureRef('data', id, kind, extension);
+      const convention = creaturePictureRef(target, id, kind, extension);
+      const fileName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+      const isOwn = CREATURE_FOLDER_FILE.test(wanted.path) && fileName(wanted.path) === fileName(convention.path);
+      if (!isOwn) {
+        stored = convention;
         await this.storage.copy(wanted.area, wanted.path, stored.path);
       }
     }
@@ -253,19 +431,22 @@ export class Repository {
   }
 
   /**
-   * Makes the picture files of `id` match `pictures`: a picture elsewhere is copied to `<id>[.token].<ext>` in
-   * the data area, other extensions of that kind are removed, null removes the data-area picture.
+   * Makes the picture files of `id` in `pack` (My content by default) match `pictures`: a picture elsewhere is
+   * copied to `<id>[.token].<ext>` there, other extensions of that kind are removed, null removes the pack's
+   * picture.
    */
-  async storeCreaturePictures(id: string, pictures: Pictures): Promise<Pictures> {
-    const folder = await this.storage.list('data', LIBRARY_DIRS.creature.data);
+  async storeCreaturePictures(id: string, pictures: Pictures, pack = MY_CONTENT): Promise<Pictures> {
+    const target = writableSource(pack);
+    const dir = libraryDir('creature', target);
+    const folder = await this.storage.list('data', dir);
     const existing = folder.filter((e) => !e.isDir && PICTURE_FILE.exec(e.name)?.[1] === id);
     const stored: Pictures = { image: null, token: null };
     for (const kind of ['image', 'token'] as const) {
-      stored[kind] = await this.storePicture(id, kind, pictures[kind]);
+      stored[kind] = await this.storePicture(target, id, kind, pictures[kind]);
       const keep = stored[kind]?.area === 'data' ? stored[kind].path : null;
       const stale = existing
         .filter((e) => (PICTURE_FILE.exec(e.name)![2] ? 'token' : 'image') === kind)
-        .map((e) => `${LIBRARY_DIRS.creature.data}/${e.name}`)
+        .map((e) => `${dir}/${e.name}`)
         .filter((path) => path !== keep);
       await Promise.all(stale.map((path) => this.storage.remove(path)));
     }
@@ -273,64 +454,51 @@ export class Repository {
   }
 
   /** Writes a picture file under the creature's convention name at once and drops other extensions. */
-  async importCreaturePicture(id: string, kind: PictureKind, fileName: string, bytes: Uint8Array): Promise<AssetRef> {
+  async importCreaturePicture(
+    id: string,
+    kind: PictureKind,
+    fileName: string,
+    bytes: Uint8Array,
+    pack = MY_CONTENT,
+  ): Promise<AssetRef> {
     const extension = extensionOf(fileName);
     if (!PICTURE_EXTENSIONS.includes(extension)) {
       throw new DataError('Creature pictures must be PNG, JPEG or WebP', 'data', fileName);
     }
-    const ref = creaturePictureRef('data', id, kind, extension);
+    const ref = creaturePictureRef(writableSource(pack), id, kind, extension);
     await this.storage.writeBytes(ref.path, bytes);
-    const current = await this.storeCreaturePictures(id, { ...(await this.creaturePictures(id)), [kind]: ref });
+    const current = await this.storeCreaturePictures(id, { ...(await this.creaturePictures(id)), [kind]: ref }, pack);
     return current[kind]!;
   }
 
   private async creaturePictures(id: string): Promise<Pictures> {
-    const folders = await this.creatureFolders();
-    return Repository.picturesOf(id, {
-      data: picturesIn('data', folders.data),
-      content: picturesIn('content', folders.content),
-    });
-  }
-
-  /** Writes the creature's text file and pictures as given (no time stamp). */
-  async storeCreature(creature: Creature): Promise<Creature> {
-    const parsed = creatureSchema.parse(creature);
-    await this.storage.writeText(libraryDocPath('creature', 'data', parsed.id), formatCreatureFile(parsed));
-    return { ...parsed, ...(await this.storeCreaturePictures(parsed.id, parsed)) };
-  }
-
-  private async listCreatures(listing: LibraryListing<'creature'>, data: LibraryListing<'creature'>) {
-    const folders = await this.creatureFolders();
-    const pictures = { data: picturesIn('data', folders.data), content: picturesIn('content', folders.content) };
-    await Promise.all(
-      (['content', 'data'] as const).map(async (area) => {
-        const ids = folders[area].filter((e) => !e.isDir && e.name.endsWith('.txt')).map((e) => e.name.slice(0, -4));
-        const target = area === 'data' ? data : listing;
-        const results = await Promise.allSettled(
-          ids.map((id) => this.readCreature(area, id, Repository.picturesOf(id, pictures))),
-        );
-        results.forEach((result, i) => {
-          const ref = { area, id: ids[i]! };
-          if (result.status === 'fulfilled') {
-            target.entries.push({ ref, doc: result.value, overridesContent: false });
-          } else {
-            const path = libraryDocPath('creature', area, ref.id);
-            target.problems.push({ area, path, message: errorMessage(result.reason) });
-          }
-        });
-      }),
+    const sources = await this.librarySources();
+    const folders = await this.kindFolders('creature', sources);
+    return picturesOf(
+      id,
+      sources.map((s, i) => picturesIn(s, folders[i]!)),
     );
+  }
+
+  /** Writes the creature's text file and pictures into `pack` as given (no time stamp). */
+  async storeCreature(creature: Creature, pack = MY_CONTENT): Promise<Creature> {
+    const parsed = creatureSchema.parse(creature);
+    await this.storage.writeText(
+      libraryDocPath('creature', writableSource(pack), parsed.id),
+      formatCreatureFile(parsed),
+    );
+    return { ...parsed, ...(await this.storeCreaturePictures(parsed.id, parsed, pack)) };
   }
 
   // --- maps ---
 
-  private async readMap(area: StorageArea, id: string): Promise<BattleMap> {
-    const dir = mapDir(area, id);
-    return this.parseFile(area, `${dir}/map.json`, async (text) => {
+  private async readMap(source: LibrarySource, id: string): Promise<BattleMap> {
+    const dir = mapDir(source, id);
+    return this.parseFile(source.area, `${dir}/map.json`, async (text) => {
       const file = mapFileSchema.parse(migrate('map', JSON.parse(text)));
       const { heightmap, ...terrain } = file.terrain;
       const { cols, rows } = HeightField.dimensions(file.grid, terrain.samplesPerSquare);
-      const png = await this.storage.readBytes(area, `${dir}/${heightmap.file}`);
+      const png = await this.storage.readBytes(source.area, `${dir}/${heightmap.file}`);
       const heights = await decodeHeightmap(png, heightmap, cols, rows);
       return mapSchema.parse({ ...file, terrain: { ...terrain, heights: float32ToBase64(heights) } });
     });
@@ -349,128 +517,212 @@ export class Repository {
     return { json: `${JSON.stringify(file, null, 2)}\n`, terrain: png };
   }
 
-  /** Writes the map folder's `terrain.png` and `map.json` as given (no time stamp). */
-  async storeMap(map: BattleMap): Promise<BattleMap> {
+  /** Writes the map folder's `terrain.png` and `map.json` into `pack` as given (no time stamp). */
+  async storeMap(map: BattleMap, pack = MY_CONTENT): Promise<BattleMap> {
     const { json, terrain } = await this.mapFiles(map);
-    const dir = mapDir('data', map.id);
+    const dir = mapDir(writableSource(pack), map.id);
     await this.storage.writeBytes(`${dir}/${TERRAIN_FILE}`, terrain);
     await this.storage.writeText(`${dir}/map.json`, json);
     return mapSchema.parse(map);
   }
 
-  /** Grid of the map an encounter uses: a user copy of a shipped map wins like in play. */
+  /**
+   * Grid of the map an encounter uses, by precedence like in play. Disabled packs count too: their maps
+   * still decide the fog grid, so disabling a pack never drops an encounter's fog.
+   */
   private async mapGrid(ref: DocRef) {
-    const edited = ref.area === 'content' && (await this.storage.exists('data', libraryDocPath('map', 'data', ref.id)));
-    const area = edited ? 'data' : ref.area;
-    const path = libraryDocPath('map', area, ref.id);
-    const found = edited || (await this.storage.exists(area, path));
+    const sources = (await this.installedPacks()).map((p) => p.source);
+    const folders = await this.kindFolders('map', sources);
+    const source = sources[folders.findIndex((entries) => docIds('map', entries).includes(ref.id))];
     const grid = (text: string) => z.object({ grid: gridSchema }).parse(JSON.parse(text)).grid;
-    return found ? this.parseFile(area, path, grid) : null;
+    return source ? this.parseFile(source.area, libraryDocPath('map', source, ref.id), grid) : null;
   }
 
   // --- library ---
 
-  load<K extends LibraryKind>(kind: K, ref: DocRef): Promise<LibraryDocs[K]>;
-  async load(kind: LibraryKind, ref: DocRef): Promise<LibraryDocs[LibraryKind]> {
-    const loaders: Record<LibraryKind, () => Promise<LibraryDocs[LibraryKind]>> = {
-      creature: async () => this.readCreature(ref.area, ref.id, await this.creaturePictures(ref.id)),
-      marker: () => this.readJson('marker', markerTemplateSchema, ref.area, libraryDocPath('marker', ref.area, ref.id)),
-      map: () => this.readMap(ref.area, ref.id),
-    };
-    return loaders[kind]();
-  }
-
-  private async listArea<K extends LibraryKind>(kind: K, area: StorageArea, listing: LibraryListing<K>) {
-    const dir = LIBRARY_DIRS[kind][area];
-    const ids = (await this.storage.list(area, dir))
-      .filter((e) => (kind === 'map' ? e.isDir : !e.isDir && e.name.endsWith('.json')))
-      .map((e) => (kind === 'map' ? e.name : e.name.slice(0, -'.json'.length)));
-    const results = await Promise.allSettled(ids.map((id) => this.load(kind, { area, id })));
-    results.forEach((result, i) => {
-      const id = ids[i]!;
-      if (result.status === 'fulfilled') {
-        listing.entries.push({ ref: { area, id }, doc: result.value, overridesContent: false });
-      } else {
-        listing.problems.push({ area, path: libraryDocPath(kind, area, id), message: errorMessage(result.reason) });
-      }
-    });
-  }
-
-  /** Shipped and user documents; a user document with the same id replaces the shipped one. */
-  async list<K extends LibraryKind>(kind: K): Promise<LibraryListing<K>> {
-    const content: LibraryListing<K> = { entries: [], problems: [] };
-    const data: LibraryListing<K> = { entries: [], problems: [] };
-    if (kind === 'creature') {
-      await this.listCreatures(content as LibraryListing<'creature'>, data as LibraryListing<'creature'>);
-    } else {
-      await Promise.all([this.listArea(kind, 'content', content), this.listArea(kind, 'data', data)]);
-    }
-    const userIds = new Set(data.entries.map((e) => e.ref.id));
-    const entries = [
-      ...content.entries.filter((e) => !userIds.has(e.ref.id)),
-      ...data.entries.map((e) => ({ ...e, overridesContent: content.entries.some((c) => c.ref.id === e.ref.id) })),
-    ].sort((a, b) => a.doc.name.localeCompare(b.doc.name));
-    const dir = `${LIBRARY_DIRS[kind].data}/`;
-    const problems = this.withLayoutProblems([...content.problems, ...data.problems], (p) => p.startsWith(dir));
-    return { entries, problems };
-  }
-
-  /** Always writes to the data area; saving a shipped document creates the user override. */
-  save<K extends LibraryKind>(kind: K, doc: LibraryDocs[K]): Promise<LibraryDocs[K]>;
-  async save(kind: LibraryKind, doc: LibraryDocs[LibraryKind]): Promise<LibraryDocs[LibraryKind]> {
-    const stamped = { ...doc, updatedAt: nowIso() };
-    const savers: Record<LibraryKind, () => Promise<LibraryDocs[LibraryKind]>> = {
-      creature: () => this.storeCreature(stamped as Creature),
-      marker: async () => {
-        const marker = markerTemplateSchema.parse(stamped);
-        await this.writeJson(libraryDocPath('marker', 'data', marker.id), marker);
-        return marker;
+  /** Codec of a kind stored as one text file per document. */
+  private textCodec<K extends LibraryKind>(
+    kind: K,
+    parse: (text: string, id: string) => LibraryDocs[K],
+    format: (doc: LibraryDocs[K]) => string,
+  ): KindCodec<K> {
+    return {
+      reader: () => (source, id) =>
+        this.parseFile(source.area, libraryDocPath(kind, source, id), (text) => parse(text, id)),
+      write: async (target, doc) => {
+        const text = format(doc);
+        await this.storage.writeText(libraryDocPath(kind, target, doc.id), text);
+        return parse(text, doc.id);
       },
-      map: () => this.storeMap(stamped as BattleMap),
     };
-    return savers[kind]();
+  }
+
+  /** One codec per kind; a new kind adds its `LibraryKind`, `LibraryDocs` entry, layout and codec. */
+  private readonly codecs: { [K in LibraryKind]: KindCodec<K> } = {
+    creature: {
+      reader: (sources, folders) => {
+        const pictures = sources.map((s, i) => picturesIn(s, folders[i]!));
+        return (source, id) => this.readCreature(source, id, picturesOf(id, pictures));
+      },
+      write: (target, doc) => this.storeCreature(doc, target.pack),
+    },
+    marker: this.textCodec(
+      'marker',
+      (text) => markerTemplateSchema.parse(migrate('marker', JSON.parse(text))),
+      (doc) => `${JSON.stringify(markerTemplateSchema.parse(doc), null, 2)}\n`,
+    ),
+    map: {
+      reader: () => (source, id) => this.readMap(source, id),
+      write: (target, doc) => this.storeMap(doc, target.pack),
+    },
+    table: this.textCodec('table', parseTableFile, formatTableFile),
+  };
+
+  private kindFolders(kind: LibraryKind, sources: LibrarySource[]): Promise<DirEntry[][]> {
+    return Promise.all(sources.map((s) => this.storage.list(s.area, libraryDir(kind, s))));
+  }
+
+  /** Why `id` cannot be loaded: it is only in a disabled pack, or nowhere. */
+  private async missing(kind: LibraryKind, id: string): Promise<DataError> {
+    const disabled = (await this.installedPacks()).filter((p) => !p.enabled).map((p) => p.source);
+    const folders = await this.kindFolders(kind, disabled);
+    const holder = disabled[folders.findIndex((entries) => docIds(kind, entries).includes(id))];
+    const message = holder
+      ? `"${id}" is in the disabled pack "${holder.pack}"; enable it under Compendium > Packs`
+      : `No ${kind} "${id}" in My content or an enabled pack`;
+    const source = holder ?? MY_CONTENT_SOURCE;
+    return new DataError(message, source.area, libraryDocPath(kind, source, id));
+  }
+
+  /** Pack that provides document `id` now (first by precedence), null when no enabled source has it. */
+  async sourceOf(kind: LibraryKind, id: string): Promise<LibrarySource | null> {
+    const sources = await this.librarySources();
+    const folders = await this.kindFolders(kind, sources);
+    return sources[folders.findIndex((entries) => docIds(kind, entries).includes(id))] ?? null;
   }
 
   /**
-   * Deletes the user document. A creature's pictures go with it unless a shipped creature with that id
-   * remains, whose pictures they then are.
+   * The document with `ref.id` from the first source holding it: My content, then the enabled packs in
+   * order. `ref.area` only records where it was when referenced.
+   */
+  load<K extends LibraryKind>(kind: K, ref: DocRef): Promise<LibraryDocs[K]>;
+  async load(kind: LibraryKind, ref: DocRef): Promise<LibraryDocs[LibraryKind]> {
+    const sources = await this.librarySources();
+    const folders = await this.kindFolders(kind, sources);
+    const index = folders.findIndex((entries) => docIds(kind, entries).includes(ref.id));
+    if (index === -1) {
+      throw await this.missing(kind, ref.id);
+    }
+    const codec = this.codecs[kind] as KindCodec<LibraryKind>;
+    return codec.reader(sources, folders)(sources[index]!, ref.id);
+  }
+
+  /**
+   * Documents of My content and the enabled packs; of several with the same id the one from the source of
+   * highest precedence wins and the others are listed as shadowed.
+   */
+  async list<K extends LibraryKind>(kind: K): Promise<LibraryListing<K>> {
+    const installed = await this.installedPacks();
+    const sources = installed.filter((p) => p.enabled).map((p) => p.source);
+    const disabled = installed.filter((p) => !p.enabled).map((p) => p.source);
+    const [folders, disabledFolders] = await Promise.all([
+      this.kindFolders(kind, sources),
+      this.kindFolders(kind, disabled),
+    ]);
+    const winners = new Map<string, LibrarySource>();
+    const listing: LibraryListing<K> = { entries: [], problems: [], shadowed: [], unavailable: [] };
+    sources.forEach((source, i) => {
+      for (const id of docIds(kind, folders[i]!)) {
+        const by = winners.get(id);
+        if (by) {
+          listing.shadowed.push({ id, pack: source.pack, by: by.pack });
+        } else {
+          winners.set(id, source);
+        }
+      }
+    });
+    disabled.forEach((source, i) => {
+      for (const id of docIds(kind, disabledFolders[i]!)) {
+        if (!winners.has(id) && !listing.unavailable.some((u) => u.id === id)) {
+          listing.unavailable.push({ id, pack: source.pack });
+        }
+      }
+    });
+    const read = (this.codecs[kind] as KindCodec<K>).reader(sources, folders);
+    const ids = [...winners.keys()];
+    const results = await Promise.allSettled(ids.map((id) => read(winners.get(id)!, id)));
+    results.forEach((result, i) => {
+      const id = ids[i]!;
+      const source = winners.get(id)!;
+      if (result.status === 'fulfilled') {
+        const overrides = listing.shadowed.filter((s) => s.id === id).map((s) => s.pack);
+        listing.entries.push({ ref: { area: source.area, id }, doc: result.value, pack: source.pack, overrides });
+      } else {
+        const path = libraryDocPath(kind, source, id);
+        listing.problems.push({ area: source.area, path, message: errorMessage(result.reason) });
+      }
+    });
+    listing.entries.sort((a, b) => a.doc.name.localeCompare(b.doc.name));
+    const dir = `${libraryDir(kind, MY_CONTENT_SOURCE)}/`;
+    listing.problems = this.withLayoutProblems(listing.problems, (p) => p.startsWith(dir));
+    return listing;
+  }
+
+  /**
+   * Writes into My content (or the imported pack `pack`) and stamps `updatedAt`; saving a pack's document in
+   * My content creates the user copy that overrides it.
+   */
+  save<K extends LibraryKind>(kind: K, doc: LibraryDocs[K], pack?: string): Promise<LibraryDocs[K]>;
+  async save(kind: LibraryKind, doc: LibraryDocs[LibraryKind], pack = MY_CONTENT): Promise<LibraryDocs[LibraryKind]> {
+    const codec = this.codecs[kind] as KindCodec<LibraryKind>;
+    return codec.write(writableSource(pack), { ...doc, updatedAt: nowIso() });
+  }
+
+  /**
+   * Deletes the document from My content. A creature's pictures go with it unless a pack still holds a
+   * creature with that id, whose pictures they then are.
    */
   async remove(kind: LibraryKind, id: string): Promise<void> {
-    const path = kind === 'map' ? mapDir('data', id) : libraryDocPath(kind, 'data', id);
+    const path = kind === 'map' ? mapDir(MY_CONTENT_SOURCE, id) : libraryDocPath(kind, MY_CONTENT_SOURCE, id);
     await this.storage.remove(path);
-    const shipped = kind === 'creature' && (await this.storage.exists('content', libraryDocPath(kind, 'content', id)));
-    if (kind === 'creature' && !shipped) {
-      await this.storeCreaturePictures(id, { image: null, token: null });
+    if (kind === 'creature') {
+      const packs = (await this.installedPacks()).map((p) => p.source).filter((s) => s.pack !== MY_CONTENT);
+      const folders = await this.kindFolders(kind, packs);
+      if (!folders.some((entries) => docIds(kind, entries).includes(id))) {
+        await this.storeCreaturePictures(id, { image: null, token: null });
+      }
     }
   }
 
-  async importMapAsset(mapId: string, fileName: string, bytes: Uint8Array): Promise<AssetRef> {
+  async importMapAsset(mapId: string, fileName: string, bytes: Uint8Array, pack = MY_CONTENT): Promise<AssetRef> {
     const safeName = fileName.replace(/[^\w.\- ]+/g, '_');
-    const ref = mapAssetRef(mapId, safeName);
+    const ref = mapAssetRef(mapId, safeName, pack);
     await this.storage.writeBytes(ref.path, bytes);
     return ref;
   }
 
-  /** Id for a new library document named `name`; shipped ids count as taken, a user copy would shadow them. */
+  /** Id for a new library document named `name`; ids in every installed pack count as taken. */
   async newLibraryId(kind: LibraryKind, name: string): Promise<string> {
-    const [data, content] = await Promise.all([
-      this.storage.list('data', LIBRARY_DIRS[kind].data),
-      this.storage.list('content', LIBRARY_DIRS[kind].content),
-    ]);
-    return freeDocumentId(name, NEW_ID_FALLBACK[kind], takenIds([...data, ...content]));
+    const sources = (await this.installedPacks()).map((p) => p.source);
+    const folders = await this.kindFolders(kind, sources);
+    return freeDocumentId(name, KIND_LAYOUTS[kind].fallbackId, takenIds(folders.flat()));
   }
 
-  /** Copies a map and the assets in its folder; the copy no longer depends on the source map. */
+  /** Copies a map and the assets in its folder into My content; the copy no longer depends on the source. */
   async duplicateMap(ref: DocRef, name: string): Promise<BattleMap> {
+    const from = await this.sourceOf('map', ref.id);
+    if (!from) {
+      throw await this.missing('map', ref.id);
+    }
     const source = await this.load('map', ref);
     const id = await this.newLibraryId('map', name);
-    const fromDir = `${mapDir(ref.area, ref.id)}/assets`;
-    const toDir = `${mapDir('data', id)}/assets`;
-    if ((await this.storage.list(ref.area, fromDir)).length > 0) {
-      await this.storage.copy(ref.area, fromDir, toDir);
+    const fromDir = `${mapDir(from, ref.id)}/assets`;
+    const toDir = `${mapDir(MY_CONTENT_SOURCE, id)}/assets`;
+    if ((await this.storage.list(from.area, fromDir)).length > 0) {
+      await this.storage.copy(from.area, fromDir, toDir);
     }
     const remap = (asset: AssetRef): AssetRef =>
-      asset.area === ref.area && asset.path.startsWith(`${fromDir}/`)
+      asset.area === from.area && asset.path.startsWith(`${fromDir}/`)
         ? { area: 'data', path: toDir + asset.path.slice(fromDir.length) }
         : asset;
     const at = nowIso();
@@ -626,13 +878,19 @@ export class Repository {
 
   // --- settings ---
 
+  /** Also makes the loaded pack order and enabled state the ones listings use. */
   async loadSettings(): Promise<Settings> {
     const exists = await this.storage.exists('data', SETTINGS_PATH);
-    return exists ? this.readJson('settings', settingsSchema, 'data', SETTINGS_PATH) : defaultSettings();
+    const settings = exists
+      ? await this.readJson('settings', settingsSchema, 'data', SETTINGS_PATH)
+      : defaultSettings();
+    this.packSettings = settings.packs;
+    return settings;
   }
 
   async saveSettings(settings: Settings): Promise<Settings> {
     const parsed = settingsSchema.parse(settings);
+    this.packSettings = parsed.packs;
     await this.writeJson(SETTINGS_PATH, parsed);
     return parsed;
   }

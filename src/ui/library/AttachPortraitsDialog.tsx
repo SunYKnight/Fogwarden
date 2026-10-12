@@ -1,6 +1,7 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { useMemo, useState } from 'react';
 import { matchPortraits } from '@/core/import/portraitMatch';
+import { MY_CONTENT_SOURCE } from '@/data/packs';
 import { creaturePictureRef, type LibraryEntry } from '@/data/repository';
 import { importFile, listFolder } from '@/data/tauriStorage';
 import { useAppStore } from '@/state/appStore';
@@ -27,13 +28,14 @@ export async function attachPortraitsFromFolder(): Promise<void> {
   }
 }
 
-// The copy's file name attaches it, also to shipped creatures, whose text
-// files stay untouched.
+// The copy's file name in My content attaches it, also to pack creatures,
+// whose text files stay untouched.
 async function attach(folder: string, plan: PlannedPortrait[]): Promise<void> {
   const { repository } = useAppStore.getState();
   const base = folder.replace(/[\\/]+$/, '');
   for (const { fileName, entry } of plan) {
-    const image = creaturePictureRef('data', entry.ref.id, 'image', fileName.slice(fileName.lastIndexOf('.') + 1));
+    const extension = fileName.slice(fileName.lastIndexOf('.') + 1);
+    const image = creaturePictureRef(MY_CONTENT_SOURCE, entry.ref.id, 'image', extension);
     await importFile(`${base}/${fileName}`, image.path);
     await repository.storeCreaturePictures(entry.ref.id, { image, token: entry.doc.token });
   }

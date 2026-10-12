@@ -58,12 +58,14 @@ function placeMarker(point: MapPoint): void {
       color: template.color,
       opacity: template.opacity,
       visibleToPlayers: true,
+      save: template.save,
     };
     useEncounterStore.getState().update((d) => {
       d.markers.push(marker);
       addLog(d, 'note', `${template.name} placed`);
     }, `Place ${template.name}`);
-    useEncounterUi.setState({ placement: null, pointer: null });
+    // The Areas tab then lists who is inside, ready for saves and damage.
+    useEncounterUi.setState({ placement: null, pointer: null, areaTargetsId: marker.id, inspectorTab: 'areas' });
   } else if (placement) {
     useEncounterUi.setState({ placement: { ...placement, origin: point } });
   }

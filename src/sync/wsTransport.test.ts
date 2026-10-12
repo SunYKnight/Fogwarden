@@ -190,6 +190,21 @@ describe('ViewSocketTransport', () => {
     expect(resends).toEqual([null, 'thorin', null]);
   });
 
+  it("hands players' requests to the DM with the view they came from", () => {
+    const { transport, sockets, resends } = dm();
+    const requests: [string, SyncPayload][] = [];
+    transport.onPlayerRequest((view, request) => requests.push([view, request]));
+    sockets[0]!.open();
+    const point: SyncPayload = { type: 'point', at: { x: 5, y: 5, elevationFt: 0 } };
+    sockets[0]!.receive(`party\n${message('player', point)}`);
+    sockets[0]!.receive(`thorin\n${message('player', { type: 'roll', dice: '1d20', mode: 'normal', label: '' })}`);
+    expect(requests).toEqual([
+      ['party', point],
+      ['thorin', { type: 'roll', dice: '1d20', mode: 'normal', label: '' }],
+    ]);
+    expect(resends).toEqual([]);
+  });
+
   it('reports player counts from status frames', () => {
     const { transport, sockets } = dm();
     const counts: number[] = [];

@@ -1,3 +1,5 @@
+import { useRef, useState } from 'react';
+import { AUDIO_ACCEPT, mediaTitle } from '@/core/atmosphere/media';
 import {
   OPENING_KINDS,
   REGION_KINDS,
@@ -7,10 +9,14 @@ import {
   type MapLight,
   type Opening,
   type Region,
+  type RegionSound,
   type Room,
   type Wall,
 } from '@/core/model';
-import { CheckboxField, ColorField, NumberField, SelectField } from '@/ui/components/fields';
+import { useAppStore } from '@/state/appStore';
+import { useEditorStore } from '@/state/editorStore';
+import { CheckboxField, ColorField, NumberField, SelectField, SliderField } from '@/ui/components/fields';
+import { Button } from '@/ui/kit';
 
 /** Field changes carry an undo label so tool templates and documents can share the editors. */
 type Change<T> = (label: string, patch: Partial<T>) => void;
@@ -35,11 +41,79 @@ export const REGION_COLORS: Record<Region['kind'], string> = {
   water: '#3d8bfd',
   hazard: '#e74c3c',
   note: '#9b59b6',
+  sound: '#1abc9c',
 };
 
-/** Region kind change with the matching default color and light level. */
-export function regionKindPatch(kind: Region['kind'], current: Region['light']): Partial<RegionTemplate> {
-  return { kind, color: REGION_COLORS[kind], light: kind === 'light' ? (current ?? 'darkness') : null };
+const DEFAULT_REGION_SOUND: RegionSound = { asset: null, radiusFt: 20, volume: 0.8 };
+
+/** Region kind change with the matching default color, light level and ambient sound. */
+export function regionKindPatch(kind: Region['kind'], current: RegionTemplate): Partial<RegionTemplate> {
+  return {
+    kind,
+    color: REGION_COLORS[kind],
+    light: kind === 'light' ? (current.light ?? 'darkness') : null,
+    sound: kind === 'sound' ? (current.sound ?? DEFAULT_REGION_SOUND) : null,
+  };
+}
+
+/** Ambient loop of a sound region: the file (copied into the map's assets), fade distance and volume. */
+function RegionSoundFields({ sound, onChange }: { sound: RegionSound; onChange: Change<RegionTemplate> }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const pick = async (file: File) => {
+    const map = useEditorStore.getState().map;
+    if (!map) {
+      throw new Error('No map is open');
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const asset = await useAppStore.getState().repository.importMapAsset(map.id, file.name, bytes);
+    onChange('Region sound', { sound: { ...sound, asset } });
+  };
+  return (
+    <>
+      <Button
+        icon="music"
+        label={busy ? 'Copying…' : sound.asset ? mediaTitle(sound.asset.path) : 'Choose sound…'}
+        title="Audio file that loops while the party is near (MP3, OGG, WAV, M4A)"
+        disabled={busy}
+        onClick={() => input.current?.click()}
+      />
+      <input
+        ref={input}
+        type="file"
+        accept={AUDIO_ACCEPT}
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) {
+            setBusy(true);
+            pick(file)
+              .catch(useAppStore.getState().reportError)
+              .finally(() => setBusy(false));
+          }
+        }}
+      />
+      <NumberField
+        label="Heard within"
+        value={sound.radiusFt}
+        min={0}
+        step={5}
+        suffix="ft"
+        title="Full volume inside the area, fading to silence this far beyond its edge"
+        onChange={(radiusFt) => onChange('Sound distance', { sound: { ...sound, radiusFt } })}
+      />
+      <SliderField
+        label="Volume"
+        value={Math.round(sound.volume * 100)}
+        min={0}
+        max={100}
+        step={5}
+        suffix="%"
+        onChange={(percent) => onChange('Sound volume', { sound: { ...sound, volume: percent / 100 } })}
+      />
+    </>
+  );
 }
 
 /** Number that may be null ("follow terrain"); unchecking starts from `fallback`. */
@@ -194,7 +268,7 @@ export function RegionFields({ value, onChange }: { value: RegionTemplate; onCha
         label="Kind"
         value={value.kind}
         options={REGION_KINDS}
-        onChange={(kind) => onChange('Region kind', regionKindPatch(kind, value.light))}
+        onChange={(kind) => onChange('Region kind', regionKindPatch(kind, value))}
       />
       {value.kind === 'light' && (
         <SelectField
@@ -204,6 +278,7 @@ export function RegionFields({ value, onChange }: { value: RegionTemplate; onCha
           onChange={(light) => onChange('Region light', { light })}
         />
       )}
+      {value.kind === 'sound' && <RegionSoundFields sound={value.sound ?? DEFAULT_REGION_SOUND} onChange={onChange} />}
       <ColorField label="Color" value={value.color} onChange={(color) => onChange('Region color', { color })} />
       <CheckboxField
         label="Hidden from players"

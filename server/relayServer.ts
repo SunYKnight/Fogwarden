@@ -5,7 +5,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Duplex } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
-import { playerHelloSchema } from '@/sync/protocol';
+import { rebuildPlayerMessage } from '@/sync/protocol';
 import {
   fileExtension,
   parseViewFrame,
@@ -27,8 +27,11 @@ import {
 import { containedPath, FileStore, HttpError } from './store';
 
 export const RELAY_SERVICE = 'dmtool-relay';
-/** Players only ever send `hello`; anything bigger is not a valid message. */
+/** Player messages are a hello, a roll, a ping or a move; anything bigger is not a valid message. */
 const PLAYER_MESSAGE_LIMIT = 1024;
+/** A player may send this many messages at once, then one per `PLAYER_REFILL_MS`; more are dropped. */
+const PLAYER_BURST = 10;
+const PLAYER_REFILL_MS = 500;
 /** Full map messages carry base64 terrain heights and can reach several MB. */
 const DM_MESSAGE_LIMIT = 64 * 1024 * 1024;
 /** A player this far behind is dropped and reconnects for a fresh resend. */
@@ -42,6 +45,23 @@ const CLOSE_POLICY = 1008;
 const CLOSE_UNSUPPORTED = 1003;
 const CLOSE_AGAIN = 1013;
 const LINKS_FILE = 'links.json';
+
+/**
+ * The single range of a `Range: bytes=…` header (Safari needs ranges to play audio and video); null without
+ * one or for several ranges, which get the whole file.
+ */
+export function byteRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | 'unsatisfiable' | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header ?? '');
+  const [, from = '', to = ''] = match ?? [];
+  const suffix = from === '' && to !== '';
+  const start = suffix ? Math.max(0, size - Number(to)) : Number(from);
+  const end = suffix || to === '' ? size - 1 : Math.min(size - 1, Number(to));
+  const satisfiable = start <= end && start < size;
+  return !match || (from === '' && to === '') ? null : satisfiable ? { start, end } : 'unsatisfiable';
+}
 
 export interface RelayOptions {
   /** Shared secret of the DM app, created by the install script. */
@@ -115,7 +135,8 @@ function decodeSegment(segment: string): string {
 
 /**
  * HTTP + WebSocket relay between one DM app and the players' browsers, mirroring the LAN server
- * (`src-tauri/src/lan.rs`): the DM publishes over `/ws`, players receive and may only send `hello`. The DM
+ * (`src-tauri/src/lan.rs`): the DM publishes over `/ws`, players receive and may only send the messages
+ * `rebuildPlayerMessage` accepts for their view, at a limited rate. The DM
  * uploads assets and the player bundle; the relay never sees anything the DM's player filter removed. Each
  * player link token shows one view; the DM addresses every frame to views and the relay forwards it only to
  * players of those views. The links live in `dataDir/links.json`, so players get in while the DM is away.
@@ -190,11 +211,24 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
       throw error.code === 'ENOENT' ? new HttpError(404, 'not found') : error;
     });
     const etag = `"${await store.sha256(file)}"`;
+    const range = byteRange(request.headers.range, info.size);
     if (request.headers['if-none-match'] === etag) {
       response.writeHead(304, { ...headers, etag });
       response.end();
+    } else if (range === 'unsatisfiable') {
+      response.writeHead(416, { ...headers, 'content-range': `bytes */${info.size}` });
+      response.end();
+    } else if (range) {
+      response.writeHead(206, {
+        ...headers,
+        etag,
+        'accept-ranges': 'bytes',
+        'content-range': `bytes ${range.start}-${range.end}/${info.size}`,
+        'content-length': range.end - range.start + 1,
+      });
+      await pipeline(createReadStream(file, range), response);
     } else {
-      response.writeHead(200, { ...headers, etag, 'content-length': info.size });
+      response.writeHead(200, { ...headers, etag, 'accept-ranges': 'bytes', 'content-length': info.size });
       await pipeline(createReadStream(file), response);
     }
   };
@@ -404,12 +438,13 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
       players.delete(socket);
       playersChanged();
     });
+    const allowed = playerRateLimit();
     socket.on('message', (data: RawData, isBinary: boolean) => {
-      const hello = isBinary ? null : playerHello(data.toString());
-      if (hello === null) {
-        socket.close(CLOSE_POLICY, 'players may only send hello');
-      } else {
-        tellDms(viewFrame([view], hello));
+      const message = isBinary ? null : rebuildPlayerMessage(data.toString(), view);
+      if (message === null) {
+        socket.close(CLOSE_POLICY, 'not a valid player message');
+      } else if (allowed()) {
+        tellDms(viewFrame([view], message));
       }
     });
   });
@@ -466,17 +501,16 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
   return { server, close };
 }
 
-/** Rebuilt instead of forwarded, so the DM only ever sees a clean hello; null for anything else. */
-function playerHello(text: string): string | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    // Malformed JSON is one more kind of invalid player message.
-    parsed = undefined;
-  }
-  const hello = playerHelloSchema.safeParse(parsed);
-  return hello.success
-    ? JSON.stringify({ protocol: hello.data.protocol, from: 'player', payload: { type: 'hello' } })
-    : null;
+/** Token bucket of one player socket: true while the player stays within its message rate. */
+function playerRateLimit(): () => boolean {
+  let tokens = PLAYER_BURST;
+  let at = Date.now();
+  return () => {
+    const now = Date.now();
+    tokens = Math.min(PLAYER_BURST, tokens + (now - at) / PLAYER_REFILL_MS);
+    at = now;
+    const allowed = tokens >= 1;
+    tokens -= allowed ? 1 : 0;
+    return allowed;
+  };
 }

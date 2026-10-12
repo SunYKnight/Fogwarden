@@ -7,8 +7,8 @@ import { z } from 'zod';
 
 /** WebSocket subprotocol naming the DM; the DM key travels as a second subprotocol, never in a logged URL. */
 export const RELAY_DM_PROTOCOL = 'dmtool-dm';
-/** Upload limit per file; the generated nginx site allows the same body size. */
-export const RELAY_MAX_UPLOAD_BYTES = 128 * 1024 * 1024;
+/** Upload limit per file, room for video battlemaps; the generated nginx site allows the same body size. */
+export const RELAY_MAX_UPLOAD_BYTES = 1024 * 1024 * 1024;
 /** Lowercase hex SHA-256 of the request body, required on every upload. */
 export const RELAY_HASH_HEADER = 'x-content-sha256';
 /** Cookie scoped to `/asset` so glTF side files, requested without the query, still carry the token. */
@@ -16,7 +16,10 @@ export const RELAY_TOKEN_COOKIE = 'dmtool-relay';
 /** Player page query parameter; short because players type the link. */
 export const RELAY_LINK_PARAM = 't';
 
-/** Map images, tokens and models: the same set the LAN server serves (`asset_mime` in `src-tauri/src/lan.rs`). */
+/**
+ * Map images, tokens, models, audio and video: the same set the LAN server serves (`asset_mime` in
+ * `src-tauri/src/lan.rs`).
+ */
 export const RELAY_ASSET_TYPES: Record<string, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
@@ -28,6 +31,12 @@ export const RELAY_ASSET_TYPES: Record<string, string> = {
   gltf: 'model/gltf+json',
   bin: 'application/octet-stream',
   ktx2: 'image/ktx2',
+  mp3: 'audio/mpeg',
+  ogg: 'audio/ogg',
+  wav: 'audio/wav',
+  m4a: 'audio/mp4',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
 };
 
 /** What a Vite build of the player page consists of. */
@@ -55,9 +64,10 @@ export type PlayerBundle = z.infer<typeof playerBundleSchema>;
 
 /**
  * Version of this contract. 2: per-view player links (`PUT /api/links`) and view-routed frames on the DM
- * socket. The app refuses relays that report another version.
+ * socket. 3: players may also send rolls, pings and token moves (`rebuildPlayerMessage`). The app refuses relays
+ * that report another version.
  */
-export const RELAY_API_VERSION = 2;
+export const RELAY_API_VERSION = 3;
 
 export const relaySessionSchema = z.object({
   /** Missing on relays before version 2, which answered with a single player token instead. */

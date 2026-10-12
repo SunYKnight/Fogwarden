@@ -1,8 +1,9 @@
 import { produce } from 'immer';
 import { useEffect, useState } from 'react';
 import { createCreature, type Creature, type DocRef } from '@/core/model';
+import { MY_CONTENT } from '@/data/packs';
 import { useAppStore } from '@/state/appStore';
-import { useLibraryStore } from '@/state/libraryStore';
+import { packName, useLibraryStore } from '@/state/libraryStore';
 import { Button, confirmDialog, EmptyState, PageHeader } from '../kit';
 import { CreatureForm, type Change } from './CreatureEditor';
 import { StatBlock } from './StatBlock';
@@ -28,7 +29,11 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
   const entry = useLibraryStore((s) => s.listings.creature.entries.find((e) => e.ref.id === saved.id));
   const [busy, setBusy] = useState(false);
   const dirty = draft !== saved;
-  const shipped = entry?.ref.area === 'content';
+  const shipped = entry !== undefined && entry.pack !== MY_CONTENT;
+  const original = useLibraryStore((s) => {
+    const pack = shipped ? entry.pack : entry?.overrides[0];
+    return pack === undefined ? null : packName(s.packs, pack);
+  });
   const change: Change = (recipe) => setDraft((c) => produce(c, recipe));
 
   useEffect(() => {
@@ -46,7 +51,7 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
         setSaved(stored);
         setDraft(stored);
         await refresh('creature');
-        useAppStore.getState().notify(`Saved the pictures of "${draft.name}"; the creature stays shipped`);
+        useAppStore.getState().notify(`Saved the pictures of "${draft.name}"; the creature stays in "${original}"`);
       } else {
         // Ids outlive renames, so a new one comes from the first saved name.
         const id = entry ? draft.id : await repository.newLibraryId('creature', draft.name);
@@ -67,21 +72,21 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
 
   const revert = async () => {
     const ok = await confirmDialog({
-      title: 'Revert to shipped version',
-      message: `Your copy of "${draft.name}" is deleted and the shipped version comes back.`,
+      title: 'Revert to pack version',
+      message: `Your copy of "${draft.name}" is deleted and the version from "${original}" comes back.`,
       confirmLabel: 'Revert',
       danger: true,
     });
     if (ok) {
       await repository.remove('creature', draft.id);
       await refresh('creature');
-      const original = useLibraryStore.getState().listings.creature.entries.find((e) => e.ref.id === draft.id);
-      if (!original) {
-        throw new Error(`Shipped creature "${draft.name}" is missing`);
+      const restored = useLibraryStore.getState().listings.creature.entries.find((e) => e.ref.id === draft.id);
+      if (!restored) {
+        throw new Error(`"${draft.name}" is no longer in "${original}"`);
       }
-      setSaved(original.doc);
-      setDraft(original.doc);
-      useAppStore.getState().notify(`Reverted "${original.doc.name}"`);
+      setSaved(restored.doc);
+      setDraft(restored.doc);
+      useAppStore.getState().notify(`Reverted "${restored.doc.name}"`);
     }
   };
 
@@ -91,8 +96,8 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
         crumbs={[{ label: 'Compendium', route: COMPENDIUM }, { label: draft.name || 'Unnamed creature' }]}
         status={dirty ? 'Unsaved changes' : entry ? 'Saved' : 'Not saved yet'}
       >
-        {entry?.overridesContent && (
-          <Button icon="undo" label="Revert to shipped" onClick={() => revert().catch(reportError)} />
+        {entry !== undefined && entry.overrides.length > 0 && (
+          <Button icon="undo" label="Revert to pack version" onClick={() => revert().catch(reportError)} />
         )}
         <Button
           icon="check"
@@ -105,8 +110,8 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
       </PageHeader>
       {shipped && (
         <div className="hint-bar" role="note">
-          Shipped creature: saving creates your copy, which you can revert later. Changing only Image or Token keeps it
-          shipped and stores the pictures as files named after it.
+          From the pack &quot;{original}&quot;: saving creates your copy, which you can revert later. Changing only
+          Image or Token keeps it in the pack and stores the pictures as files named after it in your content.
         </div>
       )}
       <div className="creature-editor-body">

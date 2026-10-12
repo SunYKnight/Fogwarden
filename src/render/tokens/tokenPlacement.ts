@@ -1,15 +1,6 @@
 import type { CreatureSize, Grid, MapPoint, Vec2 } from '@/core/model';
+import { footprintSquares } from '@/core/rules/space';
 import type { HeightField } from '@/core/terrain/heightfield';
-
-/** Token diameter per 5e creature size. */
-export const TOKEN_DIAMETER_FT: Record<CreatureSize, number> = {
-  tiny: 2.5,
-  small: 5,
-  medium: 5,
-  large: 10,
-  huge: 15,
-  gargantuan: 20,
-};
 
 function snapAxis(value: number, footprintFt: number, feetPerSquare: number, mapFt: number): number {
   const half = footprintFt / 2;
@@ -23,7 +14,7 @@ function snapAxis(value: number, footprintFt: number, feetPerSquare: number, map
  */
 export function snapTokenPoint(point: Vec2, size: CreatureSize, grid: Grid, terrain: HeightField): MapPoint {
   const fps = grid.feetPerSquare;
-  const footprintFt = Math.max(1, Math.round(TOKEN_DIAMETER_FT[size] / fps)) * fps;
+  const footprintFt = footprintSquares(size, grid) * fps;
   const x = snapAxis(point.x, footprintFt, fps, grid.squaresX * fps);
   const y = snapAxis(point.y, footprintFt, fps, grid.squaresY * fps);
   return { x, y, elevationFt: terrain.sample(x, y) };

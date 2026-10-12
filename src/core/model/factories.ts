@@ -1,6 +1,12 @@
 import { newId, nowIso, type DocRef } from './common';
 import { CREATURE_SCHEMA_VERSION, type Creature } from './creature';
-import { CAMPAIGN_SCHEMA_VERSION, ENCOUNTER_SCHEMA_VERSION, type Campaign, type Encounter } from './encounter';
+import {
+  CAMPAIGN_SCHEMA_VERSION,
+  defaultAtmosphere,
+  ENCOUNTER_SCHEMA_VERSION,
+  type Campaign,
+  type Encounter,
+} from './encounter';
 import { MAP_SCHEMA_VERSION, type BattleMap, type MapImage } from './map';
 import { MARKER_SCHEMA_VERSION, type MarkerTemplate } from './marker';
 import { HeightField } from '../terrain/heightfield';
@@ -124,5 +130,7 @@ export function createEncounter(name: string, campaignId: string, map: DocRef | 
     fog: { cellsPerSquare: 2, exploredBy: {}, revealedByDm: '', hiddenByDm: '' },
     log: [],
     notes: '',
+    atmosphere: defaultAtmosphere(),
+    playersMoveTokens: false,
   };
 }

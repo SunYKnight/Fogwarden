@@ -13,6 +13,7 @@ import {
 import { HeightField } from '@/core/terrain/heightfield';
 import { fogSize } from '@/core/vision/fog';
 import { MemoryStorage } from './memoryStorage';
+import { packSource } from './packs';
 import { campaignNotesPath, encounterDir, libraryDocPath, mapAssetRef, Repository } from './repository';
 
 function setup() {
@@ -22,17 +23,26 @@ function setup() {
 
 const text = (storage: MemoryStorage, path: string) => storage.files.data.get(path) as string;
 
+/** Installs an empty pack `id` in the content root (shipped) or the data root (imported). */
+function addPack(storage: MemoryStorage, area: 'data' | 'content', id: string, name = id) {
+  storage.files[area].set(`packs/${id}/pack.json`, JSON.stringify({ id, name }));
+}
+
+const SRD = packSource('content', 'srd');
+
 describe('Repository library listing', () => {
   it('lets a user copy shadow the shipped document with the same id', async () => {
     const { storage, repository } = setup();
     const shipped = createCreature('Goblin');
-    storage.files.content.set(libraryDocPath('creature', 'content', shipped.id), formatCreatureFile(shipped));
+    addPack(storage, 'content', 'srd');
+    storage.files.content.set(libraryDocPath('creature', SRD, shipped.id), formatCreatureFile(shipped));
     await repository.save('creature', { ...shipped, armorClass: 17 });
 
     const { entries } = await repository.list('creature');
     expect(entries).toHaveLength(1);
     expect(entries[0]!.ref.area).toBe('data');
-    expect(entries[0]!.overridesContent).toBe(true);
+    expect(entries[0]!.pack).toBe('my-content');
+    expect(entries[0]!.overrides).toEqual(['srd']);
     expect(entries[0]!.doc.armorClass).toBe(17);
   });
 
@@ -67,7 +77,8 @@ describe('Repository creatures', () => {
   it('pictures a shipped creature with files named after its id, the token file before the image', async () => {
     const { storage, repository } = setup();
     const goblin = { ...createCreature('Goblin'), id: 'srd-goblin' };
-    storage.files.content.set('creatures/srd-goblin.txt', formatCreatureFile(goblin));
+    addPack(storage, 'content', 'srd');
+    storage.files.content.set('packs/srd/creatures/srd-goblin.txt', formatCreatureFile(goblin));
     storage.files.data.set('library/creatures/srd-goblin.jpg', new Uint8Array([1]));
     storage.files.data.set('library/creatures/srd-goblin.token.webp', new Uint8Array([2]));
 
@@ -100,7 +111,8 @@ describe('Repository creatures', () => {
   it('deletes the pictures with a user creature but keeps those of a shipped one', async () => {
     const { storage, repository } = setup();
     const shipped = { ...createCreature('Goblin'), id: 'srd-goblin' };
-    storage.files.content.set('creatures/srd-goblin.txt', formatCreatureFile(shipped));
+    addPack(storage, 'content', 'srd');
+    storage.files.content.set('packs/srd/creatures/srd-goblin.txt', formatCreatureFile(shipped));
     const own = createCreature('Orc');
     for (const creature of [shipped, own]) {
       const image = await repository.importCreaturePicture(creature.id, 'image', 'a.png', new Uint8Array([1]));
@@ -161,8 +173,10 @@ describe('Repository maps', () => {
     const map = createMap({ name: 'Forest', image: null, squaresX: 1, squaresY: 1, pxPerSquare: 70 });
     const shippedAsset = { area: 'content' as const, path: 'shared/forest.jpg' };
     const files = await repository.mapFiles({ ...map, image: { asset: shippedAsset, widthPx: 70, heightPx: 70 } });
-    storage.files.content.set(libraryDocPath('map', 'content', map.id), files.json);
-    storage.files.content.set(`maps/${map.id}/terrain.png`, files.terrain);
+    addPack(storage, 'content', 'sample');
+    const sample = packSource('content', 'sample');
+    storage.files.content.set(libraryDocPath('map', sample, map.id), files.json);
+    storage.files.content.set(`packs/sample/maps/${map.id}/terrain.png`, files.terrain);
     const copy = await repository.duplicateMap({ area: 'content', id: map.id }, 'Forest copy');
     expect(copy.image!.asset).toEqual(shippedAsset);
   });
@@ -177,7 +191,8 @@ describe('Repository maps', () => {
 describe('Repository new document ids', () => {
   it('skips ids of user files, pictures and shipped documents, ignoring case', async () => {
     const { storage, repository } = setup();
-    storage.files.content.set('creatures/goblin.txt', '');
+    addPack(storage, 'content', 'srd');
+    storage.files.content.set('packs/srd/creatures/goblin.txt', '');
     storage.files.data.set('library/creatures/Goblin-2.txt', '');
     storage.files.data.set('library/creatures/goblin-3.token.png', new Uint8Array([1]));
     expect(await repository.newLibraryId('creature', 'Goblin')).toBe('goblin-4');

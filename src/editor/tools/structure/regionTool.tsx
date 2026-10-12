@@ -11,6 +11,7 @@ const useRegionTemplate = create<RegionTemplate>(() => ({
   light: 'darkness',
   color: REGION_COLORS.light,
   hiddenFromPlayers: false,
+  sound: null,
 }));
 
 const REGION_DRAFT: DraftActions = {

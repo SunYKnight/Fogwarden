@@ -4,14 +4,16 @@ import { createMap, MAP_SCHEMA_VERSION, mapSchema, type BattleMap, type Vec2 } f
 import { encodePng } from '../src/core/png';
 import { HeightField } from '../src/core/terrain/heightfield';
 import { MemoryStorage } from '../src/data/memoryStorage';
+import { formatPackManifest, PACKS_DIR } from '../src/data/packs';
 import { Repository } from '../src/data/repository';
 import { CONTENT_ROOT } from './cli';
 
 /**
- * Builds the shipped sample map `content/maps/sample-chapel`: a ruined chapel in a forest clearing,
- * drawn procedurally (no third-party art), with walls, a door, a window, a roofed room, light and
- * darkness regions, two lights and gentle terrain. Usage: pnpm tsx tools/build-sample.ts
+ * Builds the shipped pack "Sample map" (`content/packs/sample-map`) with the map `maps/sample-chapel`: a ruined
+ * chapel in a forest clearing, drawn procedurally (no third-party art), with walls, a door, a window, a roofed
+ * room, light and darkness regions, two lights and gentle terrain. Usage: pnpm tsx tools/build-sample.ts
  */
+const PACK_ID = 'sample-map';
 const MAP_ID = 'sample-chapel';
 const IMAGE_NAME = 'chapel.png';
 const SQUARES_X = 20;
@@ -352,7 +354,7 @@ function buildMap(): BattleMap {
   const base = createMap({
     name: 'Sample: ruined chapel',
     image: {
-      asset: { area: 'content', path: `maps/${MAP_ID}/assets/${IMAGE_NAME}` },
+      asset: { area: 'content', path: `${PACKS_DIR}/${PACK_ID}/maps/${MAP_ID}/assets/${IMAGE_NAME}` },
       widthPx: SQUARES_X * PX,
       heightPx: SQUARES_Y * PX,
     },
@@ -439,6 +441,7 @@ function buildMap(): BattleMap {
         color: '#202040',
         hiddenFromPlayers: true,
         notes: 'Only the altar torch lights the nave.',
+        sound: null,
       },
       {
         id: 'sample-rubble',
@@ -454,6 +457,7 @@ function buildMap(): BattleMap {
         color: '#8a7f6a',
         hiddenFromPlayers: false,
         notes: 'Collapsed wall: difficult terrain.',
+        sound: null,
       },
     ],
     lights: [
@@ -482,8 +486,21 @@ function buildMap(): BattleMap {
   return mapSchema.parse({ ...map, terrain: { ...map.terrain, heights: terrainHeights(map) } });
 }
 
-const dir = join(CONTENT_ROOT, 'maps', MAP_ID);
+const packDir = join(CONTENT_ROOT, PACKS_DIR, PACK_ID);
+const dir = join(packDir, 'maps', MAP_ID);
 mkdirSync(join(dir, 'assets'), { recursive: true });
+writeFileSync(
+  join(packDir, 'pack.json'),
+  formatPackManifest({
+    id: PACK_ID,
+    name: 'Sample map',
+    version: '1',
+    author: 'DnD DM Tool',
+    license: 'CC0-1.0',
+    description: 'A ruined chapel in a forest clearing; the map of the sample encounter.',
+    url: '',
+  }),
+);
 const png = await drawImage();
 writeFileSync(join(dir, 'assets', IMAGE_NAME), png);
 // The repository's own encoder keeps shipped maps in the app's file format.

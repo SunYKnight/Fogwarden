@@ -5,7 +5,7 @@ import { CREATURE_SCHEMA_VERSION, createCreature, type Creature } from '../model
 import { formatCreatureFile, formatStatBlock, parseCreatureFile } from './creatureFile';
 import { parseStatBlock, StatBlockError } from './statblock';
 
-const SHIPPED = join(import.meta.dirname, '..', '..', '..', 'content', 'creatures');
+const SHIPPED = join(import.meta.dirname, '..', '..', '..', 'content', 'packs', 'srd', 'creatures');
 const CREATED = '2024-01-02T03:04:05.000Z';
 const UPDATED = '2024-02-03T04:05:06.000Z';
 

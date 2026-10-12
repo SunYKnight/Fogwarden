@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { colorSchema, docHeader, idSchema, mapPointSchema } from './common';
+import { abilitySchema, damageTypeSchema } from './creature';
 
 export const MARKER_SCHEMA_VERSION = 1;
 
@@ -20,12 +21,25 @@ export const areaDimensionsSchema = z.object({
 });
 export type AreaDimensions = z.infer<typeof areaDimensionsSchema>;
 
+/** Saving throw creatures in the area make, e.g. Fireball: DEX 15, 8d6 fire, half on success. */
+export const areaSaveSchema = z.object({
+  ability: abilitySchema,
+  dc: z.number().int().min(1),
+  /** Dice rolled once for all targets; empty for saves without damage. */
+  damage: z.string(),
+  damageType: damageTypeSchema,
+  halfOnSuccess: z.boolean(),
+});
+export type AreaSave = z.infer<typeof areaSaveSchema>;
+
 export const markerTemplateSchema = z.object({
   ...docHeader('marker'),
   ...areaDimensionsSchema.shape,
   color: colorSchema,
   opacity: z.number().min(0).max(1),
   notes: z.string(),
+  /** Absent for areas without a saving throw. */
+  save: areaSaveSchema.optional(),
 });
 export type MarkerTemplate = z.infer<typeof markerTemplateSchema>;
 
@@ -39,5 +53,7 @@ export const areaMarkerSchema = z.object({
   color: colorSchema,
   opacity: z.number().min(0).max(1),
   visibleToPlayers: z.boolean(),
+  /** Copied from the template; absent for areas without a saving throw. */
+  save: areaSaveSchema.optional(),
 });
 export type AreaMarker = z.infer<typeof areaMarkerSchema>;

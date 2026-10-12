@@ -1,13 +1,15 @@
 import { useMemo, useState, type MouseEvent } from 'react';
-import { CREATURE_TYPES, creaturePortrait, nowIso, type Creature } from '@/core/model';
+import { CREATURE_TYPES, nowIso, type Creature } from '@/core/model';
 import { formatCr } from '@/core/rules/abilities';
+import { MY_CONTENT } from '@/data/packs';
 import type { LibraryEntry } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
-import { useLibraryStore } from '@/state/libraryStore';
-import { AssetImage } from '../components/AssetImage';
+import { packName, useLibraryStore } from '@/state/libraryStore';
+import { CreatureThumb } from '../creatureTypes/CreatureThumb';
 import { StatBlock } from '../creature/StatBlock';
-import { Button, confirmDialog, EmptyState, Icon, openContextMenu, type MenuItem } from '../kit';
+import { Button, confirmDialog, EmptyState, openContextMenu, type MenuItem } from '../kit';
 import { openCreatureImport } from './compendiumUi';
+import { OriginBadge } from './OriginBadge';
 
 type SortKey = 'name' | 'cr' | 'type';
 type Entry = LibraryEntry<'creature'>;
@@ -39,18 +41,9 @@ function matches(entry: Entry, f: Filter): boolean {
     (c.name.toLowerCase().includes(text) || c.tags.some((t) => t.toLowerCase().includes(text))) &&
     (f.type === '' || c.type === f.type) &&
     (f.source === '' || c.source === f.source) &&
-    (!f.mineOnly || entry.ref.area === 'data') &&
+    (!f.mineOnly || entry.pack === MY_CONTENT) &&
     c.challenge >= f.minCr &&
     c.challenge <= f.maxCr
-  );
-}
-
-function OriginBadge({ entry }: { entry: Entry }) {
-  const shipped = entry.ref.area === 'content';
-  return (
-    <span className={`badge ${entry.ref.area}`} title={shipped ? 'Shipped; editing creates your copy' : undefined}>
-      {shipped && <Icon name="lock" size={12} />} {shipped ? 'shipped' : entry.overridesContent ? 'your copy' : 'yours'}
-    </span>
   );
 }
 
@@ -136,7 +129,6 @@ export function CreatureLibrary() {
     [listing, filter, sort],
   );
   const selected = listing.entries.find((e) => e.ref.id === selectedId) ?? null;
-  const selectedPortrait = selected && creaturePortrait(selected.doc);
 
   const edit = (entry: Entry) => navigate({ page: 'creature-editor', ref: entry.ref });
 
@@ -151,12 +143,13 @@ export function CreatureLibrary() {
     useAppStore.getState().notify(`Created "${stored.name}"`);
   };
 
-  const remove = async ({ ref, doc, overridesContent }: Entry) => {
+  const remove = async ({ ref, doc, overrides }: Entry) => {
+    const original = overrides[0] && packName(useLibraryStore.getState().packs, overrides[0]);
     const ok = await confirmDialog(
-      overridesContent
+      original
         ? {
-            title: 'Revert to shipped creature',
-            message: `Your copy of "${doc.name}" is deleted and the shipped version comes back.`,
+            title: 'Revert to pack version',
+            message: `Your copy of "${doc.name}" is deleted and the version from "${original}" comes back.`,
             confirmLabel: 'Revert',
             danger: true,
           }
@@ -177,10 +170,10 @@ export function CreatureLibrary() {
     { label: 'Edit', icon: 'edit', run: () => edit(entry) },
     { label: 'Duplicate', icon: 'copy', run: () => duplicate(entry.doc).catch(reportError) },
     {
-      label: entry.overridesContent ? 'Revert to shipped' : 'Delete',
-      icon: entry.overridesContent ? 'undo' : 'trash',
+      label: entry.overrides.length > 0 ? 'Revert to pack version' : 'Delete',
+      icon: entry.overrides.length > 0 ? 'undo' : 'trash',
       danger: true,
-      disabled: entry.ref.area === 'content',
+      disabled: entry.pack !== MY_CONTENT,
       run: () => remove(entry).catch(reportError),
     },
   ];
@@ -224,7 +217,7 @@ export function CreatureLibrary() {
               }}
               onContextMenu={(e) => showMenu(e, entry)}
             >
-              <AssetImage asset={creaturePortrait(entry.doc)} alt="" className="creature-row-thumb" />
+              <CreatureThumb creature={entry.doc} className="creature-row-thumb" />
               <span className="row-name">{entry.doc.name}</span>
               <span className="row-cr">CR {formatCr(entry.doc.challenge)}</span>
               <span className="muted row-type">{entry.doc.type}</span>
@@ -259,22 +252,20 @@ export function CreatureLibrary() {
               <div className="spacer" />
               <Button icon="edit" label="Edit" variant="primary" onClick={() => edit(selected)} />
               <Button icon="copy" label="Duplicate" onClick={() => duplicate(selected.doc).catch(reportError)} />
-              {selected.ref.area === 'data' && (
+              {selected.pack === MY_CONTENT && (
                 <Button
-                  icon={selected.overridesContent ? 'undo' : 'trash'}
-                  label={selected.overridesContent ? 'Revert' : 'Delete'}
+                  icon={selected.overrides.length > 0 ? 'undo' : 'trash'}
+                  label={selected.overrides.length > 0 ? 'Revert' : 'Delete'}
                   variant="danger"
                   onClick={() => remove(selected).catch(reportError)}
                 />
               )}
             </div>
-            {selectedPortrait && (
-              <AssetImage
-                asset={selectedPortrait}
-                alt={`Portrait of ${selected.doc.name}`}
-                className="creature-portrait"
-              />
-            )}
+            <CreatureThumb
+              creature={selected.doc}
+              alt={`Portrait of ${selected.doc.name}`}
+              className="creature-portrait"
+            />
             <StatBlock creature={selected.doc} />
           </>
         ) : (

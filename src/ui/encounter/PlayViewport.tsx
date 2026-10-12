@@ -8,13 +8,18 @@ import type { MapPointerEvent } from '@/render/mapRenderContext';
 import { MapView } from '@/render/MapView';
 import { useAppStore } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
+import { usePingStore } from '@/state/pingStore';
+import { useDmScene } from '@/state/scene';
 import { useDmCameraStore } from '@/sync/cameraStore';
 import { CheckboxField, SelectField, SliderField } from '../components/fields';
 import { Button, Dialog, Popover, ToolButton, type IconName } from '../kit';
+import { SceneMenu } from '../sound/SceneMenu';
+import { SoundMenu } from '../sound/SoundMenu';
 import { EncounterOverlay } from './EncounterOverlay';
 import { handleEncounterPointer } from './encounterPointer';
 import { cancelInteraction, chooseTool, startPlacing, useEncounterUi } from './encounterUiStore';
 import { AreaTemplatePicker } from './MarkerPanel';
+import { ShowMenu } from './ShowMenu';
 import { openCombatantMenu } from './tokenMenu';
 
 // A right release nearer than this to its press is a click (menu), not a pan.
@@ -54,7 +59,7 @@ function ViewportHint() {
   ];
   const fallback =
     'Click a token to select, drag to move, right-click for actions · ' +
-    'Click a door to open or close it, Shift+click to lock';
+    'Click a door to open or close it, Shift+click to lock · Alt+click pings the spot for the players';
   return <div className="viewport-hint">{hints.find(([active]) => active)?.[1] ?? fallback}</div>;
 }
 
@@ -240,6 +245,15 @@ function CanvasToolbar() {
           onClick={() => useEncounterUi.setState({ fogMenuOpen: !fogMenuOpen })}
         />
       </div>
+      <div className="canvas-group" role="toolbar" aria-label="Sound">
+        <SoundMenu />
+      </div>
+      <div className="canvas-group" role="toolbar" aria-label="Show">
+        <ShowMenu />
+      </div>
+      <div className="canvas-group" role="toolbar" aria-label="Scene">
+        <SceneMenu />
+      </div>
     </div>
   );
 }
@@ -250,6 +264,7 @@ export function PlayViewport({ map, terrain }: { map: BattleMap; terrain: Height
   const camera = useEncounterUi((s) => s.camera);
   const fogMenuOpen = useEncounterUi((s) => s.fogMenuOpen);
   const showFog = useFogViewStore((s) => s.showFogToDm);
+  const minute = useDmScene()?.minute ?? null;
   const rightDown = useRef<{ x: number; y: number } | null>(null);
   const rightToken = useRef<string | null>(null);
 
@@ -259,7 +274,11 @@ export function PlayViewport({ map, terrain }: { map: BattleMap; terrain: Height
         if (event.type === 'down' && event.button === 2 && event.hit?.kind === 'token') {
           rightToken.current = event.hit.id;
         }
-        if (!fogBrushPointer(event)) handleEncounterPointer(event);
+        if (event.type === 'down' && event.button === 0 && event.altKey && event.point) {
+          usePingStore.getState().add({ at: event.point, by: 'DM', from: null });
+        } else if (!fogBrushPointer(event)) {
+          handleEncounterPointer(event);
+        }
       } catch (error) {
         reportError(error);
       }
@@ -293,6 +312,7 @@ export function PlayViewport({ map, terrain }: { map: BattleMap; terrain: Height
         fogMode={showFog ? 'dm' : 'off'}
         camera={camera}
         ambient={map.ambientLight}
+        minute={minute}
         onCameraChange={useDmCameraStore.getState().setCamera}
         onPointer={onPointer}
       >

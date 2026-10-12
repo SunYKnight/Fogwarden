@@ -6,7 +6,9 @@ import { createPc, spawnCombatant, type HpMode } from '@/state/encounterActions'
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { CheckboxField, NumberField, SelectField, TextField } from '../components/fields';
+import { CreatureThumb } from '../creatureTypes/CreatureThumb';
 import { Button, Dialog, Tabs, type TabSpec } from '../kit';
+import { DifficultyBadge } from './EncounterDifficulty';
 import { useEncounterUi } from './encounterUiStore';
 
 const MAX_MATCHES = 12;
@@ -23,6 +25,7 @@ const close = () => useEncounterUi.setState({ addDialogOpen: false });
 
 function FromLibrary() {
   const entries = useLibraryStore((s) => s.listings.creature.entries);
+  const combatants = useEncounterStore((s) => s.encounter)?.combatants ?? [];
   const update = useEncounterStore((s) => s.update);
   const reportError = useAppStore((s) => s.reportError);
   const notify = useAppStore((s) => s.notify);
@@ -69,8 +72,11 @@ function FromLibrary() {
               setSide(e.doc.kind === 'player' ? 'player' : 'enemy');
             }}
           >
+            <CreatureThumb creature={e.doc} className="creature-row-thumb" />
             <span className="grow">{e.doc.name}</span>
-            <span className="muted small">CR {formatCr(e.doc.challenge)}</span>
+            <span className="muted small">
+              CR {formatCr(e.doc.challenge)} · {e.doc.xp} XP
+            </span>
           </div>
         ))}
         {matches.length > MAX_MATCHES && (
@@ -88,6 +94,10 @@ function FromLibrary() {
         onChange={setHpMode}
       />
       <div className="dialog-actions">
+        <DifficultyBadge
+          combatants={combatants}
+          extraXp={picked && side === 'enemy' ? Array<number>(count).fill(picked.doc.xp) : []}
+        />
         <Button
           icon="plus"
           label={picked ? `Add ${count} × ${picked.doc.name}` : 'Pick a creature'}
@@ -102,16 +112,18 @@ function FromLibrary() {
 
 function PlayerCharacterForm() {
   const update = useEncounterStore((s) => s.update);
+  const combatants = useEncounterStore((s) => s.encounter)?.combatants ?? [];
   const notify = useAppStore((s) => s.notify);
   const [name, setName] = useState('');
   const [armorClass, setArmorClass] = useState(14);
   const [maxHp, setMaxHp] = useState(20);
   const [darkvision, setDarkvision] = useState(0);
   const [visionSource, setVisionSource] = useState(true);
+  const [level, setLevel] = useState(1);
 
   const add = () => {
     const senses = darkvision > 0 ? { darkvision } : {};
-    const pc = createPc({ name: name.trim(), armorClass, maxHp, senses, visionSource });
+    const pc = createPc({ name: name.trim(), armorClass, maxHp, senses, visionSource, level });
     update((d) => void d.combatants.push(pc), `Add ${pc.name}`);
     notify(`Added ${pc.name}`);
     close();
@@ -120,11 +132,13 @@ function PlayerCharacterForm() {
   return (
     <div className="col">
       <TextField label="Name" value={name} onChange={setName} />
+      <NumberField label="Level" min={1} max={20} value={level} onChange={(v) => setLevel(Math.round(v))} />
       <NumberField label="Armor class" value={armorClass} onChange={(v) => setArmorClass(Math.round(v))} />
       <NumberField label="Max HP" min={1} value={maxHp} onChange={(v) => setMaxHp(Math.round(v))} />
       <NumberField label="Darkvision" min={0} suffix="ft" value={darkvision} onChange={setDarkvision} />
       <CheckboxField label="Vision source" value={visionSource} onChange={setVisionSource} />
       <div className="dialog-actions">
+        <DifficultyBadge combatants={combatants} />
         <Button
           icon="plus"
           label="Add player character"

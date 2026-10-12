@@ -1,10 +1,19 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
-import { AREA_SHAPES, createMarkerTemplate, type MarkerTemplate } from '@/core/model';
+import {
+  ABILITIES,
+  AREA_SHAPES,
+  createMarkerTemplate,
+  DAMAGE_TYPES,
+  type AreaSave,
+  type MarkerTemplate,
+} from '@/core/model';
+import { MY_CONTENT } from '@/data/packs';
 import type { LibraryEntry } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
-import { useLibraryStore } from '@/state/libraryStore';
-import { ColorField, NumberField, SelectField, TextField } from '../components/fields';
-import { Button, confirmDialog, EmptyState, Icon, openContextMenu, Section } from '../kit';
+import { packName, useLibraryStore } from '@/state/libraryStore';
+import { CheckboxField, ColorField, NumberField, SelectField, TextField } from '../components/fields';
+import { Button, confirmDialog, EmptyState, openContextMenu, Section } from '../kit';
+import { OriginBadge } from './OriginBadge';
 
 type Entry = LibraryEntry<'marker'>;
 
@@ -20,8 +29,8 @@ const SIZE_LABEL: Record<MarkerTemplate['shape'], string> = {
 const VIEW = 200;
 const PAD = 24;
 
-/** Top-down drawing of the area with its dimensions, scaled to fit the preview box. */
-function AreaPreview({ t }: { t: MarkerTemplate }) {
+/** Top-down drawing of the area with its dimensions, scaled to fit the preview box; `thumb` drops the caption. */
+function AreaPreview({ t, thumb = false }: { t: MarkerTemplate; thumb?: boolean }) {
   const style = { fill: t.color, fillOpacity: t.opacity, stroke: t.color, strokeWidth: 2 };
   const inner = VIEW - 2 * PAD;
   const mid = VIEW / 2;
@@ -48,11 +57,21 @@ function AreaPreview({ t }: { t: MarkerTemplate }) {
     shape = <polygon points={`${PAD},${mid} ${VIEW - PAD},${PAD} ${VIEW - PAD},${VIEW - PAD}`} {...style} />;
     label = `${t.sizeFt} ft long`;
   }
-  return (
+  const drawing = (
+    <svg
+      viewBox={`0 0 ${VIEW} ${VIEW}`}
+      role="img"
+      aria-label={`${t.shape}, ${label}`}
+      className={thumb ? 'area-thumb' : undefined}
+    >
+      {shape}
+    </svg>
+  );
+  return thumb ? (
+    drawing
+  ) : (
     <figure className="area-preview">
-      <svg viewBox={`0 0 ${VIEW} ${VIEW}`} role="img" aria-label={`${t.shape}, ${label}`}>
-        {shape}
-      </svg>
+      {drawing}
       <figcaption>
         {t.shape} · {label}
       </figcaption>
@@ -60,11 +79,67 @@ function AreaPreview({ t }: { t: MarkerTemplate }) {
   );
 }
 
+const NEW_SAVE: AreaSave = { ability: 'dex', dc: 13, damage: '', damageType: 'fire', halfOnSuccess: true };
+
+/** Saving throw the Play view's Areas tab prefills for creatures inside the area. */
+function SaveFields({
+  save,
+  onChange,
+}: {
+  save: AreaSave | undefined;
+  onChange: (save: AreaSave | undefined) => void;
+}) {
+  return (
+    <>
+      <CheckboxField
+        label="Saving throw"
+        value={save !== undefined}
+        onChange={(v) => onChange(v ? NEW_SAVE : undefined)}
+      />
+      {save && (
+        <>
+          <SelectField
+            label="Save"
+            value={save.ability}
+            options={ABILITIES}
+            format={(a) => a.toUpperCase()}
+            onChange={(ability) => onChange({ ...save, ability })}
+          />
+          <NumberField
+            label="DC"
+            min={1}
+            max={40}
+            value={save.dc}
+            onChange={(v) => onChange({ ...save, dc: Math.round(v) })}
+          />
+          <TextField
+            label="Damage"
+            placeholder="8d6"
+            value={save.damage}
+            onChange={(damage) => onChange({ ...save, damage: damage.trim() })}
+          />
+          <SelectField
+            label="Damage type"
+            value={save.damageType}
+            options={DAMAGE_TYPES}
+            onChange={(damageType) => onChange({ ...save, damageType })}
+          />
+          <CheckboxField
+            label="Half damage on a successful save"
+            value={save.halfOnSuccess}
+            onChange={(halfOnSuccess) => onChange({ ...save, halfOnSuccess })}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
 function TemplateEditor({ template }: { template: MarkerTemplate }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const refresh = useLibraryStore((s) => s.refresh);
-  // Every committed field is saved at once; shipped templates get a user copy.
+  // Every committed field is saved at once; pack templates get a user copy.
   const set = <K extends keyof MarkerTemplate>(key: K, value: MarkerTemplate[K]) =>
     repository
       .save('marker', { ...template, [key]: value })
@@ -102,6 +177,7 @@ function TemplateEditor({ template }: { template: MarkerTemplate }) {
         value={template.opacity}
         onChange={(v) => set('opacity', v)}
       />
+      <SaveFields save={template.save} onChange={(v) => set('save', v)} />
       <TextField label="Notes" multiline value={template.notes} onChange={(v) => set('notes', v)} />
     </Section>
   );
@@ -125,12 +201,13 @@ export function MarkerLibrary() {
     setSelectedId(stored.id);
   };
 
-  const remove = async ({ ref, doc, overridesContent }: Entry) => {
+  const remove = async ({ ref, doc, overrides }: Entry) => {
+    const original = overrides[0] && packName(useLibraryStore.getState().packs, overrides[0]);
     const ok = await confirmDialog(
-      overridesContent
+      original
         ? {
-            title: 'Revert to shipped template',
-            message: `Your copy of "${doc.name}" is deleted and the shipped version comes back.`,
+            title: 'Revert to pack version',
+            message: `Your copy of "${doc.name}" is deleted and the version from "${original}" comes back.`,
             confirmLabel: 'Revert',
             danger: true,
           }
@@ -147,10 +224,10 @@ export function MarkerLibrary() {
     setSelectedId(entry.ref.id);
     openContextMenu(e.clientX, e.clientY, [
       {
-        label: entry.overridesContent ? 'Revert to shipped' : 'Delete',
-        icon: entry.overridesContent ? 'undo' : 'trash',
+        label: entry.overrides.length > 0 ? 'Revert to pack version' : 'Delete',
+        icon: entry.overrides.length > 0 ? 'undo' : 'trash',
         danger: true,
-        disabled: entry.ref.area === 'content',
+        disabled: entry.pack !== MY_CONTENT,
         run: () => remove(entry).catch(reportError),
       },
     ]);
@@ -181,15 +258,12 @@ export function MarkerLibrary() {
               onClick={() => setSelectedId(entry.ref.id)}
               onContextMenu={(e) => showMenu(e, entry)}
             >
-              <span className="swatch" style={{ background: entry.doc.color }} />
+              <AreaPreview t={entry.doc} thumb />
               <span className="row-name">{entry.doc.name}</span>
               <span className="muted">
                 {entry.doc.shape} {entry.doc.sizeFt} ft
               </span>
-              <span className={`badge ${entry.ref.area}`}>
-                {entry.ref.area === 'content' && <Icon name="lock" size={12} />}{' '}
-                {entry.ref.area === 'content' ? 'shipped' : entry.overridesContent ? 'your copy' : 'yours'}
-              </span>
+              <OriginBadge entry={entry} />
             </div>
           ))}
         </div>
@@ -207,17 +281,17 @@ export function MarkerLibrary() {
             <div className="row">
               <strong>{selected.doc.name}</strong>
               <div className="spacer" />
-              {selected.ref.area === 'data' && (
+              {selected.pack === MY_CONTENT && (
                 <Button
-                  icon={selected.overridesContent ? 'undo' : 'trash'}
-                  label={selected.overridesContent ? 'Revert' : 'Delete'}
+                  icon={selected.overrides.length > 0 ? 'undo' : 'trash'}
+                  label={selected.overrides.length > 0 ? 'Revert' : 'Delete'}
                   variant="danger"
                   onClick={() => remove(selected).catch(reportError)}
                 />
               )}
             </div>
-            {selected.ref.area === 'content' && (
-              <p className="hint-bar">Shipped template: changes create your copy, which you can revert later.</p>
+            {selected.pack !== MY_CONTENT && (
+              <p className="hint-bar">From a pack: changes create your copy, which you can revert later.</p>
             )}
             <AreaPreview t={selected.doc} />
             <TemplateEditor template={selected.doc} />

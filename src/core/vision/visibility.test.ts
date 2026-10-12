@@ -61,6 +61,7 @@ function viewer(x: number, y: number, extra: Partial<VisionCombatant> = {}): Vis
     size: 'medium',
     senses: {},
     visionSource: true,
+    light: null,
     ...extra,
   };
 }
@@ -167,6 +168,7 @@ describe('light and senses', () => {
       color: '#000000',
       hiddenFromPlayers: true,
       notes: '',
+      sound: null,
     };
     const map = { ...testMap(), regions: [region] };
     expect(see(map, [viewer(2.5, 2.5, { senses: { darkvision: 60 } })])(5, 0)).toBe(false);
@@ -216,6 +218,16 @@ describe('light and senses', () => {
     expect(visible(5, 5)).toBe(true);
     expect(visible(5, 8)).toBe(true);
     expect(visible(6, 9)).toBe(false);
+  });
+
+  it('lights the dark with a light the combatant carries', () => {
+    const map = testMap('darkness');
+    const light = { name: 'Lantern', brightFt: 10, dimFt: 10, color: '#ffcc88' };
+    const visible = see(map, [viewer(27.5, 27.5, { light })]);
+    expect(visible(5, 5)).toBe(true);
+    expect(visible(5, 8)).toBe(true);
+    expect(visible(6, 9)).toBe(false);
+    expect(see(map, [viewer(27.5, 27.5)])(5, 8)).toBe(false);
   });
 
   it('lets blindsight ignore darkness within range only', () => {

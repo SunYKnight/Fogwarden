@@ -26,6 +26,7 @@ import {
   type Shortcut,
   type TabSpec,
 } from '../kit';
+import { MapExportDialog } from '../library/MapExportDialog';
 import { MapSettingsDialog } from './MapSettingsDialog';
 
 /** Step tabs in the recommended order of work; the digit keys follow this order. */
@@ -113,13 +114,25 @@ const EDITOR_SHORTCUTS: Shortcut[] = [
   ...s,
   run: (event: KeyboardEvent) => {
     try {
-      // Keys in the map settings dialog must not edit the map behind it.
-      if (!useEditorStore.getState().settingsOpen) s.run(event);
+      // Keys in the settings or export dialog must not edit the map.
+      const { settingsOpen, exportOpen } = useEditorStore.getState();
+      if (!settingsOpen && !exportOpen) s.run(event);
     } catch (error) {
       useAppStore.getState().reportError(error);
     }
   },
 }));
+
+// Stable identities: the dialog re-focuses its first field when onClose changes.
+const closeExport = () => useEditorStore.getState().setExportOpen(false);
+// The export shows the map as edited, saved or not.
+const loadEditedMap = async () => {
+  const { map, terrain } = useEditorStore.getState();
+  if (!map || !terrain) {
+    throw new Error('No map is open in the editor');
+  }
+  return { map, terrain };
+};
 
 function EditorHeader({ map }: { map: BattleMap }) {
   const canUndo = useEditorStore((s) => s.canUndo);
@@ -127,7 +140,7 @@ function EditorHeader({ map }: { map: BattleMap }) {
   const camera = useEditorStore((s) => s.camera);
   const preview = useEditorStore((s) => s.previewAsPlayer);
   const saving = useEditorStore((s) => s.revision !== s.savedRevision);
-  const { undo, redo, setCamera, setPreviewAsPlayer, setSettingsOpen } = useEditorStore.getState();
+  const { undo, redo, setCamera, setPreviewAsPlayer, setSettingsOpen, setExportOpen } = useEditorStore.getState();
   return (
     <PageHeader
       crumbs={[{ label: 'Maps', route: { page: 'maps' } }, { label: map.name }]}
@@ -136,6 +149,7 @@ function EditorHeader({ map }: { map: BattleMap }) {
       <Button icon="undo" label="Undo" iconOnly shortcut="Ctrl+Z" disabled={!canUndo} onClick={undo} />
       <Button icon="redo" label="Redo" iconOnly shortcut="Ctrl+Y" disabled={!canRedo} onClick={redo} />
       <Button icon="settings" label="Map settings" onClick={() => setSettingsOpen(true)} />
+      <Button icon="download" label="Export…" onClick={() => setExportOpen(true)} />
       <div className="segmented" role="group" aria-label="Camera">
         <Button icon="map" label="Top" shortcut="T" active={camera === 'top'} onClick={() => setCamera('top')} />
         <Button
@@ -264,6 +278,7 @@ function EditorLayout({ map, terrain }: { map: BattleMap; terrain: HeightField }
   const step = useEditorStore((s) => s.step);
   const preview = useEditorStore((s) => s.previewAsPlayer);
   const settingsOpen = useEditorStore((s) => s.settingsOpen);
+  const exportOpen = useEditorStore((s) => s.exportOpen);
   const tool = toolById(activeTool);
   const { Overlay } = tool;
 
@@ -315,6 +330,7 @@ function EditorLayout({ map, terrain }: { map: BattleMap; terrain: HeightField }
       </div>
       <EditorStatus hint={tool.hint} terrain={terrain} />
       {settingsOpen && <MapSettingsDialog />}
+      {exportOpen && <MapExportDialog name={map.name} load={loadEditedMap} onClose={closeExport} />}
     </div>
   );
 }

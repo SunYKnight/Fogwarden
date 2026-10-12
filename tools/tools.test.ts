@@ -24,7 +24,7 @@ describe('shipped SRD content', () => {
     expect(creatures.problems).toEqual([]);
     expect(markers.problems).toEqual([]);
     expect(creatures.entries.length).toBeGreaterThanOrEqual(300);
-    expect(creatures.entries.every((e) => e.doc.license === 'CC-BY-4.0' && e.ref.area === 'content')).toBe(true);
+    expect(creatures.entries.every((e) => e.doc.license === 'CC-BY-4.0' && e.pack === 'srd')).toBe(true);
     expect(markers.entries.map((e) => [e.doc.name, e.doc.shape, e.doc.sizeFt])).toEqual([
       ['Burning Hands', 'cone', 15],
       ['Fireball', 'sphere', 20],
@@ -32,7 +32,23 @@ describe('shipped SRD content', () => {
       ['Moonbeam', 'cylinder', 5],
       ['Thunderwave', 'cube', 15],
     ]);
-    expect(existsSync(join(CONTENT_ROOT, 'LICENSE-SRD.md'))).toBe(true);
+  });
+
+  it('ships every pack with a manifest and its license', async () => {
+    const { packs, problems } = await repository.listPacks();
+    expect(problems).toEqual([]);
+    const shipped = packs.filter((p) => p.origin === 'shipped');
+    expect(shipped.map((p) => [p.manifest.id, p.manifest.name])).toEqual([
+      ['cc0-models', 'CC0 models'],
+      ['sample-map', 'Sample map'],
+      ['srd', 'SRD 5.1'],
+    ]);
+    expect(shipped.map((p) => p.counts)).toEqual([
+      { creature: 0, marker: 0, map: 0, table: 0, model: 11 },
+      { creature: 0, marker: 0, map: 1, table: 0, model: 0 },
+      { creature: 334, marker: 5, map: 0, table: 0, model: 0 },
+    ]);
+    expect(shipped.every((p) => existsSync(join(CONTENT_ROOT, p.source.root, 'LICENSE.md')))).toBe(true);
   });
 });
 
@@ -50,7 +66,6 @@ describe('shipped sample map', () => {
     expect(map.rooms).toHaveLength(1);
     expect(map.regions.some((r) => r.kind === 'light' && r.light === 'darkness')).toBe(true);
     expect(map.lights.length).toBeGreaterThan(0);
-    expect(existsSync(join(CONTENT_ROOT, 'LICENSE-SAMPLE.md'))).toBe(true);
   });
 
   it('builds the sample encounter with four goblins and two PCs on the map', async () => {

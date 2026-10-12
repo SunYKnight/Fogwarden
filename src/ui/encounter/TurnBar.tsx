@@ -7,7 +7,7 @@ import { useAppStore } from '@/state/appStore';
 import { currentCombatant, type AttackResult } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { Button } from '../kit';
-import { changeHp, endCombat, rollAction, stepTurn } from './combatantCommands';
+import { changeHp, rollAction, stepTurn } from './combatantCommands';
 import { useCreature } from './creatureLookup';
 import { useEncounterUi } from './encounterUiStore';
 
@@ -135,7 +135,13 @@ export function TurnBar({ encounter }: { encounter: Encounter }) {
   return (
     <footer className="play-turnbar" aria-label="Turn">
       <TurnControls key={current?.id ?? 'none'} current={current} target={target} />
-      <Button label="End combat" variant="ghost" disabled={!started} onClick={endCombat} />
+      <Button
+        icon="check"
+        label="End combat"
+        variant="ghost"
+        disabled={!started}
+        onClick={() => useEncounterUi.setState({ endCombatOpen: true })}
+      />
       <Button
         icon="previous"
         label="Previous"

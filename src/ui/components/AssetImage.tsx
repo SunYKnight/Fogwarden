@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isVideoAsset } from '@/core/atmosphere/media';
 import type { AssetRef } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 
@@ -9,7 +10,10 @@ interface AssetImageProps {
   style?: React.CSSProperties;
 }
 
-/** <img> for a storage asset; renders an empty placeholder box while the URL resolves or when there is none. */
+/**
+ * <img> for a storage asset (the first frame for a video battlemap); renders an empty placeholder box while
+ * the URL resolves or when there is none.
+ */
 export function AssetImage({ asset, alt, className, style }: AssetImageProps) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
@@ -32,7 +36,9 @@ export function AssetImage({ asset, alt, className, style }: AssetImageProps) {
   }, [asset, repository, reportError]);
 
   const url = resolved && resolved.key === key ? resolved.url : null;
-  return url ? (
+  return url && asset && isVideoAsset(asset) ? (
+    <video src={url} aria-label={alt} className={className} style={style} muted preload="metadata" />
+  ) : url ? (
     <img src={url} alt={alt} className={className} style={style} />
   ) : (
     <div className={`thumb ${className ?? ''}`} style={style} />

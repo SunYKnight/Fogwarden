@@ -10,7 +10,7 @@ import {
   worldVec3Schema,
 } from './common';
 
-export const MAP_SCHEMA_VERSION = 2;
+export const MAP_SCHEMA_VERSION = 3;
 
 export const SIDE_MATERIALS = ['projected', 'stone', 'brick', 'wood', 'plaster', 'hedge', 'rock', 'metal'] as const;
 export const sideMaterialSchema = z.enum(SIDE_MATERIALS);
@@ -103,9 +103,19 @@ export const roomSchema = z.object({
 });
 export type Room = z.infer<typeof roomSchema>;
 
-export const REGION_KINDS = ['light', 'difficult', 'water', 'hazard', 'note'] as const;
+export const REGION_KINDS = ['light', 'difficult', 'water', 'hazard', 'note', 'sound'] as const;
 export const regionKindSchema = z.enum(REGION_KINDS);
 export type RegionKind = z.infer<typeof regionKindSchema>;
+
+/** Ambient loop of a `sound` region: full volume inside, silent `radiusFt` beyond the edge. */
+export const regionSoundSchema = z.object({
+  /** Audio file in the map's assets folder; null until the DM picks one. */
+  asset: assetRefSchema.nullable(),
+  radiusFt: z.number().nonnegative(),
+  /** 0..1 of the DM's master volume. */
+  volume: z.number().min(0).max(1),
+});
+export type RegionSound = z.infer<typeof regionSoundSchema>;
 
 export const regionSchema = z.object({
   id: idSchema,
@@ -117,6 +127,8 @@ export const regionSchema = z.object({
   color: colorSchema,
   hiddenFromPlayers: z.boolean(),
   notes: z.string(),
+  /** Only used by `sound` regions. */
+  sound: regionSoundSchema.nullable(),
 });
 export type Region = z.infer<typeof regionSchema>;
 

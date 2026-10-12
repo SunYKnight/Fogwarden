@@ -147,8 +147,8 @@ export function LegacyImportDialog({ onClose }: { onClose: () => void }) {
             <ProblemList title="files will be skipped" problems={stage.plan.skipped} />
             <ProblemList title="files will be imported with problems" problems={stage.plan.warnings} />
             <p className="muted">
-              Earlier imports of the same creatures, maps and area templates are replaced, other library entries stay as
-              they are.
+              Everything goes into the content pack &quot;Legacy DM Tool&quot; (Compendium &gt; Packs). Earlier imports
+              of the same creatures, maps and area templates are replaced, other entries stay as they are.
             </p>
           </>
         )}

@@ -6,11 +6,9 @@ import { pointInPolygon } from '@/core/geometry/walls';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { createProjectedMaterial, type ProjectionUniforms } from '../materials/projectedMaterial';
 import { useMapRender, type HitTag } from '../mapRenderContext';
-import { slabGeometry } from './drape';
 import { useCombatantPositions, useDisposable, useLayerVisible } from './hooks';
+import { roomFloorGeometry, roomRoofGeometry } from './roomGeometry';
 
-const ROOF_THICKNESS_FT = 0.5;
-const FLOOR_SINK_FT = 0.5;
 // No camera renders this layer and raycasters skip it.
 const HIDDEN_LAYER = 31;
 
@@ -20,11 +18,6 @@ function createRoofMaterial(uniforms: ProjectionUniforms, side: SideMaterial): M
   // face use the roof material (createProjectedMaterial exposes it).
   material.userData.projection.uSideCos.value = 2;
   return material;
-}
-
-function terrainRange(polygon: Room['polygon'], terrain: HeightField): { min: number; max: number } {
-  const heights = polygon.map((p) => terrain.sample(p.x, p.y));
-  return { min: Math.min(...heights), max: Math.max(...heights) };
 }
 
 interface RoomViewProps {
@@ -44,15 +37,14 @@ interface RoomViewProps {
 function RoomView(props: RoomViewProps) {
   const { room, terrain, terrainVersion, uniforms, peel, occupied } = props;
   const roofRef = useRef<Mesh>(null);
-  const floorGeometry = useDisposable(() => {
-    const top = room.floorFt ?? 0;
-    return slabGeometry(room.polygon, Math.min(top, terrainRange(room.polygon, terrain).min - FLOOR_SINK_FT), top);
-  }, [room.polygon, room.floorFt, terrain, terrainVersion]);
-  const roofGeometry = useDisposable(() => {
-    const base = room.floorFt ?? terrainRange(room.polygon, terrain).max;
-    const bottom = base + room.ceilingFt;
-    return slabGeometry(room.polygon, bottom, bottom + ROOF_THICKNESS_FT);
-  }, [room.polygon, room.floorFt, room.ceilingFt, terrain, terrainVersion]);
+  const floorGeometry = useDisposable(
+    () => roomFloorGeometry(room, terrain),
+    [room.polygon, room.floorFt, terrain, terrainVersion],
+  );
+  const roofGeometry = useDisposable(
+    () => roomRoofGeometry(room, terrain),
+    [room.polygon, room.floorFt, room.ceilingFt, terrain, terrainVersion],
+  );
   const floorMaterial = useDisposable(
     () => createProjectedMaterial(uniforms, { side: props.cliffMaterial, sideFromSlopeDeg: props.cliffSlopeDeg }),
     [uniforms, props.cliffMaterial, props.cliffSlopeDeg],

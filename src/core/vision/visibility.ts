@@ -21,7 +21,7 @@ export type VisionMap = Pick<
   BattleMap,
   'grid' | 'walls' | 'openings' | 'rooms' | 'regions' | 'lights' | 'ambientLight'
 >;
-export type VisionCombatant = Pick<Combatant, 'id' | 'position' | 'size' | 'senses' | 'visionSource'>;
+export type VisionCombatant = Pick<Combatant, 'id' | 'position' | 'size' | 'senses' | 'visionSource' | 'light'>;
 
 export interface VisionState {
   openingStates: Record<string, OpeningState>;
@@ -128,9 +128,12 @@ function groundHeights(map: VisionMap, terrain: HeightField, size: FogSize): Flo
   return ground;
 }
 
-/** Enabled lights at their current place; lights carried by an unplaced or absent combatant are skipped. */
+/**
+ * Enabled lights at their current place plus lights combatants carry; lights carried by an unplaced or absent
+ * combatant are skipped.
+ */
 function resolveLights(map: VisionMap, combatants: VisionCombatant[]): ResolvedLight[] {
-  return map.lights.flatMap((light) => {
+  const fixed = map.lights.flatMap((light) => {
     const carrier = light.attachedTo === null ? null : combatants.find((c) => c.id === light.attachedTo);
     const position = carrier ? carrier.position : light.attachedTo === null ? light.position : null;
     const lift = carrier ? EYE_HEIGHT_FT[carrier.size] : 0;
@@ -138,6 +141,20 @@ function resolveLights(map: VisionMap, combatants: VisionCombatant[]): ResolvedL
       ? [{ x: position.x, y: position.y, h: position.elevationFt + lift, brightFt: light.brightFt, dimFt: light.dimFt }]
       : [];
   });
+  const carried = combatants.flatMap(({ light, position, size }): ResolvedLight[] =>
+    light && position
+      ? [
+          {
+            x: position.x,
+            y: position.y,
+            h: position.elevationFt + EYE_HEIGHT_FT[size],
+            brightFt: light.brightFt,
+            dimFt: light.dimFt,
+          },
+        ]
+      : [],
+  );
+  return [...fixed, ...carried];
 }
 
 /**

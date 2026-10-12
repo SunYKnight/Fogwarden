@@ -1,6 +1,8 @@
 import type { Draft } from 'immer';
 import type { Combatant, Condition, CreatureAction, Encounter, LogEntry } from '@/core/model';
 import type { RollMode } from '@/core/rules/dice';
+import { useAppStore } from '@/state/appStore';
+import { advanceTurn, settleHpChange } from '@/state/combatRules';
 import {
   addLog,
   applyDamage,
@@ -8,7 +10,6 @@ import {
   currentCombatant,
   describeRoll,
   grantTempHp,
-  nextTurn,
   previousTurn,
   removeCombatant,
   rollAttack,
@@ -19,8 +20,8 @@ import {
 } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { confirmDialog } from '../kit';
-import { dexScore } from './creatureLookup';
-import type { HpChange } from './encounterUiStore';
+import { dexScore, findCreature } from './creatureLookup';
+import { queueConcentrationChecks, type HpChange } from './encounterUiStore';
 
 /**
  * Play commands shared by the initiative strip, turn bar, inspector, token context menu and shortcuts.
@@ -54,11 +55,25 @@ function hpLogText(change: HpChange, name: string, amount: number, before: numbe
   return change === 'temp' ? `${name} gains ${amount} temporary HP` : `${name} ${verb}: ${before} → ${after} HP`;
 }
 
+/** Damage also settles death saves and concentration and asks for the concentration save it calls for. */
 export function changeHp(id: string, change: HpChange, amount: number): void {
+  const owed: Record<string, number> = {};
   patchCombatant(id, `${HP_CHANGE_LABEL[change]} ${nameOf(id)}`, (c, encounter) => {
     const before = c.hp.current;
     c.hp = HP_CHANGES[change].apply(c.hp, amount);
     addLog(encounter, HP_CHANGES[change].log, hpLogText(change, c.name, amount, before, c.hp.current));
+    const dc = settleHpChange(encounter, c, before, change === 'damage' ? amount : 0);
+    if (dc !== null) owed[c.id] = dc;
+  });
+  queueConcentrationChecks(owed);
+}
+
+/** Hit points typed in directly; no damage was taken, so no saves follow. */
+export function setCurrentHp(id: string, value: number): void {
+  patchCombatant(id, `HP of ${nameOf(id)}`, (c, encounter) => {
+    const before = c.hp.current;
+    c.hp.current = value;
+    settleHpChange(encounter, c, before, 0);
   });
 }
 
@@ -66,6 +81,8 @@ export function toggleCondition(id: string, condition: Condition): void {
   patchCombatant(id, `Toggle ${condition} on ${nameOf(id)}`, (c, encounter) => {
     const on = c.conditions.includes(condition);
     c.conditions = on ? c.conditions.filter((x) => x !== condition) : [...c.conditions, condition];
+    // A timed effect imposing the condition ends when the DM lifts it by hand.
+    if (on) c.effects = c.effects.filter((e) => e.condition !== condition);
     addLog(encounter, 'note', `${c.name} ${on ? 'is no longer' : 'is'} ${condition}`);
   });
 }
@@ -108,25 +125,38 @@ export function sortInitiative(): void {
   useEncounterStore.getState().update((d) => sortByInitiative(d, dexScore), 'Sort initiative');
 }
 
-/** Turn changes select the combatant whose turn it is, so its stat block and actions show up. */
+/**
+ * Turn changes select the combatant whose turn it is, so its stat block and actions show up. Next turn runs
+ * the turn upkeep (effects, legendary actions, recharges) and announces lair actions.
+ */
 export function stepTurn(direction: 'next' | 'previous'): void {
+  let lair: string[] = [];
   useEncounterStore.getState().update(
     (d) => {
-      if (direction === 'next') nextTurn(d);
-      else previousTurn(d);
-      const current = currentCombatant(d);
-      if (current) addLog(d, 'turn', `Round ${d.round}: ${current.name}`);
+      if (direction === 'next') {
+        lair = advanceTurn(d, (c) => findCreature(c.creature));
+      } else {
+        previousTurn(d);
+        const current = currentCombatant(d);
+        if (current) addLog(d, 'turn', `Round ${d.round}: ${current.name}`);
+      }
     },
     direction === 'next' ? 'Next turn' : 'Previous turn',
   );
+  if (lair.length > 0) useAppStore.getState().notify(`Lair action (initiative 20): ${lair.join(', ')}`, 'info');
   const { encounter, select } = useEncounterStore.getState();
   const current = encounter && currentCombatant(encounter);
   if (current) select(current.id);
 }
 
-/** The campaign page reads this exact log entry to mark the encounter finished. */
-export function endCombat(): void {
+/**
+ * Logs the experience line and loot first; the campaign page reads the closing "Combat ended" entry to mark
+ * the encounter finished.
+ */
+export function endCombat(xp: string | null, loot: readonly string[]): void {
   useEncounterStore.getState().update((d) => {
+    if (xp) addLog(d, 'xp', xp);
+    loot.forEach((line) => addLog(d, 'loot', `Loot: ${line}`));
     d.round = 0;
     d.turnIndex = 0;
     addLog(d, 'turn', 'Combat ended');

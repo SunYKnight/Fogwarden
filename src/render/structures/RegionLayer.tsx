@@ -10,13 +10,14 @@ import { noRaycast, useDisposable, useLayerVisible } from './hooks';
 const REGION_LIFT_FT = 0.2;
 const REGION_OPACITY = 0.3;
 
-/** Region kinds players see; the others only change rules (movement) or lighting. */
+/** Region kinds players see; the others only change rules (movement), lighting or sound. */
 const PLAYER_VISIBLE: Record<RegionKind, boolean> = {
   light: false,
   difficult: false,
   water: false,
   hazard: true,
   note: true,
+  sound: false,
 };
 
 // Players must not learn about regions in cells they have never seen.

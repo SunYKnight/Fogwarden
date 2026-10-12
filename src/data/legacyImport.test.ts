@@ -163,18 +163,20 @@ describe('legacy import', () => {
       message: 'image not found: 240722_DnD_DMTool_Data\\NPCs\\mira.png',
     });
 
-    expect(storage.files.data.get('library/creatures/legacy--goblin.txt')).toMatch(/^Goblin$/m);
-    expect(storage.files.data.get('library/creatures/legacy--goblin.jpg')).toEqual(
+    const pack = 'packs/legacy-dm-tool';
+    expect(storage.files.data.has(`${pack}/pack.json`)).toBe(true);
+    expect(storage.files.data.get(`${pack}/creatures/legacy--goblin.txt`)).toMatch(/^Goblin$/m);
+    expect(storage.files.data.get(`${pack}/creatures/legacy--goblin.jpg`)).toEqual(
       files[`${LEGACY}/Monsters/Goblin.jpg`],
     );
     const creatures = await repository.list('creature');
-    expect(creatures.entries.map((e) => [e.doc.name, e.doc.kind, e.doc.image?.path ?? null])).toEqual([
-      ['Goblin', 'monster', 'library/creatures/legacy--goblin.jpg'],
-      ['Mira', 'npc', null],
+    expect(creatures.entries.map((e) => [e.doc.name, e.pack, e.doc.image?.path ?? null])).toEqual([
+      ['Goblin', 'legacy-dm-tool', `${pack}/creatures/legacy--goblin.jpg`],
+      ['Mira', 'legacy-dm-tool', null],
     ]);
     const map = await repository.load('map', { area: 'data', id: 'legacy--cellar' });
     expect(map.image).toMatchObject({
-      asset: { area: 'data', path: 'library/maps/legacy--cellar/assets/cellar.png' },
+      asset: { area: 'data', path: `${pack}/maps/legacy--cellar/assets/cellar.png` },
       widthPx: 4,
       heightPx: 2,
     });

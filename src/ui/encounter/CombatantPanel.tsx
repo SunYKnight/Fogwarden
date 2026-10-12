@@ -12,10 +12,12 @@ import {
   patchCombatant,
   removeFromMap,
   rollAction,
+  setCurrentHp,
   setHidden,
   toggleCondition,
 } from './combatantCommands';
-import { useCreature } from './creatureLookup';
+import { CarriedLightField, DeathSaves, EffectsSection, ResourcesSection } from './CombatantRules';
+import { useCreature, useDisabledPackOf } from './creatureLookup';
 import { HpBar } from './HpBar';
 import { startPlacing, useEncounterUi, type HpChange } from './encounterUiStore';
 
@@ -106,11 +108,7 @@ function CombatStats({ c }: { c: Combatant }) {
         value={c.armorClass}
         onChange={(v) => patchCombatant(c.id, `AC of ${c.name}`, (d) => void (d.armorClass = v))}
       />
-      <NumberField
-        label="Current HP"
-        value={c.hp.current}
-        onChange={(v) => patchCombatant(c.id, `HP of ${c.name}`, (d) => void (d.hp.current = Math.round(v)))}
-      />
+      <NumberField label="Current HP" value={c.hp.current} onChange={(v) => setCurrentHp(c.id, Math.round(v))} />
       <NumberField
         label="Max HP"
         min={0}
@@ -158,6 +156,7 @@ function CombatantDetails({ c, hasMap }: { c: Combatant; hasMap: boolean }) {
   const reportError = useAppStore((s) => s.reportError);
   const rollMode = useEncounterUi((s) => s.rollMode);
   const creature = useCreature(c.creature);
+  const disabledPack = useDisabledPackOf(c.creature);
 
   const attack = (action: CreatureAction) => {
     try {
@@ -174,10 +173,24 @@ function CombatantDetails({ c, hasMap }: { c: Combatant; hasMap: boolean }) {
         value={c.name}
         onChange={(v) => patchCombatant(c.id, `Rename ${c.name}`, (d) => void (d.name = v))}
       />
+      {c.side === 'player' && (
+        <OptionalNumberField
+          label="Level"
+          value={c.level ?? undefined}
+          onChange={(v) =>
+            patchCombatant(c.id, `Level of ${c.name}`, (d) => {
+              d.level = v === undefined ? null : Math.min(20, Math.max(1, Math.round(v)));
+            })
+          }
+        />
+      )}
       <HitPointControls c={c} />
+      {c.side === 'player' && c.hp.current <= 0 && <DeathSaves c={c} />}
       <Section title="Conditions">
         <ConditionChips c={c} />
       </Section>
+      <EffectsSection c={c} />
+      {creature && <ResourcesSection c={c} creature={creature} />}
       <Section title="Players and map">
         <CheckboxField label="Hidden" value={c.hiddenFromPlayers} onChange={(v) => setHidden(c.id, v)} />
         <CheckboxField
@@ -185,6 +198,7 @@ function CombatantDetails({ c, hasMap }: { c: Combatant; hasMap: boolean }) {
           value={c.visionSource}
           onChange={(v) => patchCombatant(c.id, `Vision of ${c.name}`, (d) => void (d.visionSource = v))}
         />
+        <CarriedLightField c={c} />
         {hasMap && <MapPlacement c={c} />}
       </Section>
       <Section title="Notes" collapsible defaultOpen={c.notes !== ''}>
@@ -202,6 +216,12 @@ function CombatantDetails({ c, hasMap }: { c: Combatant; hasMap: boolean }) {
         <Section title="Stat block" collapsible>
           <StatBlock creature={creature} onAttack={attack} />
         </Section>
+      )}
+      {disabledPack && (
+        <p className="hint-bar" role="note">
+          No stat block: this creature is in the disabled pack &quot;{disabledPack}&quot;. Enable it under Compendium
+          &gt; Packs.
+        </p>
       )}
       <Button
         icon="trash"

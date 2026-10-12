@@ -83,3 +83,14 @@ export function readFileText(absolutePath: string): Promise<string> {
 export async function readFileBytes(absolutePath: string): Promise<Uint8Array<ArrayBuffer>> {
   return new Uint8Array(await invoke<ArrayBuffer>('storage_read_file_bytes', { path: absolutePath }));
 }
+
+/**
+ * Writes `bytes` to `absolutePath`, a file the user picked in a save dialog (desktop only). Refused
+ * inside the data and content roots and system folders and for other types than .glb, .dd2vtt,
+ * .png and .zip.
+ */
+export function writeFileBytes(absolutePath: string, bytes: Uint8Array): Promise<void> {
+  return invoke<void>('storage_write_file_bytes', bytes, {
+    headers: { [PATH_HEADER]: encodeURIComponent(absolutePath) },
+  });
+}

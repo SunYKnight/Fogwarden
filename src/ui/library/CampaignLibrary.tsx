@@ -1,66 +1,40 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { createCampaign, nowIso, type Campaign, type Encounter } from '@/core/model';
 import type { LoadProblem } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
+import { CalendarTab } from '../campaign/CalendarTab';
+import { NameDialog, Problems, type CampaignTabProps } from '../campaign/campaignUi';
+import { CastTab } from '../campaign/CastTab';
+import { JournalTab } from '../campaign/JournalTab';
+import { QuestsTab } from '../campaign/QuestsTab';
 import { AssetImage } from '../components/AssetImage';
-import { Field } from '../components/fields';
-import { Button, confirmDialog, Dialog, EmptyState, PageHeader, Section } from '../kit';
+import { Button, confirmDialog, EmptyState, PageHeader, Section, Tabs, type TabSpec } from '../kit';
 import { openNewEncounter } from './compendiumUi';
 import { encounterStatus, statusLabel } from './encounterStatus';
 
 const CAMPAIGNS = { page: 'campaigns', campaignId: null } as const;
 const NOTES_SAVE_MS = 800;
 
+type CampaignTab = 'encounters' | 'journal' | 'cast' | 'quests' | 'calendar';
+
+const CAMPAIGN_TABS: TabSpec<CampaignTab>[] = [
+  { id: 'encounters', label: 'Encounters', icon: 'swords' },
+  { id: 'journal', label: 'Journal', icon: 'journal' },
+  { id: 'cast', label: 'People & places', icon: 'users' },
+  { id: 'quests', label: 'Quests', icon: 'flag' },
+  { id: 'calendar', label: 'Calendar', icon: 'calendar' },
+];
+
+const TAB_BODIES: Record<Exclude<CampaignTab, 'encounters'>, ComponentType<CampaignTabProps>> = {
+  journal: JournalTab,
+  cast: CastTab,
+  quests: QuestsTab,
+  calendar: CalendarTab,
+};
+
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-function Problems({ problems }: { problems: LoadProblem[] }) {
-  return problems.map((p) => (
-    <div key={p.path} className="error-text">
-      {p.path}: {p.message}
-    </div>
-  ));
-}
-
-function NameDialog(props: {
-  title: string;
-  initial: string;
-  confirmLabel: string;
-  onSubmit: (name: string) => Promise<void>;
-  onClose: () => void;
-}) {
-  const { title, initial, confirmLabel, onSubmit, onClose } = props;
-  const reportError = useAppStore((s) => s.reportError);
-  const [name, setName] = useState(initial);
-  const id = useId();
-  const valid = name.trim() !== '';
-  const submit = () => onSubmit(name.trim()).then(onClose, reportError);
-  return (
-    <Dialog
-      title={title}
-      onClose={onClose}
-      width={420}
-      footer={
-        <>
-          <Button label="Cancel" onClick={onClose} />
-          <Button label={confirmLabel} variant="primary" disabled={!valid} onClick={submit} />
-        </>
-      }
-    >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (valid) submit();
-        }}
-      >
-        <Field label="Name" htmlFor={id}>
-          <input id={id} value={name} onChange={(e) => setName(e.target.value)} />
-        </Field>
-      </form>
-    </Dialog>
-  );
 }
 
 interface CampaignSummary {
@@ -240,7 +214,12 @@ function CampaignNotes({ campaign, onSaved }: { campaign: Campaign; onSaved: (c:
   );
 }
 
-/** One campaign: notes and its encounters with status and Play. */
+/** One campaign: encounters with status and Play, notes, journal, people and places, quests, calendar. */
+function TabBody({ tab, ...props }: CampaignTabProps & { tab: Exclude<CampaignTab, 'encounters'> }) {
+  const Body = TAB_BODIES[tab];
+  return <Body {...props} />;
+}
+
 export function CampaignDetail({ campaignId }: { campaignId: string }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
@@ -248,6 +227,7 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
   const [campaign, setCampaign] = useState<Campaign | null | undefined>(undefined);
   const [listing, setListing] = useState<{ encounters: Encounter[]; problems: LoadProblem[] } | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const [tab, setTab] = useState<CampaignTab>('encounters');
 
   useEffect(() => {
     repository
@@ -302,21 +282,16 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
           disabled={!campaign}
           onClick={() => campaign && remove(campaign).catch(reportError)}
         />
-        <Button icon="plus" label="New encounter" variant="primary" onClick={() => openNewEncounter(campaignId)} />
       </PageHeader>
+      <div className="campaign-tabbar">
+        <Tabs tabs={CAMPAIGN_TABS} value={tab} onChange={setTab} label="Campaign" />
+      </div>
       <div className="page-body campaign-page">
-        <Section title={`Encounters (${encounters.length})`}>
-          <Problems problems={listing?.problems ?? []} />
-          <div className="col">
-            {encounters.map((e) => (
-              <EncounterRow key={e.id} encounter={e} onChanged={loadEncounters} />
-            ))}
-          </div>
-          {listing?.encounters.length === 0 && (
-            <EmptyState
-              icon="swords"
-              title="No encounters in this campaign yet."
-              action={
+        {tab === 'encounters' ? (
+          <>
+            <Section
+              title={`Encounters (${encounters.length})`}
+              actions={
                 <Button
                   icon="plus"
                   label="New encounter"
@@ -325,11 +300,34 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
                 />
               }
             >
-              Pick a name and a map, then play it right away.
-            </EmptyState>
-          )}
-        </Section>
-        {campaign && <CampaignNotes key={campaign.id} campaign={campaign} onSaved={setCampaign} />}
+              <Problems problems={listing?.problems ?? []} />
+              <div className="col">
+                {encounters.map((e) => (
+                  <EncounterRow key={e.id} encounter={e} onChanged={loadEncounters} />
+                ))}
+              </div>
+              {listing?.encounters.length === 0 && (
+                <EmptyState
+                  icon="swords"
+                  title="No encounters in this campaign yet."
+                  action={
+                    <Button
+                      icon="plus"
+                      label="New encounter"
+                      variant="primary"
+                      onClick={() => openNewEncounter(campaignId)}
+                    />
+                  }
+                >
+                  Pick a name and a map, then play it right away.
+                </EmptyState>
+              )}
+            </Section>
+            {campaign && <CampaignNotes key={campaign.id} campaign={campaign} onSaved={setCampaign} />}
+          </>
+        ) : (
+          <TabBody tab={tab} campaignId={campaignId} encounters={encounters} />
+        )}
       </div>
       {renaming && campaign && (
         <NameDialog

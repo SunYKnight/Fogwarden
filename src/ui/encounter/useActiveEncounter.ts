@@ -1,17 +1,8 @@
 import { useEffect } from 'react';
-import type { BattleMap, DocRef } from '@/core/model';
-import { libraryDocPath, type Repository } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { flushEncounter } from '@/state/autosave';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLibraryStore } from '@/state/libraryStore';
-
-/** A shipped map edited after the encounter was created lives on as a user copy with the same id. */
-async function loadEncounterMap(repository: Repository, ref: DocRef): Promise<BattleMap> {
-  const edited =
-    ref.area === 'content' && (await repository.storage.exists('data', libraryDocPath('map', 'data', ref.id)));
-  return repository.load('map', edited ? { area: 'data', id: ref.id } : ref);
-}
 
 // A late load must not replace a newer encounter, and a switch waits for the
 // previous encounter's last save before the store moves on.
@@ -38,9 +29,10 @@ export function useActiveEncounter(): void {
         // Stat blocks, spawning and marker templates read the library listings.
         useLibraryStore.getState().refreshAll().catch(reportError);
         const encounter = await repository.loadEncounter(campaignId, encounterId);
-        // A missing map is reported; the encounter still runs as a tracker.
+        // A missing map (deleted, or in a disabled pack: the error says which)
+        // is reported; the encounter still runs as a tracker.
         const map = encounter.map
-          ? await loadEncounterMap(repository, encounter.map).catch((error: unknown) => {
+          ? await repository.load('map', encounter.map).catch((error: unknown) => {
               reportError(error);
               return null;
             })

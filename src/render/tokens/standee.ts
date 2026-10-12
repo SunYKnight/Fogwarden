@@ -30,6 +30,16 @@ export function coverWindow(imageAspect: number, frameAspect: number): UvWindow 
   return { repeatX, repeatY, offsetX: (1 - repeatX) / 2, offsetY: (1 - repeatY) * TOP_BIAS };
 }
 
+/** Number that tells equal creatures apart ("Goblin 3" → "3"); empty when the name has none. */
+export function tokenNumber(name: string): string {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .findLast((w) => /^\d+$/.test(w)) ?? ''
+  );
+}
+
 /** Short text for a card without picture: initials of up to two words plus the number ("Goblin 3" → "G3"). */
 export function tokenInitials(name: string): string {
   const words = name
@@ -37,7 +47,6 @@ export function tokenInitials(name: string): string {
     .split(/\s+/)
     .filter((w) => w !== '');
   const letters = words.filter((w) => !/^\d+$/.test(w)).flatMap((w) => w.match(/[\p{L}\p{N}]/u) ?? []);
-  const number = words.findLast((w) => /^\d+$/.test(w)) ?? '';
-  const text = letters.slice(0, 2).join('').toUpperCase() + number;
+  const text = letters.slice(0, 2).join('').toUpperCase() + tokenNumber(name);
   return text === '' ? '?' : text;
 }

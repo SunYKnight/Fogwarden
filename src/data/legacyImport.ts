@@ -12,6 +12,7 @@ import {
   type LegacyMap,
 } from '@/core/import/legacy';
 import type { Creature, CreatureKind, MarkerTemplate } from '@/core/model';
+import type { PackManifest } from './packs';
 import type { Repository } from './repository';
 import type { DirEntry } from './storage';
 
@@ -60,6 +61,17 @@ export class LegacyFolderError extends Error {
 }
 
 export const LEGACY_FOLDER_NAME = '240722_DnD_DMTool_Data';
+/** Pack every legacy import goes into; legacy ids start with `legacy--`. */
+export const LEGACY_PACK: PackManifest = {
+  id: 'legacy-dm-tool',
+  name: 'Legacy DM Tool',
+  version: '',
+  author: '',
+  license: '',
+  description: 'Creatures, maps and area templates imported from the old WPF DM tool.',
+  url: '',
+};
+
 const CREATURE_FOLDERS: [string, CreatureKind][] = [
   ['BeeingType', 'monster'],
   ['NPCs', 'npc'],
@@ -244,8 +256,9 @@ export async function planLegacyImport(source: LegacySource, folder: string): Pr
 }
 
 /**
- * Writes a plan into the repository in the current data layout. Ids derive from the legacy names, so running
- * it again overwrites the earlier import. A file that fails is reported and the others are still imported.
+ * Writes a plan into the pack `LEGACY_PACK` in the current data layout. Ids derive from the legacy names, so
+ * running it again overwrites the earlier import. A file that fails is reported and the others are still
+ * imported.
  */
 export async function runLegacyImport(
   plan: LegacyPlan,
@@ -259,6 +272,8 @@ export async function runLegacyImport(
     warnings: [...plan.warnings],
   };
   const total = plan.creatures.length + plan.maps.length + plan.markers.length;
+  const pack = LEGACY_PACK.id;
+  await repository.ensurePack(LEGACY_PACK);
   let done = 0;
   const step = async (file: string, write: () => Promise<void>): Promise<void> => {
     try {
@@ -275,8 +290,14 @@ export async function runLegacyImport(
       const picture =
         image === null
           ? null
-          : await repository.importCreaturePicture(doc.id, 'image', fileNameOf(image), await source.readBytes(image));
-      await repository.save('creature', { ...doc, image: picture });
+          : await repository.importCreaturePicture(
+              doc.id,
+              'image',
+              fileNameOf(image),
+              await source.readBytes(image),
+              pack,
+            );
+      await repository.save('creature', { ...doc, image: picture }, pack);
       report.imported.creatures += 1;
     });
   }
@@ -286,17 +307,17 @@ export async function runLegacyImport(
       // Size first: an unsupported picture must not leave a file behind.
       const mapImage = picture && {
         ...imageSize(picture.bytes),
-        asset: await repository.importMapAsset(legacyId(legacy.Name), picture.name, picture.bytes),
+        asset: await repository.importMapAsset(legacyId(legacy.Name), picture.name, picture.bytes, pack),
       };
       const { doc, warnings } = convertLegacyMap(legacy, mapImage);
-      await repository.save('map', doc);
+      await repository.save('map', doc, pack);
       report.warnings.push(...warnings.map((w) => ({ file, message: w })));
       report.imported.maps += 1;
     });
   }
   for (const { file, doc } of plan.markers) {
     await step(file, async () => {
-      await repository.save('marker', doc);
+      await repository.save('marker', doc, pack);
       report.imported.areaTemplates += 1;
     });
   }

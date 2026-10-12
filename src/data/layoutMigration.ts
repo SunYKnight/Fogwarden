@@ -7,10 +7,8 @@ import {
   creatureSchema,
   CREATURE_SCHEMA_VERSION,
   encounterSchema,
-  ENCOUNTER_SCHEMA_VERSION,
   mapFileSchema,
   mapSchema,
-  MAP_SCHEMA_VERSION,
   type AssetRef,
   type BattleMap,
   type Campaign,
@@ -163,12 +161,12 @@ class LayoutMigration {
     const dir = `library/maps/${id}`;
     const { raw, version } = await this.version(`${dir}/map.json`);
     if (version === 1) {
-      await this.convertMap(dir, mapSchema.parse(migrate('map', raw, 1)));
+      // The new layout is v2; later steps are pure and run on top of it.
+      await this.convertMap(dir, mapSchema.parse(migrate('map', { ...migrate('map', raw, 1), version: 2 })));
     }
   }
 
-  private async convertMap(dir: string, old: BattleMap): Promise<void> {
-    const expected: BattleMap = { ...old, version: MAP_SCHEMA_VERSION };
+  private async convertMap(dir: string, expected: BattleMap): Promise<void> {
     const { json, terrain } = await this.repository.mapFiles(expected);
     const terrainPath = `${dir}/terrain.png`;
     await this.storage.writeBytes(terrainPath, terrain);
@@ -215,12 +213,14 @@ class LayoutMigration {
 
   async encounter(campaignId: string, id: string): Promise<void> {
     const oldPath = `campaigns/${campaignId}/encounters/${id}.json`;
-    const old = encounterSchema.parse(migrate('encounter', await this.readJson(oldPath), 2));
-    const combatants = old.combatants.map((c) => ({
+    const old = migrate('encounter', await this.readJson(oldPath), 2);
+    // The folder layout is v3; later steps are pure and run on top of it.
+    const upgraded = encounterSchema.parse(migrate('encounter', { ...old, version: 3 }));
+    const combatants = upgraded.combatants.map((c) => ({
       ...c,
       token: c.token && (this.moved.get(c.token.path) ?? c.token),
     }));
-    const expected = { ...old, version: ENCOUNTER_SCHEMA_VERSION, combatants };
+    const expected = { ...upgraded, combatants };
     const dir = encounterDir(campaignId, id);
     try {
       await this.repository.storeEncounter(expected);

@@ -1,4 +1,5 @@
 import {
+  freshCombatState,
   newId,
   nowIso,
   type AttackRoll,
@@ -83,6 +84,7 @@ export function spawnCombatant(creature: Creature, ref: DocRef, options: SpawnOp
     hiddenFromPlayers: false,
     token: creature.token ?? creature.image,
     notes: '',
+    ...freshCombatState(null),
   };
 }
 
@@ -92,6 +94,8 @@ export interface PcOptions {
   maxHp: number;
   senses: Senses;
   visionSource: boolean;
+  /** Character level; unknown when absent. */
+  level?: number;
 }
 
 /** Player character entered at the table without a library creature. */
@@ -113,6 +117,7 @@ export function createPc(options: PcOptions): Combatant {
     hiddenFromPlayers: false,
     token: null,
     notes: '',
+    ...freshCombatState(options.level ?? null),
   };
 }
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const SETTINGS_SCHEMA_VERSION = 6;
+export const SETTINGS_SCHEMA_VERSION = 8;
 
 /** View of all player characters together; any other view is one player character's combatant id. */
 export const PARTY_VIEW = 'party';
@@ -74,6 +74,30 @@ export function defaultPlayerLinks(): PlayerLinks {
   return { secret: '', rotations: {} };
 }
 
+export const packSettingsSchema = z.object({
+  /** Pack ids from highest to lowest precedence; installed packs missing here follow, user packs first. */
+  order: z.array(z.string()),
+  /** Pack ids whose documents are hidden; every other installed pack is enabled. */
+  disabled: z.array(z.string()),
+});
+export type PackSettings = z.infer<typeof packSettingsSchema>;
+
+export function defaultPackSettings(): PackSettings {
+  return { order: [], disabled: [] };
+}
+
+export const audioSettingsSchema = z.object({
+  /** Master volume 0..1 of music, effects and ambience for everyone; players scale it with their own. */
+  volume: z.number().min(0).max(1),
+  /** Volume 0..1 in the DM window only; 0 when the player window on this computer plays the sound. */
+  dmVolume: z.number().min(0).max(1),
+});
+export type AudioSettings = z.infer<typeof audioSettingsSchema>;
+
+export function defaultAudioSettings(): AudioSettings {
+  return { volume: 0.8, dmVolume: 1 };
+}
+
 export const settingsSchema = z.object({
   schema: z.literal('settings'),
   version: z.number().int().positive(),
@@ -96,6 +120,10 @@ export const settingsSchema = z.object({
   remote: remoteSettingsSchema,
   /** Player links per view for the LAN server and the relay. */
   playerLinks: playerLinksSchema,
+  /** Order and enabled state of the content packs (Compendium > Packs). */
+  packs: packSettingsSchema,
+  /** Sound volumes (Settings > Audio, Play > Sound). */
+  audio: audioSettingsSchema,
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -111,5 +139,7 @@ export function defaultSettings(): Settings {
     tokenStandees: true,
     remote: defaultRemoteSettings(),
     playerLinks: defaultPlayerLinks(),
+    packs: defaultPackSettings(),
+    audio: defaultAudioSettings(),
   };
 }

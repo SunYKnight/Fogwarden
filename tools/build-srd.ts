@@ -10,15 +10,17 @@ import {
   MARKER_SCHEMA_VERSION,
   creatureSchema,
   markerTemplateSchema,
+  type AreaSave,
   type AreaShape,
   type Creature,
   type MarkerTemplate,
 } from '../src/core/model';
 import { abilityModifier, formatCr, formatModifier } from '../src/core/rules/abilities';
+import { formatPackManifest, PACKS_DIR } from '../src/data/packs';
 import { CONTENT_ROOT } from './cli';
 
 /**
- * Builds the shipped SRD 5.1 content (`content/creatures/*.txt`, `content/markers/*.json`).
+ * Builds the shipped pack "SRD 5.1" (`content/packs/srd`: `pack.json`, `creatures/*.txt`, `markers/*.json`).
  * Source: 5e-bits/5e-database (MIT), whose monster data is SRD 5.1 text (CC-BY-4.0). Each monster is rendered
  * as stat block text and read back with the app's stat block parser, so shipped and imported creatures share
  * one conversion; structured dataset values cross-check the result.
@@ -236,14 +238,63 @@ function writeFiles(dir: string, files: [string, string][]): void {
   }
 }
 
-const MARKERS: { name: string; shape: AreaShape; sizeFt: number; widthFt: number; heightFt: number; color: string }[] =
-  [
-    { name: 'Fireball', shape: 'sphere', sizeFt: 20, widthFt: 5, heightFt: 40, color: '#ff5a1f' },
-    { name: 'Burning Hands', shape: 'cone', sizeFt: 15, widthFt: 5, heightFt: 15, color: '#ff9b2f' },
-    { name: 'Lightning Bolt', shape: 'line', sizeFt: 100, widthFt: 5, heightFt: 5, color: '#7fc8ff' },
-    { name: 'Thunderwave', shape: 'cube', sizeFt: 15, widthFt: 5, heightFt: 15, color: '#8a7dff' },
-    { name: 'Moonbeam', shape: 'cylinder', sizeFt: 5, widthFt: 5, heightFt: 40, color: '#e6ecff' },
-  ];
+// Spell save DC 13 is a typical caster's (8 + proficiency 2 + ability 3);
+// the DM sets the real one in Play.
+const MARKERS: {
+  name: string;
+  shape: AreaShape;
+  sizeFt: number;
+  widthFt: number;
+  heightFt: number;
+  color: string;
+  save: AreaSave;
+}[] = [
+  {
+    name: 'Fireball',
+    shape: 'sphere',
+    sizeFt: 20,
+    widthFt: 5,
+    heightFt: 40,
+    color: '#ff5a1f',
+    save: { ability: 'dex', dc: 13, damage: '8d6', damageType: 'fire', halfOnSuccess: true },
+  },
+  {
+    name: 'Burning Hands',
+    shape: 'cone',
+    sizeFt: 15,
+    widthFt: 5,
+    heightFt: 15,
+    color: '#ff9b2f',
+    save: { ability: 'dex', dc: 13, damage: '3d6', damageType: 'fire', halfOnSuccess: true },
+  },
+  {
+    name: 'Lightning Bolt',
+    shape: 'line',
+    sizeFt: 100,
+    widthFt: 5,
+    heightFt: 5,
+    color: '#7fc8ff',
+    save: { ability: 'dex', dc: 13, damage: '8d6', damageType: 'lightning', halfOnSuccess: true },
+  },
+  {
+    name: 'Thunderwave',
+    shape: 'cube',
+    sizeFt: 15,
+    widthFt: 5,
+    heightFt: 15,
+    color: '#8a7dff',
+    save: { ability: 'con', dc: 13, damage: '2d8', damageType: 'thunder', halfOnSuccess: true },
+  },
+  {
+    name: 'Moonbeam',
+    shape: 'cylinder',
+    sizeFt: 5,
+    widthFt: 5,
+    heightFt: 40,
+    color: '#e6ecff',
+    save: { ability: 'con', dc: 13, damage: '2d10', damageType: 'radiant', halfOnSuccess: true },
+  },
+];
 
 const { values } = parseArgs({ options: { input: { type: 'string' } } });
 const raw = values.input ? readFileSync(values.input, 'utf8') : await (await fetch(DATASET_URL)).text();
@@ -270,12 +321,25 @@ const markers: MarkerTemplate[] = MARKERS.map((m) =>
     notes: `${m.name} (${SOURCE}, ${LICENSE})`,
   }),
 );
+const packDir = join(CONTENT_ROOT, PACKS_DIR, 'srd');
 writeFiles(
-  join(CONTENT_ROOT, 'creatures'),
+  join(packDir, 'creatures'),
   creatures.map((c) => [`${c.id}.txt`, formatCreatureFile(c)]),
 );
 writeFiles(
-  join(CONTENT_ROOT, 'markers'),
+  join(packDir, 'markers'),
   markers.map((m) => [`${m.id}.json`, `${JSON.stringify(m, null, 2)}\n`]),
 );
-console.log(`Wrote ${creatures.length} creatures and ${markers.length} marker templates to ${CONTENT_ROOT}`);
+writeFileSync(
+  join(packDir, 'pack.json'),
+  formatPackManifest({
+    id: 'srd',
+    name: SOURCE,
+    version: '5.1',
+    author: 'Wizards of the Coast',
+    license: LICENSE,
+    description: 'Creatures and area templates of the System Reference Document 5.1.',
+    url: 'https://dnd.wizards.com/resources/systems-reference-document',
+  }),
+);
+console.log(`Wrote ${creatures.length} creatures and ${markers.length} marker templates to ${packDir}`);

@@ -3,10 +3,18 @@ import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   SYNC_PROTOCOL_VERSION,
   type DmTransport,
+  type PlayerRequest,
   type SyncMessage,
   type SyncPayload,
   type SyncTransport,
 } from './protocol';
+
+const REQUESTS: Record<PlayerRequest['type'], true> = { roll: true, point: true, move: true };
+
+/** True for the payloads players send besides `hello`. */
+export function isPlayerRequest(payload: SyncPayload): payload is PlayerRequest {
+  return REQUESTS[payload.type as PlayerRequest['type']] === true;
+}
 
 const CHANNEL = 'dm-tool-sync';
 
@@ -118,6 +126,15 @@ export class LocalViewTransport implements DmTransport {
       this.resendHandlers.delete(handler);
       unsubscribe();
     };
+  }
+
+  // The window is the app's own, so its requests count for the view it shows.
+  onPlayerRequest(handler: (view: string, request: PlayerRequest) => void): () => void {
+    return this.transport.subscribe((payload) => {
+      if (this.view !== null && isPlayerRequest(payload)) {
+        handler(this.view, payload);
+      }
+    });
   }
 
   watchViews(handler: (views: ReadonlySet<string>) => void): () => void {

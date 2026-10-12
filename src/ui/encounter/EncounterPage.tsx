@@ -7,10 +7,14 @@ import { useEncounterStore } from '@/state/encounterStore';
 import { Button, PageHeader, useShortcuts } from '../kit';
 import { AddCombatantsDialog } from './AddCombatants';
 import { removeFromMap, stepTurn } from './combatantCommands';
+import { ConcentrationDialog } from './ConcentrationDialog';
+import { DifficultyBadge } from './EncounterDifficulty';
 import { cancelInteraction, chooseTool, useEncounterUi } from './encounterUiStore';
+import { EndCombatDialog } from './EndCombatDialog';
 import { HpPromptDialog } from './HpPromptDialog';
 import { InitiativeStrip } from './InitiativeStrip';
 import { Inspector } from './Inspector';
+import { PlayerMovesToggle } from './PlayerMovesToggle';
 import { PlayViewport } from './PlayViewport';
 import { TurnBar } from './TurnBar';
 
@@ -42,7 +46,9 @@ function removeSelectedFromMap(): void {
 }
 
 function usePlayShortcuts(): void {
-  const dialogOpen = useEncounterUi((s) => s.addDialogOpen || s.hpPrompt !== null);
+  const dialogOpen = useEncounterUi(
+    (s) => s.addDialogOpen || s.hpPrompt !== null || s.endCombatOpen || s.concentrationChecks.length > 0,
+  );
   useShortcuts(
     'Play',
     [
@@ -81,6 +87,8 @@ function PlayHeader({ encounter, campaignName }: { encounter: Encounter; campaig
       ]}
       status={`${turn} · ${dirty ? 'Saving…' : 'Saved'}`}
     >
+      <DifficultyBadge combatants={encounter.combatants} />
+      <PlayerMovesToggle allowed={encounter.playersMoveTokens} />
       <Button
         icon="undo"
         label="Undo"
@@ -106,6 +114,7 @@ function PlayLayout({ campaignName }: { campaignName: string }) {
   const map = useEncounterStore((s) => s.map);
   const terrain = useEncounterStore((s) => s.terrain);
   const addDialogOpen = useEncounterUi((s) => s.addDialogOpen);
+  const endCombatOpen = useEncounterUi((s) => s.endCombatOpen);
   usePlayShortcuts();
   return (
     encounter && (
@@ -123,6 +132,8 @@ function PlayLayout({ campaignName }: { campaignName: string }) {
         </div>
         {addDialogOpen && <AddCombatantsDialog />}
         <HpPromptDialog />
+        {endCombatOpen && <EndCombatDialog encounter={encounter} />}
+        <ConcentrationDialog />
       </div>
     )
   );
@@ -149,7 +160,7 @@ export function EncounterPage({ campaignId, encounterId }: { campaignId: string;
   useEffect(
     () => () => {
       cancelInteraction();
-      useEncounterUi.setState({ addDialogOpen: false, hpPrompt: null });
+      useEncounterUi.setState({ addDialogOpen: false, hpPrompt: null, endCombatOpen: false });
     },
     [],
   );

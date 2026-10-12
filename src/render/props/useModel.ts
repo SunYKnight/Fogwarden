@@ -8,7 +8,8 @@ import { useAppStore } from '@/state/appStore';
 // One parse per file; every prop gets its own clone of the scene.
 const loads = new Map<string, Promise<GLTF>>();
 
-function loadGltf(url: string): Promise<GLTF> {
+/** The parsed glTF/GLB at `url`; clone its scene before adding it anywhere. */
+export function loadGltf(url: string): Promise<GLTF> {
   const cached = loads.get(url);
   const load = cached ?? new GLTFLoader().loadAsync(url);
   if (!cached) {

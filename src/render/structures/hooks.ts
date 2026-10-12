@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type DependencyList } from 'react';
-import type { MapPoint } from '@/core/model';
+import type { MapLight, MapPoint } from '@/core/model';
 import { useEditorStore, type LayerId } from '@/state/editorStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { usePlayerStore } from '@/ui/player/playerStore';
@@ -34,6 +34,21 @@ export function useCombatantPositions(): Record<string, MapPoint> {
     () =>
       Object.fromEntries(
         (combatants ?? []).flatMap((c) => (c.position ? [[c.id, c.position] as [string, MapPoint]] : [])),
+      ),
+    [combatants],
+  );
+}
+
+/** Lights placed combatants carry, as map lights attached to them; none in the editor. */
+export function useCarriedLights(): MapLight[] {
+  const { mode } = useMapRender();
+  const dm = useEncounterStore((s) => s.encounter?.combatants);
+  const player = usePlayerStore((s) => s.encounter?.combatants);
+  const combatants = mode === 'dm' ? dm : mode === 'player' ? player : undefined;
+  return useMemo(
+    () =>
+      (combatants ?? []).flatMap(({ id, light, position }) =>
+        light && position ? [{ ...light, id: `carried-${id}`, position, enabled: true, attachedTo: id }] : [],
       ),
     [combatants],
   );

@@ -1,11 +1,14 @@
 import type { BitSet } from '@/core/binary';
-import type { BattleMap, Encounter, Fog } from '@/core/model';
+import { sceneLightLevel } from '@/core/atmosphere/timeOfDay';
+import type { BattleMap, Encounter, Fog, LightLevel } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { exploreBySource, fogSize, readEncounterFog, readFogBits, viewFog, type FogSources } from '@/core/vision/fog';
 import type { VisionState } from '@/core/vision/visibility';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
 import { useAppStore } from '@/state/appStore';
+import { useCalendarStore } from '@/state/calendarStore';
 import { useEncounterStore } from '@/state/encounterStore';
+import { currentDmScene } from '@/state/scene';
 import type { VisibilityRequest, VisibilityResponse } from '@/workers/visibilityProtocol';
 
 // Explored cells change with every token step; the document needn't.
@@ -14,12 +17,13 @@ const PERSIST_INTERVAL_MS = 1000;
 function visionState(encounter: Encounter): VisionState {
   return {
     openingStates: encounter.openingStates,
-    combatants: encounter.combatants.map(({ id, position, size, senses, visionSource }) => ({
+    combatants: encounter.combatants.map(({ id, position, size, senses, visionSource, light }) => ({
       id,
       position,
       size,
       senses,
       visionSource,
+      light,
     })),
     cellsPerSquare: encounter.fog.cellsPerSquare,
   };
@@ -35,7 +39,7 @@ function visionState(encounter: Encounter): VisionState {
 export function startFogTracker(): () => void {
   const worker = new Worker(new URL('../workers/visibility.worker.ts', import.meta.url), { type: 'module' });
   const reportError = (error: unknown) => useAppStore.getState().reportError(error);
-  let scene: { map: BattleMap; terrain: HeightField } | null = null;
+  let scene: { map: BattleMap; terrain: HeightField; ambientLight: LightLevel } | null = null;
   let requested = '';
   let nextId = 1;
   let inFlight: { id: number; key: string } | null = null;
@@ -110,10 +114,12 @@ export function startFogTracker(): () => void {
   const update = () => {
     const { encounter, map, terrain } = useEncounterStore.getState();
     if (encounter && map && terrain) {
-      if (scene?.map !== map || scene.terrain !== terrain) {
-        scene = { map, terrain };
+      // The scene's time of day darkens open maps for every vision source.
+      const ambientLight = sceneLightLevel(currentDmScene()?.minute ?? null, map.ambientLight);
+      if (scene?.map !== map || scene.terrain !== terrain || scene.ambientLight !== ambientLight) {
+        scene = { map, terrain, ambientLight };
         requested = '';
-        const { grid, walls, openings, rooms, regions, lights, ambientLight } = map;
+        const { grid, walls, openings, rooms, regions, lights } = map;
         post({
           type: 'scene',
           map: { grid, walls, openings, rooms, regions, lights, ambientLight },
@@ -153,11 +159,13 @@ export function startFogTracker(): () => void {
   };
   worker.onerror = (event) => reportError(new Error(`Visibility worker: ${event.message}`));
 
-  const unsubscribe = useEncounterStore.subscribe(update);
+  const unsubscribers = [useEncounterStore.subscribe(update), useCalendarStore.subscribe(update)];
   update();
 
   return () => {
-    unsubscribe();
+    for (const unsubscribe of unsubscribers) {
+      unsubscribe();
+    }
     if (persistTimer !== undefined) {
       clearTimeout(persistTimer);
       persist();

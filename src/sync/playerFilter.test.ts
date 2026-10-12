@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { BitSet } from '@/core/binary';
-import { createEncounter, createMap, type BattleMap, type Combatant, type Encounter } from '@/core/model';
+import {
+  createEncounter,
+  createMap,
+  freshCombatState,
+  type BattleMap,
+  type Combatant,
+  type Encounter,
+} from '@/core/model';
 import { HeightField } from '@/core/terrain/heightfield';
 import {
   exploreBySource,
@@ -32,6 +39,7 @@ function combatant(id: string, extra: Partial<Combatant> = {}): Combatant {
     hiddenFromPlayers: false,
     token: null,
     notes: 'DM secret',
+    ...freshCombatState(null),
     ...extra,
   };
 }
@@ -57,6 +65,7 @@ function secretMap(): BattleMap {
     ],
     kind: 'note' as const,
     light: null,
+    sound: null,
     color: '#ff0000',
   };
   return {
@@ -184,6 +193,20 @@ describe('filterEncounterForPlayers', () => {
     expect(goblin).toMatchObject({ id: 'goblin', health: 'bloodied' });
     expect(goblin).not.toHaveProperty('hp');
     expect(pc).toMatchObject({ id: 'pc', health: null });
+  });
+
+  it('sends the creature type icon of shown library creatures only', () => {
+    const goblin = { area: 'content' as const, id: 'goblin' };
+    const encounter = encounterWith([combatant('goblin', { creature: goblin }), combatant('pc', { side: 'player' })]);
+    const [shown, pc] = filterEncounterForPlayers(encounter, null, FOG, {
+      showTurnOrder: false,
+      standees: true,
+      tokenOf: () => null,
+      typeIconOf: (c) => (c.creature ? 'humanoid' : null),
+    }).combatants;
+    expect(shown).toMatchObject({ id: 'goblin', typeIcon: 'humanoid' });
+    expect(pc).not.toHaveProperty('typeIcon');
+    expect(filterEncounterForPlayers(encounter, null, FOG).combatants[0]).not.toHaveProperty('typeIcon');
   });
 });
 

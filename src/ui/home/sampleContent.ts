@@ -27,8 +27,8 @@ const GOBLIN_SQUARES: [number, number][] = [
 
 /** Example party on the path south of the chapel. */
 const PCS = [
-  { name: 'Thorin (dwarf fighter)', armorClass: 18, maxHp: 28, senses: { darkvision: 60 }, square: [9, 14] },
-  { name: 'Elara (human cleric)', armorClass: 16, maxHp: 24, senses: {}, square: [10, 15] },
+  { name: 'Thorin (dwarf fighter)', level: 3, armorClass: 18, maxHp: 28, senses: { darkvision: 60 }, square: [9, 14] },
+  { name: 'Elara (human cleric)', level: 3, armorClass: 16, maxHp: 24, senses: {}, square: [10, 15] },
 ] as const;
 
 export function createSampleCampaign(): Campaign {

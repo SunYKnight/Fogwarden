@@ -1,120 +1,35 @@
-import { useMemo, type ComponentType } from 'react';
+import { useMemo } from 'react';
 import { BoxGeometry, Color, MeshStandardMaterial, type Material } from 'three';
-import type { Opening, OpeningKind, OpeningState, Wall } from '@/core/model';
+import type { Opening, OpeningState, Wall } from '@/core/model';
 import { wallCorners, type WallCorner } from '@/core/geometry/wallOutline';
-import { distance2, lerp2, wallBaseAt, wallPieces, type WallPiece } from '@/core/geometry/walls';
+import { wallPieces, type WallPiece } from '@/core/geometry/walls';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { createProjectedMaterial, type ProjectionUniforms } from '../materials/projectedMaterial';
 import { useMapRender, type HitTag, type RenderMode } from '../mapRenderContext';
 import { useOpeningStates } from '../useOpeningStates';
 import { useDisposable, useLayerVisible } from './hooks';
+import {
+  GLASS,
+  IRON,
+  openingFillSide,
+  openingFrame,
+  WALL_SIDE_SLOPE_DEG,
+  type OpeningPartMaterial,
+} from './openingShape';
 import { buildWallGeometry } from './wallGeometry';
 
-// Flat wall tops show the battlemap line, steeper faces the material.
-const WALL_SIDE_SLOPE_DEG = 45;
-const DOOR_THICKNESS_FT = 0.25;
-const PANE_THICKNESS_FT = 0.08;
-const BAR_FT = 0.15;
-const BAR_SPACING_FT = 0.6;
-// Raised bars shrink into the lintel instead of poking out of the wall.
-const RAISED_PORTCULLIS_SCALE = 0.12;
 const SECRET_TINT = new Color('#5a2d91');
 
 const UNIT_BOX = new BoxGeometry(1, 1, 1);
-const GLASS = new MeshStandardMaterial({
-  color: '#a8d8ff',
-  transparent: true,
-  opacity: 0.3,
-  roughness: 0.1,
-  metalness: 0.1,
-  depthWrite: false,
-});
-const IRON = new MeshStandardMaterial({ color: '#3a3d42', metalness: 0.7, roughness: 0.5 });
 // Arrow slits are too narrow to click; an invisible box keeps them selectable.
 const HIT_ONLY = new MeshStandardMaterial({ colorWrite: false, depthWrite: false });
 const NO_OPENINGS: Opening[] = [];
 
-interface OpeningViewProps {
-  opening: Opening;
-  widthFt: number;
-  heightFt: number;
-  depthFt: number;
-  open: boolean;
-  material: Material;
-}
-
-function DoorView({ widthFt, heightFt, open, material }: OpeningViewProps) {
-  return (
-    <group rotation={[0, open ? Math.PI / 2 : 0, 0]}>
-      <mesh
-        geometry={UNIT_BOX}
-        material={material}
-        position={[widthFt / 2, heightFt / 2, 0]}
-        scale={[widthFt, heightFt, DOOR_THICKNESS_FT]}
-        castShadow
-        receiveShadow
-      />
-    </group>
-  );
-}
-
-function WindowView({ widthFt, heightFt, open }: OpeningViewProps) {
-  return (
-    <group rotation={[0, open ? Math.PI / 2 : 0, 0]}>
-      <mesh
-        geometry={UNIT_BOX}
-        material={GLASS}
-        position={[widthFt / 2, heightFt / 2, 0]}
-        scale={[widthFt, heightFt, PANE_THICKNESS_FT]}
-      />
-    </group>
-  );
-}
-
-function PortcullisView({ widthFt, heightFt, open }: OpeningViewProps) {
-  const count = Math.max(2, Math.round(widthFt / BAR_SPACING_FT));
-  return (
-    <group position={[0, heightFt, 0]} scale={[1, open ? RAISED_PORTCULLIS_SCALE : 1, 1]}>
-      {Array.from({ length: count }, (_, i) => (
-        <mesh
-          key={i}
-          geometry={UNIT_BOX}
-          material={IRON}
-          position={[((i + 0.5) * widthFt) / count, -heightFt / 2, 0]}
-          scale={[BAR_FT, heightFt, BAR_FT]}
-          castShadow
-        />
-      ))}
-      {[0.3, 0.75].map((f) => (
-        <mesh
-          key={f}
-          geometry={UNIT_BOX}
-          material={IRON}
-          position={[widthFt / 2, -heightFt * f, 0]}
-          scale={[widthFt, BAR_FT, BAR_FT]}
-          castShadow
-        />
-      ))}
-    </group>
-  );
-}
-
-function ArrowSlitView({ widthFt, heightFt, depthFt }: OpeningViewProps) {
-  return (
-    <mesh
-      geometry={UNIT_BOX}
-      material={HIT_ONLY}
-      position={[widthFt / 2, heightFt / 2, 0]}
-      scale={[widthFt, heightFt, depthFt]}
-    />
-  );
-}
-
-const OPENING_VIEWS: Record<OpeningKind, ComponentType<OpeningViewProps>> = {
-  door: DoorView,
-  window: WindowView,
-  portcullis: PortcullisView,
-  'arrow-slit': ArrowSlitView,
+const PART_SHADOWS: Record<OpeningPartMaterial, { cast: boolean; receive: boolean }> = {
+  fill: { cast: true, receive: true },
+  glass: { cast: false, receive: false },
+  iron: { cast: true, receive: false },
+  hit: { cast: false, receive: false },
 };
 
 interface OpeningFillProps {
@@ -127,40 +42,36 @@ interface OpeningFillProps {
   uniforms: ProjectionUniforms;
 }
 
-/** What fills a hole in the wall, framed at the hinge side: local x along the wall, y up from the sill. */
+/** What fills a hole in the wall: door leaf, pane, bars or a pick box. */
 function OpeningFill({ wall, piece, opening, state, mode, terrain, uniforms }: OpeningFillProps) {
-  const start = lerp2(piece.a, piece.b, piece.t0);
-  const end = lerp2(piece.a, piece.b, piece.t1);
-  const sill = wallBaseAt(wall, lerp2(start, end, 0.5), terrain) + opening.sillFt;
   const secretTint = opening.secret && mode !== 'player';
-  // Secret doors wear the wall's material so they blend in once opened too.
-  const material = useDisposable(() => {
-    const created = createProjectedMaterial(uniforms, {
-      side: opening.secret ? wall.material : 'wood',
-      sideFromSlopeDeg: WALL_SIDE_SLOPE_DEG,
-    });
+  const side = openingFillSide(opening, wall);
+  const fill = useDisposable(() => {
+    const created = createProjectedMaterial(uniforms, { side, sideFromSlopeDeg: WALL_SIDE_SLOPE_DEG });
     if (secretTint) {
       created.emissive.copy(SECRET_TINT);
       created.emissiveIntensity = 0.6;
     }
     return created;
-  }, [uniforms, opening.secret, wall.material, secretTint]);
+  }, [uniforms, side, secretTint]);
+  const materials: Record<OpeningPartMaterial, Material> = { fill, glass: GLASS, iron: IRON, hit: HIT_ONLY };
+  const { position, rotationY, shape } = openingFrame(wall, piece, opening, state === 'open', terrain);
   const hit: HitTag = { kind: 'opening', id: opening.id };
-  const View = OPENING_VIEWS[opening.kind];
   return (
-    <group
-      position={[start.x, sill, start.y]}
-      rotation={[0, Math.atan2(start.y - end.y, end.x - start.x), 0]}
-      userData={{ hit }}
-    >
-      <View
-        opening={opening}
-        widthFt={distance2(start, end)}
-        heightFt={Math.max(0.1, Math.min(opening.heightFt, wall.heightFt - opening.sillFt))}
-        depthFt={wall.thicknessFt}
-        open={state === 'open'}
-        material={material}
-      />
+    <group position={position} rotation={[0, rotationY, 0]} userData={{ hit }}>
+      <group position={shape.position} rotation={[0, shape.rotationY, 0]} scale={shape.scale}>
+        {shape.parts.map((part, i) => (
+          <mesh
+            key={i}
+            geometry={UNIT_BOX}
+            material={materials[part.material]}
+            position={part.position}
+            scale={part.scale}
+            castShadow={PART_SHADOWS[part.material].cast}
+            receiveShadow={PART_SHADOWS[part.material].receive}
+          />
+        ))}
+      </group>
     </group>
   );
 }

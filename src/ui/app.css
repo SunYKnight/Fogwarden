@@ -2323,3 +2323,787 @@ kbd {
   grid-template-columns: auto 1fr;
   margin-bottom: 0;
 }
+
+/* Compendium images: creature type icons and area shape thumbnails */
+.creature-type-icon {
+  padding: 3px;
+  color: var(--fg-muted);
+  background: var(--bg-input);
+  border-radius: var(--radius);
+}
+
+.creature-type-icon.creature-portrait {
+  width: 96px;
+  height: 96px;
+  padding: 12px;
+}
+
+.area-thumb {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+
+/* Campaign tabs: journal, people and places, quests, calendar; random tables */
+
+.campaign-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.campaign-split {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.campaign-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.campaign-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  min-width: 0;
+}
+
+.list-heading {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.status-chip.failed {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.list-item.past {
+  color: var(--fg-muted);
+}
+
+.notes-editor {
+  flex: 1;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notes-text,
+.notes-preview {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  overflow-y: auto;
+}
+
+.notes-preview {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  margin: 12px 0 6px;
+}
+
+.markdown h1 {
+  font-size: 20px;
+}
+
+.markdown h2 {
+  font-size: 17px;
+}
+
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-size: 15px;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown pre {
+  margin: 6px 0;
+}
+
+.markdown blockquote {
+  margin: 6px 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--fg-muted);
+}
+
+.markdown code {
+  font-family: monospace;
+  background: var(--bg-input);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+.md-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.link-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-raised);
+}
+
+.cast-thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.cast-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cast-picture {
+  width: 132px;
+  height: 132px;
+  flex: 0 0 auto;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  text-align: center;
+}
+
+.cast-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.calendar-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 900px;
+}
+
+.calendar-now {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.calendar-date {
+  font-size: 22px;
+}
+
+.calendar-event-date {
+  width: 220px;
+  font-variant-numeric: tabular-nums;
+}
+
+.table-text {
+  width: 100%;
+  min-height: 220px;
+  font-family: monospace;
+  resize: vertical;
+}
+
+.roll-result {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.roll-result strong {
+  font-size: 16px;
+}
+
+.roll-earlier {
+  padding-left: 10px;
+}
+
+/* Map export: one card per format, the chosen one outlined in the accent */
+.export-formats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.export-format {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px;
+  text-align: left;
+}
+
+.export-format.active {
+  background: var(--bg-input);
+  color: var(--fg);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Player devices: Show popover, player sheet and dice, turn banner, handouts */
+.show-popover {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.handout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.handout-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+}
+
+.handout-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handout-item.active {
+  border-color: var(--accent);
+  background: var(--bg-input);
+}
+
+.show-status {
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+
+/* Holding a finger on the map pings; the browser must not select or open menus. */
+.player-app {
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.player-sheet {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 320px;
+  max-height: calc(100% - 64px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  background: rgba(21, 23, 28, 0.92);
+  border: 1px solid var(--border);
+  touch-action: auto;
+  user-select: text;
+}
+
+.sheet-handle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.sheet-summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--fg-muted);
+}
+
+.sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 12px;
+  overflow-y: auto;
+}
+
+.sheet-hp {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sheet-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sheet-chips .chip {
+  text-transform: capitalize;
+}
+
+.sheet-saves,
+.sheet-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sheet-slot-level {
+  width: 64px;
+  color: var(--fg-muted);
+}
+
+.sheet-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.sheet-dots .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+}
+
+.sheet-dots .dot.filled {
+  background: var(--accent);
+}
+
+.sheet-dice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.sheet-dice button {
+  min-height: 36px;
+}
+
+.sheet-rolls {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Phones: a bottom sheet the thumb reaches; collapsed it is one line. */
+@media (max-width: 700px) {
+  .player-sheet {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 70%;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .player-app .player-status {
+    bottom: 56px;
+  }
+}
+
+.turn-banner {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 26px;
+  font-weight: 700;
+  pointer-events: none;
+  animation: turn-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes turn-pulse {
+  50% {
+    box-shadow: 0 0 0 8px rgba(212, 162, 76, 0.35);
+  }
+}
+
+.handout-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.7);
+  touch-action: auto;
+}
+
+.handout-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: min(960px, 100%);
+  max-height: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+}
+
+.handout-media {
+  max-width: 100%;
+  max-height: calc(100vh - 120px);
+  object-fit: contain;
+  min-height: 0;
+}
+
+.handout-text {
+  max-width: 70ch;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 18px;
+  line-height: 1.5;
+  user-select: text;
+}
+
+/* Combat rules: difficulty, death saves, effects, resources, area targets, end combat */
+.difficulty {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  cursor: help;
+}
+.difficulty-trivial,
+.difficulty-easy {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.difficulty-medium {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.difficulty-hard,
+.difficulty-deadly {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.difficulty-deadly {
+  font-weight: 600;
+}
+.dialog-actions .difficulty {
+  margin-right: auto;
+}
+.pips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pip {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 2px solid var(--fg-muted);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.pip.filled.good {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+.pip.filled.bad {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+.pip.filled.spent {
+  background: var(--fg-muted);
+}
+.death-saves {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 8px;
+}
+.effect-list,
+.area-targets,
+.end-combat-loot {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.effect-form .row > *,
+.area-save-fields > * {
+  flex: 1;
+  min-width: 0;
+}
+.resource-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.resource-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.area-save-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 8px;
+}
+.end-combat-xp {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Compendium tab bar and content packs */
+
+.compendium-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 0 16px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.compendium-bar > .kit-tabs {
+  flex: 0 0 auto;
+  border-bottom: none;
+}
+
+.compendium-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 4px 12px;
+  border-left: 1px solid var(--border);
+}
+
+.pack-library {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 1100px;
+}
+
+.pack-library > .hint-bar {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pack-row {
+  display: grid;
+  grid-template-columns: 16px 22px minmax(0, 1fr) auto auto 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pack-row[draggable='true'] {
+  cursor: grab;
+}
+
+.pack-row.disabled .pack-main {
+  opacity: 0.55;
+}
+
+.pack-grip {
+  color: var(--fg-muted);
+}
+
+.pack-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pack-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pack-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 56px;
+}
+
+/* Sound, Scene, player sound and interludes (Atmosphere) */
+.sound-popover,
+.scene-popover {
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sound-now {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-moods,
+.sound-board {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sound-new-mood {
+  width: 140px;
+}
+
+.sound-tracks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.sound-track-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-time {
+  flex: 1;
+}
+
+.scene-clock {
+  min-width: 96px;
+  text-align: right;
+}
+
+.player-sound {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--fg-muted);
+}
+
+.player-volume input {
+  width: 96px;
+}
+
+.sound-unlock {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 16px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.interlude {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  z-index: 20;
+}
+
+.interlude video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+video.encounter-thumb,
+.map-card-thumb video,
+.recent-card video,
+.map-pick-thumb {
+  object-fit: cover;
+}

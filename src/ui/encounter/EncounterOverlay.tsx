@@ -9,6 +9,7 @@ import { TokenView } from '@/render/tokens/TokenView';
 import { useAppStore } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useCombatantToken } from '@/state/libraryStore';
+import { useCombatantTypeIcon } from './creatureLookup';
 import { directionDeg } from './encounterPointer';
 import { useEncounterUi } from './encounterUiStore';
 
@@ -61,6 +62,7 @@ function DragOverlay() {
   const drag = useEncounterUi((s) => s.drag);
   const combatant = useEncounterStore((s) => s.encounter?.combatants.find((c) => c.id === drag?.combatantId));
   const token = useCombatantToken(combatant);
+  const icon = useCombatantTypeIcon(combatant?.creature);
   const { map } = useMapRender();
   const rule = useDiagonalRule();
   const moved = drag && (drag.from.x !== drag.to.x || drag.from.y !== drag.to.y);
@@ -70,6 +72,7 @@ function DragOverlay() {
       <TokenView
         {...combatant}
         token={token}
+        icon={icon}
         position={drag.to}
         health={null}
         ghost
@@ -94,10 +97,11 @@ function PlacingOverlay() {
   const pointer = useEncounterUi((s) => s.pointer);
   const combatant = useEncounterStore((s) => s.encounter?.combatants.find((c) => c.id === placingId));
   const token = useCombatantToken(combatant);
+  const icon = useCombatantTypeIcon(combatant?.creature);
   const { map, terrain } = useMapRender();
   const position = combatant && pointer && snapTokenPoint(pointer, combatant.size, map.grid, terrain);
   return combatant && position ? (
-    <TokenView {...combatant} token={token} position={position} health={null} ghost interactive={false} />
+    <TokenView {...combatant} token={token} icon={icon} position={position} health={null} ghost interactive={false} />
   ) : null;
 }
 

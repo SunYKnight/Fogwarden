@@ -1,6 +1,6 @@
 import type { Settings } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
-import { CheckboxField, NumberField, SelectField } from '../components/fields';
+import { CheckboxField, NumberField, SelectField, SliderField } from '../components/fields';
 import { PageHeader, Section } from '../kit';
 import { AboutSection } from './AboutSection';
 import { DataSection } from './DataSection';
@@ -28,6 +28,26 @@ export function SettingsPage() {
                 max={65535}
                 title="Applies the next time the LAN server starts"
                 onChange={(port) => save({ ...settings, lan: { port } })}
+              />
+            </Section>
+            <Section title="Audio">
+              <SliderField
+                label="Volume (everyone)"
+                value={Math.round(settings.audio.volume * 100)}
+                min={0}
+                max={100}
+                step={5}
+                suffix="%"
+                onChange={(v) => save({ ...settings, audio: { ...settings.audio, volume: v / 100 } })}
+              />
+              <SliderField
+                label="This window"
+                value={Math.round(settings.audio.dmVolume * 100)}
+                min={0}
+                max={100}
+                step={5}
+                suffix="%"
+                onChange={(v) => save({ ...settings, audio: { ...settings.audio, dmVolume: v / 100 } })}
               />
             </Section>
             <Section title="Rules">

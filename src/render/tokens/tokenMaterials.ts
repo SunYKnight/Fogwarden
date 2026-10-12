@@ -181,3 +181,40 @@ export function initialsCard(
   texture.colorSpace = SRGBColorSpace;
   return { texture, materials: cardMaterials(texture) };
 }
+
+const ICON_CARD_PX = 256;
+/** Icon edge per card edge with and without a number below it. */
+const ICON_SCALE = { numbered: 0.56, plain: 0.72 };
+
+/**
+ * Square picture for a token without image: the creature type icon (`iconPath` in a `iconView` square) in the
+ * side color on the plain token color, with the combatant's number below it. Disc and card use it like a portrait.
+ */
+export function typeIconTexture(iconPath: string, iconView: number, color: string, number: string): Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = ICON_CARD_PX;
+  canvas.height = ICON_CARD_PX;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('2D canvas is unavailable');
+  }
+  ctx.fillStyle = PLAIN_TOP_COLOR;
+  ctx.fillRect(0, 0, ICON_CARD_PX, ICON_CARD_PX);
+  const iconPx = ICON_CARD_PX * (number ? ICON_SCALE.numbered : ICON_SCALE.plain);
+  // The disc crops the square to a circle: icon and number stay inside it.
+  const top = number ? ICON_CARD_PX * 0.1 : (ICON_CARD_PX - iconPx) / 2;
+  ctx.save();
+  ctx.translate((ICON_CARD_PX - iconPx) / 2, top);
+  ctx.scale(iconPx / iconView, iconPx / iconView);
+  ctx.fillStyle = color;
+  ctx.fill(new Path2D(iconPath));
+  ctx.restore();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `700 ${Math.round(ICON_CARD_PX * 0.2)}px 'Segoe UI', system-ui, sans-serif`;
+  ctx.fillText(number, ICON_CARD_PX / 2, top + iconPx + ICON_CARD_PX * 0.13);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}

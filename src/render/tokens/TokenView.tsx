@@ -1,12 +1,15 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import { Mesh, PerspectiveCamera, Vector3, type Group, type Intersection, type Raycaster, type Texture } from 'three';
+import type { CreatureIconKey } from '@/core/creatureTypeIcon';
 import type { AssetRef, CreatureSize, MapPoint, Side } from '@/core/model';
+import { CREATURE_SPACE_FT } from '@/core/rules/space';
 import { useAppStore } from '@/state/appStore';
+import { CREATURE_ICON_PATHS, CREATURE_ICON_VIEW } from '@/ui/creatureTypes/creatureIconPaths';
 import { usePlayerStore } from '@/ui/player/playerStore';
 import { TextLabel, type LabelLine } from '../TextLabel';
 import { useMapRender, type HitTag } from '../mapRenderContext';
-import { cardHeightRatio, tokenInitials } from './standee';
+import { cardHeightRatio, tokenInitials, tokenNumber } from './standee';
 import {
   FRAME_MATERIALS,
   initialsCard,
@@ -17,8 +20,8 @@ import {
   SIDE_COLORS,
   SIDE_MATERIALS,
   TOKEN_GEOMETRY,
+  typeIconTexture,
 } from './tokenMaterials';
-import { TOKEN_DIAMETER_FT } from './tokenPlacement';
 import { useAssetTexture } from './useAssetTexture';
 
 const DISC_HEIGHT_FT = 0.6;
@@ -63,6 +66,8 @@ export interface TokenViewProps {
   size: CreatureSize;
   position: MapPoint;
   token: AssetRef | null;
+  /** Creature type icon for a token without picture; null shows initials instead. */
+  icon?: CreatureIconKey | null;
   /** Remaining health 0..1; null hides the band. */
   health: number | null;
   ghost?: boolean;
@@ -172,10 +177,20 @@ function Standee({ side, radius, texture, ghost, raycast, name, frame, cardWidth
  * label and health band are the same in both.
  */
 export function TokenView(props: TokenViewProps) {
-  const { id, name, side, size, position, health, ghost = false, interactive = true } = props;
-  const texture = useAssetTexture(props.token);
+  const { id, name, side, size, position, health, icon, ghost = false, interactive = true } = props;
+  const picture = useAssetTexture(props.token);
+  const iconCard = useMemo(
+    () =>
+      picture || !icon
+        ? null
+        : typeIconTexture(CREATURE_ICON_PATHS[icon], CREATURE_ICON_VIEW, SIDE_COLORS[side], tokenNumber(name)),
+    [picture, icon, side, name],
+  );
+  // Disposing the texture also frees the looks portraitLook built from it.
+  useEffect(() => () => iconCard?.dispose(), [iconCard]);
+  const texture = picture ?? iconCard;
   const standee = useStandees();
-  const diameter = TOKEN_DIAMETER_FT[size];
+  const diameter = CREATURE_SPACE_FT[size];
   const radius = (diameter / 2) * 0.92;
   const cardWidth = diameter * CARD_WIDTH;
   const cardHeight = cardWidth * (texture ? portraitLook(texture).cardRatio : cardHeightRatio(null));

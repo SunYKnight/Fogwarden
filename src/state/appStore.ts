@@ -3,11 +3,12 @@ import { create } from 'zustand';
 import type { DocRef, EncounterLocator, Settings } from '@/core/model';
 import { BrowserStorage } from '@/data/browserStorage';
 import { migrateDataRoot } from '@/data/layoutMigration';
+import { migrateToPacks } from '@/data/packMigration';
 import { Repository } from '@/data/repository';
 import type { StorageRoots } from '@/data/storage';
 import { TauriStorage } from '@/data/tauriStorage';
 
-export type CompendiumTab = 'creatures' | 'markers';
+export type CompendiumTab = 'creatures' | 'markers' | 'tables' | 'packs';
 
 export type Route =
   | { page: 'home' }
@@ -115,7 +116,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   init: async () => {
     const repository = get().repository;
-    repository.layoutProblems = await migrateDataRoot(repository);
+    // Packs move after the layout conversion, which works in the old places.
+    const layoutProblems = await migrateDataRoot(repository);
+    repository.layoutProblems = [...layoutProblems, ...(await migrateToPacks(repository))];
     const [roots, settings] = await Promise.all([repository.storage.roots(), repository.loadSettings()]);
     set({ roots, settings });
   },

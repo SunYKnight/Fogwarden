@@ -40,6 +40,7 @@ interface EditorState {
   /** Map point under the pointer, for the status bar readouts. */
   pointer: MapPoint | null;
   settingsOpen: boolean;
+  exportOpen: boolean;
   layers: Record<LayerId, boolean>;
   camera: CameraMode;
   previewAsPlayer: boolean;
@@ -63,6 +64,7 @@ interface EditorState {
   setHover(hover: HitTag | null): void;
   setPointer(pointer: MapPoint | null): void;
   setSettingsOpen(open: boolean): void;
+  setExportOpen(open: boolean): void;
   toggleLayer(id: LayerId): void;
   setCamera(mode: CameraMode): void;
   setPreviewAsPlayer(on: boolean): void;
@@ -92,6 +94,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   hover: null,
   pointer: null,
   settingsOpen: false,
+  exportOpen: false,
   layers: allLayers(),
   camera: 'top',
   previewAsPlayer: false,
@@ -111,6 +114,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       hover: null,
       pointer: null,
       settingsOpen: false,
+      exportOpen: false,
     });
   },
 
@@ -123,6 +127,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       hover: null,
       pointer: null,
       settingsOpen: false,
+      exportOpen: false,
       canUndo: false,
       canRedo: false,
     });
@@ -190,6 +195,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   setPointer: (pointer) => set({ pointer }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setExportOpen: (exportOpen) => set({ exportOpen }),
   toggleLayer: (id) => set((s) => ({ layers: { ...s.layers, [id]: !s.layers[id] } })),
   setCamera: (camera) => set({ camera }),
   setPreviewAsPlayer: (previewAsPlayer) => set({ previewAsPlayer }),

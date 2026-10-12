@@ -76,6 +76,13 @@ describe('settings migration', () => {
     expect(migrated.playerWindow).toEqual({ ...playerWindow, view: PARTY_VIEW });
     expect(migrated.playerLinks).toEqual(defaultPlayerLinks());
   });
+
+  it('enables every content pack in v6 settings and keeps the rest', () => {
+    const { packs: _unused, ...v6 } = { ...defaultSettings(), diagonalRule: '5-10-5' as const };
+    const migrated = settingsSchema.parse(migrate('settings', { ...v6, version: 6 }));
+    expect(migrated.packs).toEqual({ order: [], disabled: [] });
+    expect(migrated.diagonalRule).toBe('5-10-5');
+  });
 });
 
 describe('encounter migration', () => {
@@ -108,5 +115,60 @@ describe('encounter migration', () => {
 
   it('refuses to read an encounter of the old file layout as a current one', () => {
     expect(() => migrate('encounter', v1Encounter('').doc)).toThrow(/version 2 uses the old file layout/);
+  });
+
+  it('keeps players from moving their own tokens in a v5 encounter', () => {
+    const { playersMoveTokens: _unused, ...v5 } = { ...createEncounter('e', 'c1', null), version: 5 };
+    const migrated = encounterSchema.parse(migrate('encounter', v5));
+    expect(migrated.version).toBe(6);
+    expect(migrated.playersMoveTokens).toBe(false);
+  });
+
+  it('gives combatants of a v4 encounter no level, effects, death saves, spent resources or light', () => {
+    const {
+      level: _l,
+      effects: _e,
+      concentrating: _c,
+      deathSaves: _d,
+      resources: _r,
+      light: _li,
+      ...thorin
+    } = {
+      ...pc('Thorin', true),
+      hp: { current: 3, max: 10, temp: 0 },
+    };
+    const { playersMoveTokens: _p, ...encounter } = createEncounter('e', 'c1', null);
+    const migrated = encounterSchema.parse(migrate('encounter', { ...encounter, version: 4, combatants: [thorin] }));
+    expect(migrated.combatants).toEqual([
+      {
+        ...thorin,
+        level: null,
+        effects: [],
+        concentrating: false,
+        deathSaves: { successes: 0, failures: 0 },
+        resources: { legendaryUsed: 0, recharging: [], slotsUsed: {}, dailyUsed: {} },
+        light: null,
+      },
+    ]);
+  });
+});
+
+describe('atmosphere migrations', () => {
+  it('gives v3 encounters a silent scene with the combat mood for combat', () => {
+    const { atmosphere: _unused, ...v3 } = { ...createEncounter('Ambush', 'c1', null), version: 3 };
+    const migrated = migrate('encounter', v3, 4);
+    expect(migrated.atmosphere).toEqual({ mood: null, combatMood: 'combat', minute: null, weather: 'none' });
+  });
+
+  it('gives v2 map regions no ambient sound', () => {
+    const region = { id: 'r1', name: 'Dark', kind: 'light', light: 'darkness' };
+    const migrated = migrate('map', { schema: 'map', version: 2, regions: [region] }, 3);
+    expect(migrated.regions).toEqual([{ ...region, sound: null }]);
+  });
+
+  it('adds default volumes to v7 settings', () => {
+    const { audio: _unused, ...v7 } = defaultSettings();
+    const migrated = settingsSchema.parse(migrate('settings', { ...v7, version: 7 }));
+    expect(migrated.audio).toEqual(defaultSettings().audio);
   });
 });

@@ -9,13 +9,15 @@
 //!
 //! The DM socket speaks the relay's view frames (`src/sync/relayApi.ts`):
 //! DM frames are `<view>[,<view>...]\n<message>` and reach only players of
-//! those views; a player's hello reaches the DM as `<view>\n<hello>`, and
-//! status frames tell the DM how many players watch each view.
+//! those views; a player's message (hello, roll, ping, own token move)
+//! reaches the DM rebuilt as `<view>\n<message>`, and status frames tell the
+//! DM how many players watch each view.
 
 use std::collections::{BTreeMap, HashMap};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use axum::body::{Body, Bytes};
 use axum::extract::ws::{close_code, CloseFrame, Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
@@ -38,8 +40,18 @@ use crate::storage::{self, Area, StorageError, StorageState};
 const PLAYER_PAGE: &str = "player.html";
 const BUNDLE_DIR: &str = "assets";
 const TOKEN_COOKIE: &str = "dmtool-lan";
-// Players only ever send `hello`; anything bigger is not a valid message.
+// Player messages are a hello, a roll, a ping or a move; anything bigger is
+// not a valid message.
 const PLAYER_MESSAGE_LIMIT: usize = 1024;
+// A player may send this many messages at once, then one per
+// `PLAYER_REFILL`; more are dropped (`server/relayServer.ts` does the same).
+const PLAYER_BURST: f64 = 10.0;
+const PLAYER_REFILL: Duration = Duration::from_millis(500);
+// Same limits as `playerMessageSchema` in `src/sync/protocol.ts`.
+const PARTY_VIEW: &str = "party";
+const MAX_COORDINATE_FT: f64 = 1_000_000.0;
+const PLAYER_DICE_MAX: usize = 40;
+const PLAYER_LABEL_MAX: usize = 40;
 // Receivers that fall this far behind are dropped and reconnect for a resend.
 const CHANNEL_CAPACITY: usize = 64;
 // `RELAY_LINK_REVOKED`: the player page stops reconnecting on this code.
@@ -306,7 +318,7 @@ impl Hub {
         (self.to_dm.subscribe(), status(&players))
     }
 
-    fn incoming(&self, role: &Role, text: Utf8Bytes) -> Next {
+    fn incoming(&self, role: &Role, text: Utf8Bytes, rate: &mut RateLimit) -> Next {
         match role {
             Role::Dm => match view_frame(text) {
                 Some(frame) => {
@@ -315,18 +327,47 @@ impl Hub {
                 }
                 None => Next::Kick(close_code::POLICY, "frames must start with a view list"),
             },
-            Role::Player(viewer) => match player_hello(&viewer.view, text.as_str()) {
-                Some(hello) => {
-                    let _ = self.to_dm.send(hello);
+            Role::Player(viewer) => match rebuild_player_message(&viewer.view, text.as_str()) {
+                Some(message) => {
+                    if rate.take(Instant::now()) {
+                        let _ = self.to_dm.send(message);
+                    }
                     Next::Stay
                 }
-                None => Next::Kick(close_code::POLICY, "players may only send hello"),
+                None => Next::Kick(close_code::POLICY, "not a valid player message"),
             },
         }
     }
 }
 
-#[derive(Deserialize)]
+/// Token bucket of one player socket.
+struct RateLimit {
+    tokens: f64,
+    at: Instant,
+}
+
+impl RateLimit {
+    fn new(now: Instant) -> Self {
+        RateLimit {
+            tokens: PLAYER_BURST,
+            at: now,
+        }
+    }
+
+    /// True while the player stays within its message rate.
+    fn take(&mut self, now: Instant) -> bool {
+        let refilled = now.duration_since(self.at).as_secs_f64() / PLAYER_REFILL.as_secs_f64();
+        self.tokens = (self.tokens + refilled).min(PLAYER_BURST);
+        self.at = now;
+        let allowed = self.tokens >= 1.0;
+        if allowed {
+            self.tokens -= 1.0;
+        }
+        allowed
+    }
+}
+
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct PlayerMessage {
     protocol: u32,
@@ -334,37 +375,85 @@ struct PlayerMessage {
     payload: PlayerPayload,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum PlayerSender {
     Player,
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PlayerPayload {
-    #[serde(rename = "type")]
-    kind: PayloadKind,
+// Struct variants, also for hello: serde ignores extra fields of an
+// internally tagged unit variant.
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
+enum PlayerPayload {
+    Hello {},
+    Roll {
+        dice: String,
+        mode: RollMode,
+        label: String,
+    },
+    Point {
+        at: MapPoint,
+    },
+    Move {
+        #[serde(rename = "combatantId")]
+        combatant_id: String,
+        to: MapPoint,
+    },
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-enum PayloadKind {
-    Hello,
+enum RollMode {
+    Normal,
+    Advantage,
+    Disadvantage,
 }
 
-// Rebuilt instead of forwarded, so the DM only ever sees a clean hello.
-fn player_hello(view: &str, text: &str) -> Option<Utf8Bytes> {
-    serde_json::from_str::<PlayerMessage>(text).ok().map(|message| {
-        let PlayerMessage {
-            protocol,
-            from: PlayerSender::Player,
-            payload: PlayerPayload {
-                kind: PayloadKind::Hello,
-            },
-        } = message;
-        format!("{view}\n{{\"protocol\":{protocol},\"from\":\"player\",\"payload\":{{\"type\":\"hello\"}}}}").into()
-    })
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct MapPoint {
+    x: f64,
+    y: f64,
+    elevation_ft: f64,
+}
+
+impl MapPoint {
+    fn valid(&self) -> bool {
+        [self.x, self.y, self.elevation_ft]
+            .iter()
+            .all(|v| v.abs() <= MAX_COORDINATE_FT)
+    }
+}
+
+impl PlayerPayload {
+    // Party screens have no sheet to roll for and no token of their own.
+    fn allowed_for(&self, view: &str) -> bool {
+        match self {
+            PlayerPayload::Hello {} => true,
+            PlayerPayload::Roll { dice, label, .. } => {
+                view != PARTY_VIEW
+                    && (1..=PLAYER_DICE_MAX).contains(&dice.len())
+                    && dice
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || matches!(b, b'd' | b'D' | b'+' | b'-' | b' '))
+                    // UTF-16 units, as JavaScript counts the string length.
+                    && label.encode_utf16().count() <= PLAYER_LABEL_MAX
+            }
+            PlayerPayload::Point { at } => at.valid(),
+            PlayerPayload::Move { combatant_id, to } => view != PARTY_VIEW && combatant_id == view && to.valid(),
+        }
+    }
+}
+
+// Rebuilt from the parsed fields instead of forwarded, so the DM never sees
+// smuggled data; mirrors `rebuildPlayerMessage` in `src/sync/protocol.ts`.
+fn rebuild_player_message(view: &str, text: &str) -> Option<Utf8Bytes> {
+    serde_json::from_str::<PlayerMessage>(text)
+        .ok()
+        .filter(|message| message.payload.allowed_for(view))
+        .and_then(|message| serde_json::to_string(&message).ok())
+        .map(|json| format!("{view}\n{json}").into())
 }
 
 fn asset_mime(extension: &str) -> Option<&'static str> {
@@ -378,15 +467,24 @@ fn asset_mime(extension: &str) -> Option<&'static str> {
         "gltf" => Some("model/gltf+json"),
         "bin" => Some("application/octet-stream"),
         "ktx2" => Some("image/ktx2"),
+        "mp3" => Some("audio/mpeg"),
+        "ogg" => Some("audio/ogg"),
+        "wav" => Some("audio/wav"),
+        "m4a" => Some("audio/mp4"),
+        "mp4" => Some("video/mp4"),
+        "webm" => Some("video/webm"),
         _ => None,
     }
 }
 
 // Pictures inside document folders: campaign folders hold fog masks
-// (what each character explored), maps their terrain heightmap.
+// (what each character explored), maps their terrain heightmap. A campaign's
+// handouts are there to be shown to players.
 fn document_data(file: &Path) -> bool {
-    let in_campaigns = file.components().next().is_some_and(|c| c.as_os_str() == "campaigns");
-    in_campaigns || file.file_name().is_some_and(|name| name == "terrain.png")
+    let parts: Vec<_> = file.components().map(|c| c.as_os_str()).collect();
+    let in_campaigns = parts.first().is_some_and(|c| *c == "campaigns");
+    let handout = parts.len() > 3 && parts[2] == "handouts";
+    (in_campaigns && !handout) || file.file_name().is_some_and(|name| name == "terrain.png")
 }
 
 // Images and models only: documents hold DM secrets (hidden monsters,
@@ -534,6 +632,7 @@ async fn relay<T: Outgoing>(
         socket.send(Message::Text(text)).await?;
     }
     let mut shutdown = hub.shutdown.clone();
+    let mut rate = RateLimit::new(Instant::now());
     let mut next = Next::Stay;
     while matches!(next, Next::Stay) {
         next = tokio::select! {
@@ -548,7 +647,7 @@ async fn relay<T: Outgoing>(
                 Err(RecvError::Closed) => Next::Kick(close_code::AWAY, "server stopped"),
             },
             incoming = socket.recv() => match incoming {
-                Some(Ok(Message::Text(text))) => hub.incoming(role, text),
+                Some(Ok(Message::Text(text))) => hub.incoming(role, text, &mut rate),
                 Some(Ok(Message::Binary(_))) => Next::Kick(close_code::UNSUPPORTED, "text messages only"),
                 Some(Ok(Message::Close(_))) | None => Next::Leave,
                 Some(Ok(Message::Ping(_) | Message::Pong(_))) => Next::Stay,
@@ -868,6 +967,13 @@ mod tests {
         assert_eq!(asset_status(&root, ""), StatusCode::FORBIDDEN);
         let fog = "campaigns/c1/encounters/e1/fog/explored/pc.png";
         assert_eq!(asset_status(&root, fog), StatusCode::FORBIDDEN);
+        std::fs::create_dir_all(root.join("campaigns/c1/handouts")).unwrap();
+        std::fs::write(root.join("campaigns/c1/handouts/letter.png"), b"PNGDATA").unwrap();
+        assert_eq!(asset_status(&root, "campaigns/c1/handouts/letter.png"), StatusCode::OK);
+        assert_eq!(
+            asset_status(&root, "campaigns/handouts/x/letter.png"),
+            StatusCode::FORBIDDEN
+        );
         assert_eq!(asset_status(&root, "library/maps/m1/terrain.png"), StatusCode::FORBIDDEN);
         assert_eq!(asset_status(&root, "folder.png"), StatusCode::NOT_FOUND);
         assert_eq!(asset_status(&root, "missing.glb"), StatusCode::NOT_FOUND);
@@ -875,17 +981,86 @@ mod tests {
     }
 
     #[test]
-    fn players_can_only_send_hello() {
-        assert_eq!(player_hello("A", HELLO).unwrap().as_str(), format!("A\n{HELLO}"));
+    fn pack_pictures_and_models_are_served_but_never_their_documents() {
+        let root = test_root("packs");
+        let pack = root.join("packs/mm");
+        std::fs::create_dir_all(pack.join("creatures")).unwrap();
+        std::fs::create_dir_all(pack.join("maps/m1/assets")).unwrap();
+        for file in [
+            "pack.json",
+            "creatures/goblin.txt",
+            "creatures/goblin.png",
+            "maps/m1/map.json",
+            "maps/m1/terrain.png",
+            "maps/m1/assets/tree.glb",
+        ] {
+            std::fs::write(pack.join(file), b"DATA").unwrap();
+        }
+        let status = |file: &str| asset_status(&root, &format!("packs/mm/{file}"));
+        assert_eq!(status("creatures/goblin.png"), StatusCode::OK);
+        assert_eq!(status("maps/m1/assets/tree.glb"), StatusCode::OK);
+        assert_eq!(status("pack.json"), StatusCode::FORBIDDEN);
+        assert_eq!(status("creatures/goblin.txt"), StatusCode::FORBIDDEN);
+        assert_eq!(status("maps/m1/map.json"), StatusCode::FORBIDDEN);
+        assert_eq!(status("maps/m1/terrain.png"), StatusCode::FORBIDDEN);
+        assert_eq!(status("../../library/maps/m1/assets/map.png"), StatusCode::BAD_REQUEST);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn players_send_only_valid_messages_for_their_view() {
+        let rebuilt = |view: &str, payload: &str| {
+            rebuild_player_message(
+                view,
+                &format!(r#"{{"protocol":1,"from":"player","payload":{payload}}}"#),
+            )
+            .map(|text| text.to_string())
+        };
+        assert_eq!(
+            rebuild_player_message("A", HELLO).unwrap().as_str(),
+            format!("A\n{HELLO}")
+        );
+        let roll = r#"{"type":"roll","dice":"1d20 + 5","mode":"advantage","label":"Hit"}"#;
+        let expected_roll = r#"{"protocol":1,"from":"player","payload":{"type":"roll","dice":"1d20 + 5","mode":"advantage","label":"Hit"}}"#;
+        assert_eq!(rebuilt("A", roll), Some(format!("A\n{expected_roll}")));
+        let point = r#"{"type":"point","at":{"x":1.5,"y":2.0,"elevationFt":0.0}}"#;
+        assert!(rebuilt("party", point).is_some());
+        let to = r#""to":{"x":5.0,"y":5.0,"elevationFt":0.0}"#;
+        assert!(rebuilt("A", &format!(r#"{{"type":"move","combatantId":"A",{to}}}"#)).is_some());
+
+        // Another view's token, or nothing of the party's own.
+        assert!(rebuilt("A", &format!(r#"{{"type":"move","combatantId":"B",{to}}}"#)).is_none());
+        assert!(rebuilt("party", &format!(r#"{{"type":"move","combatantId":"party",{to}}}"#)).is_none());
+        assert!(rebuilt("party", roll).is_none());
+        // Malformed requests.
+        assert!(rebuilt("A", r#"{"type":"roll","dice":"1d20;rm","mode":"normal","label":""}"#).is_none());
+        assert!(rebuilt("A", r#"{"type":"roll","dice":"1d20","mode":"lucky","label":""}"#).is_none());
+        let long_label = format!(
+            r#"{{"type":"roll","dice":"1d20","mode":"normal","label":"{}"}}"#,
+            "x".repeat(41)
+        );
+        assert!(rebuilt("A", &long_label).is_none());
+        assert!(rebuilt("A", r#"{"type":"point","at":{"x":"1","y":2,"elevationFt":0}}"#).is_none());
+        assert!(rebuilt("A", r#"{"type":"point","at":{"x":1e9,"y":2,"elevationFt":0}}"#).is_none());
+        assert!(rebuilt("A", r#"{"type":"point","at":{"x":1,"y":2,"elevationFt":0},"by":"DM"}"#).is_none());
+        assert!(rebuilt("A", r#"{"type":"hello","x":1}"#).is_none());
+        assert!(rebuilt("A", r#"{"type":"map","map":null}"#).is_none());
         let dm = r#"{"protocol":1,"from":"dm","payload":{"type":"hello"}}"#;
-        assert!(player_hello("A", dm).is_none());
-        let map = r#"{"protocol":1,"from":"player","payload":{"type":"map","map":null}}"#;
-        assert!(player_hello("A", map).is_none());
-        let extra_payload = r#"{"protocol":1,"from":"player","payload":{"type":"hello","x":1}}"#;
-        assert!(player_hello("A", extra_payload).is_none());
+        assert!(rebuild_player_message("A", dm).is_none());
         let extra = r#"{"protocol":1,"from":"player","payload":{"type":"hello"},"x":1}"#;
-        assert!(player_hello("A", extra).is_none());
-        assert!(player_hello("A", "not json").is_none());
+        assert!(rebuild_player_message("A", extra).is_none());
+        assert!(rebuild_player_message("A", "not json").is_none());
+    }
+
+    #[test]
+    fn rate_limit_allows_a_burst_then_refills() {
+        let start = Instant::now();
+        let mut rate = RateLimit::new(start);
+        let burst = (0..12).filter(|_| rate.take(start)).count();
+        assert_eq!(burst, 10);
+        assert!(!rate.take(start + PLAYER_REFILL / 2));
+        assert!(rate.take(start + PLAYER_REFILL));
+        assert!(!rate.take(start + PLAYER_REFILL));
     }
 
     struct TestHost(PathBuf);
@@ -1002,7 +1177,7 @@ mod tests {
 
         let forged = r#"{"protocol":1,"from":"dm","payload":{"type":"camera","camera":null}}"#;
         player.send(WsMessage::text(forged)).await.unwrap();
-        expect_close(&mut player, close_code::POLICY, "players may only send hello").await;
+        expect_close(&mut player, close_code::POLICY, "not a valid player message").await;
         // The forged message never reached the DM: it only sees the player
         // leave, then a second player join and say hello.
         expect_status(&mut dm, 0, json!({})).await;
