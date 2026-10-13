@@ -1,13 +1,15 @@
+import { Line } from '@react-three/drei';
 import { useMemo } from 'react';
 import { BoxGeometry, Color, MeshStandardMaterial, type Material } from 'three';
 import type { Opening, OpeningState, Wall } from '@/core/model';
 import { wallCorners, type WallCorner } from '@/core/geometry/wallOutline';
 import { wallPieces, type WallPiece } from '@/core/geometry/walls';
 import type { HeightField } from '@/core/terrain/heightfield';
+import { useEncounterUi } from '@/ui/encounter/encounterUiStore';
 import { createProjectedMaterial, type ProjectionUniforms } from '../materials/projectedMaterial';
 import { useMapRender, type HitTag, type RenderMode } from '../mapRenderContext';
 import { useOpeningStates } from '../useOpeningStates';
-import { useDisposable, useLayerVisible } from './hooks';
+import { noRaycast, useDisposable, useLayerVisible } from './hooks';
 import {
   GLASS,
   IRON,
@@ -19,6 +21,13 @@ import {
 import { buildWallGeometry } from './wallGeometry';
 
 const SECRET_TINT = new Color('#5a2d91');
+// Doors are thin seen from above: the DM gets a white outline around each
+// opening at the wall top, drawn over trees and roofs.
+const OUTLINE_LIFT_FT = 0.1;
+const OUTLINE_MARGIN_FT = 0.4;
+const OUTLINE_RENDER_ORDER = 20;
+const OUTLINE_HIT_FT = 1;
+const OUTLINE_HIT_HEIGHT_FT = 0.1;
 
 const UNIT_BOX = new BoxGeometry(1, 1, 1);
 // Arrow slits are too narrow to click; an invisible box keeps them selectable.
@@ -44,6 +53,7 @@ interface OpeningFillProps {
 
 /** What fills a hole in the wall: door leaf, pane, bars or a pick box. */
 function OpeningFill({ wall, piece, opening, state, mode, terrain, uniforms }: OpeningFillProps) {
+  const hovered = useEncounterUi((s) => s.hover?.kind === 'opening' && s.hover.id === opening.id);
   const secretTint = opening.secret && mode !== 'player';
   const side = openingFillSide(opening, wall);
   const fill = useDisposable(() => {
@@ -57,6 +67,18 @@ function OpeningFill({ wall, piece, opening, state, mode, terrain, uniforms }: O
   const materials: Record<OpeningPartMaterial, Material> = { fill, glass: GLASS, iron: IRON, hit: HIT_ONLY };
   const { position, rotationY, shape } = openingFrame(wall, piece, opening, state === 'open', terrain);
   const hit: HitTag = { kind: 'opening', id: opening.id };
+  // Local frame: x along the wall from the hinge, y up from the sill.
+  const top = wall.heightFt - opening.sillFt + OUTLINE_LIFT_FT;
+  const half = wall.thicknessFt / 2 + OUTLINE_MARGIN_FT;
+  const end = opening.widthFt;
+  // Invisible strips under the outline take the click; the inside stays
+  // free for tokens standing in the doorway.
+  const strips: { position: [number, number, number]; scale: [number, number, number] }[] = [
+    { position: [end / 2, top, -half], scale: [end, OUTLINE_HIT_HEIGHT_FT, OUTLINE_HIT_FT] },
+    { position: [end / 2, top, half], scale: [end, OUTLINE_HIT_HEIGHT_FT, OUTLINE_HIT_FT] },
+    { position: [0, top, 0], scale: [OUTLINE_HIT_FT, OUTLINE_HIT_HEIGHT_FT, half * 2] },
+    { position: [end, top, 0], scale: [OUTLINE_HIT_FT, OUTLINE_HIT_HEIGHT_FT, half * 2] },
+  ];
   return (
     <group position={position} rotation={[0, rotationY, 0]} userData={{ hit }}>
       <group position={shape.position} rotation={[0, shape.rotationY, 0]} scale={shape.scale}>
@@ -72,6 +94,29 @@ function OpeningFill({ wall, piece, opening, state, mode, terrain, uniforms }: O
           />
         ))}
       </group>
+      {mode === 'dm' && (
+        <>
+          <Line
+            points={[
+              [0, top, -half],
+              [end, top, -half],
+              [end, top, half],
+              [0, top, half],
+              [0, top, -half],
+            ]}
+            color="#ffffff"
+            lineWidth={hovered ? 4 : 2}
+            transparent
+            opacity={hovered ? 1 : 0.8}
+            depthTest={false}
+            renderOrder={OUTLINE_RENDER_ORDER}
+            raycast={noRaycast}
+          />
+          {strips.map((strip, i) => (
+            <mesh key={i} geometry={UNIT_BOX} material={HIT_ONLY} position={strip.position} scale={strip.scale} />
+          ))}
+        </>
+      )}
     </group>
   );
 }

@@ -4,7 +4,7 @@ import { defaultGraphicsSettings, type Prop, type SideMaterial } from '@/core/mo
 import { useAppStore } from '@/state/appStore';
 import { createProjectedMaterial, type ProjectionUniforms } from '../materials/projectedMaterial';
 import { useMapRender, type HitTag } from '../mapRenderContext';
-import { useLayerVisible } from '../structures/hooks';
+import { noRaycast, useLayerVisible } from '../structures/hooks';
 import { usePropObjects } from './propObjects';
 import { useModel } from './useModel';
 
@@ -15,22 +15,28 @@ interface PropViewProps {
   uniforms: ProjectionUniforms;
   cliffMaterial: SideMaterial;
   cliffSlopeDeg: number;
+  /** Play views: the pointer passes through to tokens, doors and the ground. */
+  passThrough: boolean;
 }
 
-function PropView({ prop, uniforms, cliffMaterial, cliffSlopeDeg }: PropViewProps) {
+function PropView({ prop, uniforms, cliffMaterial, cliffSlopeDeg, passThrough }: PropViewProps) {
   const model = useModel(prop.asset);
   const register = usePropObjects((s) => s.register);
   const { id, projectMap } = prop;
   // Player windows load no settings and keep the defaults.
   const { propShadows } = useAppStore((s) => s.settings?.graphics) ?? defaultGraphicsSettings();
+  // Trees and bushes would hide the tokens below them from clicks; walkable
+  // props and draped ground models still take tokens placed on them.
+  const catchesPointer = !passThrough || prop.walkable || projectMap;
 
   useEffect(() => {
     model?.traverse((child) => {
       if (child instanceof Mesh) {
         child.castShadow = propShadows;
+        child.raycast = catchesPointer ? Mesh.prototype.raycast : noRaycast;
       }
     });
-  }, [model, propShadows]);
+  }, [model, propShadows, catchesPointer]);
 
   // Projected props drape the battlemap; steep faces look like cliffs.
   useEffect(() => {
@@ -77,7 +83,7 @@ function PropView({ prop, uniforms, cliffMaterial, cliffSlopeDeg }: PropViewProp
 
 /** Imported glTF/GLB models placed on the map, optionally with the battlemap projected onto them. */
 export function PropLayer() {
-  const { map, uniforms } = useMapRender();
+  const { map, uniforms, mode } = useMapRender();
   const visible = useLayerVisible('props');
   return visible ? (
     <group>
@@ -88,6 +94,7 @@ export function PropLayer() {
           uniforms={uniforms}
           cliffMaterial={map.terrain.cliffMaterial}
           cliffSlopeDeg={map.terrain.cliffSlopeDeg}
+          passThrough={mode !== 'editor'}
         />
       ))}
     </group>

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import type { BattleMap } from '@/core/model';
+import type { BattleMap, OpeningState } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { fogBrushPointer } from '@/render/fog/fogBrush';
 import { useFogViewStore, type FogBrushMode } from '@/render/fog/fogViewStore';
@@ -39,13 +39,26 @@ const BRUSH_HINT: Record<FogBrushMode, string> = {
   erase: 'Drag to erase revealed and hidden areas · Esc stops the brush',
 };
 
+const OPENING_ACTIONS: Record<OpeningState, string> = {
+  open: 'click closes it, Shift+click locks it',
+  closed: 'click opens it, Shift+click locks it',
+  locked: 'Shift+click unlocks it',
+};
+
 function ViewportHint() {
   const placement = useEncounterUi((s) => s.placement);
   const placingId = useEncounterUi((s) => s.placingId);
   const placingAll = useEncounterUi((s) => s.placingAll);
   const tool = useEncounterUi((s) => s.tool);
+  const hover = useEncounterUi((s) => s.hover);
   const brush = useFogViewStore((s) => s.brush);
   const placingName = useEncounterStore((s) => s.encounter?.combatants.find((c) => c.id === placingId)?.name);
+  const opening = useEncounterStore((s) =>
+    hover?.kind === 'opening' ? s.map?.openings.find((o) => o.id === hover.id) : undefined,
+  );
+  const openingState = useEncounterStore((s) =>
+    opening ? (s.encounter?.openingStates[opening.id] ?? opening.state) : null,
+  );
   const hints: [boolean, string][] = [
     [placement !== null && placement.origin === null, `Click the origin of ${placement?.template.name} · Esc cancels`],
     [placement !== null, 'Move the pointer to aim, click to confirm · Esc cancels'],
@@ -56,6 +69,11 @@ function ViewportHint() {
     [placingName !== undefined, `Click a square to place ${placingName} · Esc cancels`],
     [brush !== 'off', BRUSH_HINT[brush]],
     [tool === 'measure', 'Drag on the map to measure · S returns to Select'],
+    [
+      opening !== undefined && openingState !== null,
+      `${opening?.secret ? 'Secret ' : ''}${opening?.kind}, ${openingState}: ` +
+        (openingState ? OPENING_ACTIONS[openingState] : ''),
+    ],
   ];
   const fallback =
     'Click a token to select, drag to move, right-click for actions · ' +
@@ -268,9 +286,18 @@ export function PlayViewport({ map, terrain }: { map: BattleMap; terrain: Height
   const rightDown = useRef<{ x: number; y: number } | null>(null);
   const rightToken = useRef<string | null>(null);
 
+  const hover = useEncounterUi((s) => s.hover);
   const onPointer = useCallback(
     (event: MapPointerEvent) => {
       try {
+        if (event.type === 'move') {
+          const target = event.hit?.kind === 'token' || event.hit?.kind === 'opening' ? event.hit : null;
+          const { hover: current } = useEncounterUi.getState();
+          // Moves arrive every frame; the store changes only between targets.
+          if (current?.kind !== target?.kind || current?.id !== target?.id) {
+            useEncounterUi.setState({ hover: target });
+          }
+        }
         if (event.type === 'down' && event.button === 2 && event.hit?.kind === 'token') {
           rightToken.current = event.hit.id;
         }
@@ -291,6 +318,8 @@ export function PlayViewport({ map, terrain }: { map: BattleMap; terrain: Height
   return (
     <div
       className="play-viewport"
+      style={{ cursor: hover ? 'pointer' : undefined }}
+      onPointerLeave={() => useEncounterUi.setState({ hover: null })}
       onPointerDownCapture={(e) => {
         if (e.button === 2) {
           rightDown.current = { x: e.clientX, y: e.clientY };

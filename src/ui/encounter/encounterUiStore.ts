@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { MapPoint, MarkerTemplate } from '@/core/model';
 import type { RollMode } from '@/core/rules/dice';
 import type { CameraMode } from '@/render/CameraRig';
+import type { HitTag } from '@/render/mapRenderContext';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
 
 export type EncounterTool = 'select' | 'measure';
@@ -16,6 +17,8 @@ interface EncounterUiState {
   rollMode: RollMode;
   /** Last pointer position on the map while placing something. */
   pointer: MapPoint | null;
+  /** Token or door under the pointer; it glows and the cursor turns into a hand. */
+  hover: HitTag | null;
   drag: { combatantId: string; from: MapPoint; to: MapPoint } | null;
   /** Combatant waiting for a click on the map. */
   placingId: string | null;
@@ -41,6 +44,7 @@ export const useEncounterUi = create<EncounterUiState>(() => ({
   camera: 'top',
   rollMode: 'normal',
   pointer: null,
+  hover: null,
   drag: null,
   placingId: null,
   placingAll: false,
