@@ -1,35 +1,35 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fitUnitFt, type DamCatalog } from '@/core/import/damCatalog';
 import type { DamProject } from '@/core/import/damProject';
 import { damObjectKinds, type DamObjectChoice, type DamObjectChoices } from '@/core/import/damObjects';
 import type { MapImage } from '@/core/model';
 import type { GridCalibration } from '@/core/terrain/calibration';
+import {
+  downloadPolyHaven,
+  missingPolyHavenModels,
+  plannedBytes,
+  planPolyHaven,
+  polyHavenStandIns,
+} from '@/data/polyHaven';
 import { useAppStore } from '@/state/appStore';
-import { Button } from '../kit';
+import { Button, confirmDialog } from '../kit';
+import { loadDamCatalog, modelSize, projectChoices } from './daCatalog';
 import {
   CC0_MODELS,
-  DA_UNIT_FT,
   damObjectPixels,
   importFolderModel,
   importModelFiles,
   listFolderModels,
   listLibraryModels,
+  METERS_TO_FEET,
   type ModelOption,
 } from './daObjects';
 
 const SKIP = 'skip';
 const OTHER_FILE = 'file';
 const FOLDER_PREFIX = 'folder:';
-
-/** Every kept choice for the project's kinds, with a skip entry for kinds never seen before. */
-export function choicesForProject(project: DamProject, choices: DamObjectChoices): DamObjectChoices {
-  const objects = { ...choices.objects };
-  damObjectKinds(project).forEach(({ blockId }) => {
-    objects[blockId] ??= { name: `Object ${blockId.slice(0, 8)}`, model: null, unitFt: DA_UNIT_FT, rotationDeg: 0 };
-  });
-  return { ...choices, objects };
-}
 
 /** The export's picture placed as the import will place it. */
 export interface DamPreview {
@@ -50,14 +50,19 @@ interface DamObjectsPanelProps {
 /**
  * One row per Dungeon Alchemist object kind: the DM picks a model (shipped CC0 stand-in, own
  * file, or a file from a folder such as Dungeon Alchemist's custom models) or skips the kind.
- * The map picture beside the table marks where the hovered or selected kind stands, since
- * Dungeon Alchemist files name kinds only by id.
+ * Names and sizes come from Dungeon Alchemist's own database when it is installed; the map
+ * picture beside the table marks where the hovered or selected kind stands.
  */
 export function DamObjectsPanel({ project, choices, preview, onChange }: DamObjectsPanelProps) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const [library, setLibrary] = useState<ModelOption[]>([]);
+  // Undefined while loading, null without a Dungeon Alchemist install.
+  const [catalog, setCatalog] = useState<DamCatalog | null>();
   const [folderModels, setFolderModels] = useState<string[]>([]);
+  const [polyHaven, setPolyHaven] = useState<ModelOption[]>([]);
+  // Bytes done and total while the Poly Haven models download.
+  const [download, setDownload] = useState<{ done: number; total: number } | null>(null);
   const [fileTarget, setFileTarget] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const kinds = useMemo(() => damObjectKinds(project), [project]);
@@ -68,22 +73,47 @@ export function DamObjectsPanel({ project, choices, preview, onChange }: DamObje
     () => (preview && shown !== null ? damObjectPixels(project, shown, preview.image, preview.calibration) : []),
     [project, shown, preview],
   );
-  const options = [...CC0_MODELS, ...library];
+  const options = [...polyHaven, ...CC0_MODELS, ...library];
 
+  // Models of the Poly Haven pack not downloaded yet; null while counting.
+  const [missing, setMissing] = useState<number | null>(null);
+  const refreshPolyHaven = useCallback(async () => {
+    const [bySlot, count] = await Promise.all([polyHavenStandIns(repository), missingPolyHavenModels(repository)]);
+    setPolyHaven(
+      Object.values(bySlot)
+        .flat()
+        .map((model) => ({
+          label: `${model.path.slice(model.path.lastIndexOf('/') + 1, -'.gltf'.length)} (Poly Haven)`,
+          model,
+          unitFt: METERS_TO_FEET,
+        })),
+    );
+    setMissing(count);
+  }, [repository]);
   useEffect(() => {
     listLibraryModels(repository).then(setLibrary, reportError);
-  }, [repository, reportError]);
+    refreshPolyHaven().catch(reportError);
+  }, [repository, reportError, refreshPolyHaven]);
   useEffect(() => {
     if (choices.modelFolder !== null && isTauri()) {
       listFolderModels(choices.modelFolder).then(setFolderModels, reportError);
     }
   }, [choices.modelFolder, reportError]);
+  useEffect(() => {
+    loadDamCatalog(choices.gameFolder).then(setCatalog, reportError);
+  }, [choices.gameFolder, reportError]);
 
   const update = (blockId: string, patch: Partial<DamObjectChoice>) =>
     onChange({ ...choices, objects: { ...choices.objects, [blockId]: { ...choices.objects[blockId]!, ...patch } } });
+  // Sized to the kind when Dungeon Alchemist's database knows its size.
+  const assign = async (blockId: string, option: ModelOption) => {
+    const sizeFt = catalog?.[blockId]?.sizeFt;
+    const unitFt = sizeFt ? fitUnitFt(sizeFt, await modelSize(repository, option.model)) : option.unitFt;
+    update(blockId, { model: option.model, unitFt });
+  };
   const adoptModel = (blockId: string, option: ModelOption) => {
     setLibrary((l) => (l.some((o) => o.model.path === option.model.path) ? l : [...l, option]));
-    update(blockId, { model: option.model, unitFt: option.unitFt });
+    return assign(blockId, option);
   };
   const select = (blockId: string, key: string) => {
     const option = options.find((o) => `${o.model.area}/${o.model.path}` === key);
@@ -93,9 +123,20 @@ export function DamObjectsPanel({ project, choices, preview, onChange }: DamObje
       setFileTarget(blockId);
       input.current?.click();
     } else if (key.startsWith(FOLDER_PREFIX)) {
-      importFolderModel(repository, key.slice(FOLDER_PREFIX.length)).then((o) => adoptModel(blockId, o), reportError);
+      importFolderModel(repository, key.slice(FOLDER_PREFIX.length))
+        .then((o) => adoptModel(blockId, o))
+        .catch(reportError);
     } else if (option) {
-      update(blockId, { model: option.model, unitFt: option.unitFt });
+      assign(blockId, option).catch(reportError);
+    }
+  };
+  const locateGame = async () => {
+    const folder = await open({ directory: true, title: 'Dungeon Alchemist folder' });
+    if (folder !== null && (await loadDamCatalog(folder)) === null) {
+      throw new Error(`"${folder}" is not Dungeon Alchemist's folder; choose the one with Dungeon Alchemist.exe`);
+    }
+    if (folder !== null) {
+      onChange(await projectChoices(repository, project, { ...choices, gameFolder: folder }, false));
     }
   };
   const pickFolder = async () => {
@@ -104,15 +145,63 @@ export function DamObjectsPanel({ project, choices, preview, onChange }: DamObje
       onChange({ ...choices, modelFolder: folder });
     }
   };
+  const downloadPolyHavenModels = async () => {
+    const plan = await planPolyHaven(repository);
+    const total = plannedBytes(plan);
+    const count = plan.filter((m) => m.needed).length;
+    const ok = await confirmDialog({
+      title: 'Download Poly Haven models',
+      message:
+        `${count} realistic plant, rock and furniture models (CC0, ${Math.round(total / 1e6)} MB) from ` +
+        'polyhaven.com go into the pack "Poly Haven models"; Auto-assign then prefers them. ' +
+        'Compendium > Packs removes them again.',
+      confirmLabel: 'Download',
+    });
+    if (ok) {
+      setDownload({ done: 0, total });
+      try {
+        await downloadPolyHaven(repository, plan, (done) => setDownload({ done, total }));
+      } finally {
+        setDownload(null);
+      }
+      await refreshPolyHaven();
+      onChange(await projectChoices(repository, project, choices, true));
+    }
+  };
 
   return (
     <div className="col">
       <p className="muted">
         {project.objects.length} objects of {kinds.length} kinds. Dungeon Alchemist's own models stay in Dungeon
         Alchemist; pick a stand-in per kind. Choices are kept for later imports.
+        {catalog === null && " Dungeon Alchemist wasn't found, so the kinds have no names."}
       </p>
       <div className="row">
+        {catalog && (
+          <Button
+            icon="cube"
+            label="Auto-assign stand-ins"
+            title="Give every kind with a matching stand-in that model, sized as in Dungeon Alchemist"
+            onClick={() => projectChoices(repository, project, choices, true).then(onChange, reportError)}
+          />
+        )}
+        {catalog === null && isTauri() && (
+          <Button icon="search" label="Locate Dungeon Alchemist…" onClick={() => locateGame().catch(reportError)} />
+        )}
         {isTauri() && <Button icon="folder" label="Model folder…" onClick={() => pickFolder().catch(reportError)} />}
+        {missing !== null && missing > 0 && (
+          <Button
+            icon="upload"
+            label={
+              download
+                ? `Downloading… ${Math.round((100 * download.done) / Math.max(download.total, 1))}%`
+                : 'Get realistic models…'
+            }
+            title="Download CC0 plants, rocks and furniture from Poly Haven"
+            disabled={download !== null}
+            onClick={() => downloadPolyHavenModels().catch(reportError)}
+          />
+        )}
         {choices.modelFolder !== null && <span className="muted portrait-folder">{choices.modelFolder}</span>}
       </div>
       <div className="dam-objects-layout">
@@ -237,7 +326,9 @@ export function DamObjectsPanel({ project, choices, preview, onChange }: DamObje
           const files = [...(e.target.files ?? [])];
           e.target.value = '';
           if (fileTarget !== null && files.length > 0) {
-            importModelFiles(repository, files).then((o) => adoptModel(fileTarget, o), reportError);
+            importModelFiles(repository, files)
+              .then((o) => adoptModel(fileTarget, o))
+              .catch(reportError);
           }
         }}
       />

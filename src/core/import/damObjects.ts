@@ -23,13 +23,15 @@ export const damObjectChoicesSchema = z.object({
   version: z.literal(1),
   /** Last folder models were picked from (Dungeon Alchemist's custom models), absolute path. */
   modelFolder: z.string().nullable(),
+  /** Dungeon Alchemist's install folder the DM located; null finds Steam installs by itself. */
+  gameFolder: z.string().nullable().default(null),
   /** By Dungeon Alchemist block id. */
   objects: z.record(z.string(), damObjectChoiceSchema),
 });
 export type DamObjectChoices = z.infer<typeof damObjectChoicesSchema>;
 
 export function emptyDamObjectChoices(): DamObjectChoices {
-  return { schema: 'dungeon-alchemist-objects', version: 1, modelFolder: null, objects: {} };
+  return { schema: 'dungeon-alchemist-objects', version: 1, modelFolder: null, gameFolder: null, objects: {} };
 }
 
 export interface DamObjectKind {

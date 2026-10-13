@@ -31,6 +31,7 @@ pub fn run() {
             storage::storage_list_folder,
             storage::storage_import_file,
             storage::storage_read_file_text,
+            storage::storage_is_file,
             storage::storage_read_file_bytes,
             storage::storage_write_file_bytes,
             history::history_list,

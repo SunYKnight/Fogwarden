@@ -12,8 +12,9 @@ import { CheckboxField, NumberField, SliderField, TextField } from '../component
 import { completeOnboardingStep } from '../home/onboarding';
 import { Button, Dialog, Icon } from '../kit';
 import { openNewEncounter } from './compendiumUi';
+import { projectChoices } from './daCatalog';
 import { damPropsFor, loadDamObjectChoices, saveDamObjectChoices } from './daObjects';
-import { choicesForProject, DamObjectsPanel } from './DamObjectsPanel';
+import { DamObjectsPanel } from './DamObjectsPanel';
 import { isDamFile, isImageFile, isMapSourceFile, useFileDrop } from './fileDrop';
 import {
   cornerGesture,
@@ -116,7 +117,7 @@ async function withProject(draft: Draft, file: File): Promise<Draft> {
   damMargin(project, fitSquaresToImage(draft.image, draft.calibration.pxPerSquare));
   const { repository } = useAppStore.getState();
   const kept = project.objects.length > 0 ? await loadDamObjectChoices(repository) : null;
-  const objects = kept && choicesForProject(project, kept);
+  const objects = kept && (await projectChoices(repository, project, kept, false));
   return { ...draft, source: { ...draft.source, project, objects } };
 }
 

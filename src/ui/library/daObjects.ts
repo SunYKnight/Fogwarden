@@ -19,8 +19,8 @@ import { modelSideFiles } from '@/sync/relayClient';
 /** Models the DM picked for Dungeon Alchemist objects, one folder per model with its side files. */
 const LIBRARY_MODELS = 'library/dungeon-alchemist-models';
 const MODEL_FILE = /\.(glb|gltf)$/i;
-// glTF models made for general use are in meters.
-const METERS_TO_FEET = 3.28084;
+/** glTF models made for general use are in meters. */
+export const METERS_TO_FEET = 3.28084;
 /** Models made for Dungeon Alchemist: one unit is one square. */
 export const DA_UNIT_FT = 5;
 // Model file names may carry characters storage paths refuse.
@@ -139,7 +139,7 @@ export async function importFolderModel(repository: Repository, absolutePath: st
       )
     : [];
   await importFile(absolutePath, model.path);
-  await Promise.all(sides.map((side) => importFile(`${dir}/${side.path.slice(folder.length + 1)}`, side.path)));
+  await Promise.all(sides.map((side) => importFile(`${dir}/${side.ref.path.slice(folder.length + 1)}`, side.ref.path)));
   return { label: fileName.replace(MODEL_FILE, ''), model, unitFt: DA_UNIT_FT };
 }
 
@@ -149,7 +149,7 @@ async function copyModelToMap(repository: Repository, model: AssetRef, mapId: st
   const parts = model.path.split('/');
   const dir = parts.slice(0, -1).join('/');
   const target = (path: string) => mapAssetRef(mapId, `models/${parts.at(-2)}/${path.slice(dir.length + 1)}`);
-  const sides = modelSideFiles(model, await storage.readBytes(model.area, model.path));
+  const sides = modelSideFiles(model, await storage.readBytes(model.area, model.path)).map((side) => side.ref);
   await Promise.all([model, ...sides].map((ref) => storage.copy(ref.area, ref.path, target(ref.path).path)));
   return target(model.path);
 }

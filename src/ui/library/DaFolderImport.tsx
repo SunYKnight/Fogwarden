@@ -9,8 +9,9 @@ import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { CheckboxField } from '../components/fields';
 import { Button, Dialog } from '../kit';
+import { projectChoices } from './daCatalog';
 import { damPropsFor, loadDamObjectChoices, saveDamObjectChoices } from './daObjects';
-import { choicesForProject, DamObjectsPanel, type DamPreview } from './DamObjectsPanel';
+import { DamObjectsPanel, type DamPreview } from './DamObjectsPanel';
 import { saveImportedMap, storeMapImage } from './mapImport';
 
 interface FloorPlan {
@@ -89,7 +90,13 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
     const projectsWithObjects = plan.maps.flatMap((m) => (m.project?.objects.length ? [m.project] : []));
     if (projectsWithObjects.length > 0) {
       loadDamObjectChoices(repository)
-        .then((kept) => setChoices(projectsWithObjects.reduce((all, p) => choicesForProject(p, all), kept)))
+        .then((kept) =>
+          projectsWithObjects.reduce(
+            async (all, p) => projectChoices(repository, p, await all, false),
+            Promise.resolve(kept),
+          ),
+        )
+        .then(setChoices)
         .catch(reportError);
     }
   }, [plan, repository, reportError]);

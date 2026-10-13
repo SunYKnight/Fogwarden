@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Dungeon Alchemist objects: with Dungeon Alchemist installed (Steam libraries are searched; **Locate Dungeon
+  Alchemist…** otherwise), the import reads its object database (read only), so kinds get their real names and
+  picked models are sized to fit the kind's box instead of a guessed scale. **Auto-assign stand-ins** gives every kind
+  whose name or keywords match a tree, plant, rock or piece of furniture a model; new kinds get one on import.
+  **Get realistic models…** downloads 20 CC0 models from Poly Haven (1k textures, about 50 MB) into the data pack
+  "Poly Haven models"; sets of plants are split into one model per variant, and Auto-assign prefers these models.
+  Dungeon Alchemist rooms import without a roof.
+- Fix: models that load textures or buffers from files next to them (`.gltf`, and `.glb` files such as the shipped
+  crate, barrel and chest) lost those files in the desktop app (HTTP 403).
+- Fix: roofs showed the battlemap of the floor below tinted into their material.
 - Dungeon Alchemist buildings: a `.dam` project imported with its `.dd2vtt` (or Foundry folder) now brings the ground
   level's rooms (floor, 12 ft storey ceiling, roof), storey-high walls on the true room outlines, doors and windows
   (kind from the export's portals) and free-standing pillars; the export's lines of the same building are dropped

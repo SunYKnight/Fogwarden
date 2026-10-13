@@ -262,18 +262,28 @@ bring the grid, walls, doors, windows and lights along:
 - **DungeonFog**: export with file type _Universal VTT_ (`.df2vtt`).
 
 With a `.dam`, the buildings of its ground level replace the export's wall lines: walls stand on the true room
-outlines at Dungeon Alchemist's storey height (12 ft), rooms get floors and roofs, doors and windows sit where the
-project has them. Dungeon Alchemist draws its picture in perspective, so the export's lines trace the wall tops a
-little outside the true walls; the import works this out. Upper floors are not imported yet.
+outlines at Dungeon Alchemist's storey height (12 ft), rooms get floors (tick _Roof_ on a room to add one), doors and
+windows sit where the project has them. Dungeon Alchemist draws its picture in perspective, so the export's lines
+trace the wall tops a little outside the true walls; the import works this out. Upper floors are not imported yet.
 
 The grid comes from the file, so the wizard skips the grid step; _Check grid_ shows it over the image first. Walls are
 10 ft high, sight-blocking objects 6 ft; lights reach their full range, half of it bright. When the export says the
 lighting is baked into the picture, the ambient light is set one level brighter and the map notes say so.
 
 Dungeon Alchemist's own 3D models stay in Dungeon Alchemist. On import with a `.dam`, every object kind is listed once
-with its count; pick a stand-in per kind: a shipped CC0 model, your own `.glb`/`.gltf`, a file from a folder (for
-example the custom models you added under `Dungeon Alchemist_Data/StreamingAssets/Models/`), or _Skip_. The choices
-are kept for later imports.
+with its count; pick a stand-in per kind: a shipped CC0 model, a downloaded Poly Haven model, your own
+`.glb`/`.gltf`, a file from a folder (for example the custom models you added under
+`Dungeon Alchemist_Data/StreamingAssets/Models/`), or _Skip_. The choices are kept for later imports.
+
+- **Names and sizes**: when Dungeon Alchemist is installed (found through Steam, or **Locate Dungeon Alchemist…**),
+  the kinds get its names ("Fern", "Evergreen Tree") and a picked model is sized to fit the kind's box from its
+  database (`StreamingAssets/Database/BuildingBlocks.json`, `ModelStaticData.json`; read only).
+- **Auto-assign stand-ins** picks a model for every kind whose name or keywords match a tree, plant, rock or piece of
+  furniture, and sizes it; kinds seen for the first time get one on import already. Food, cutlery and other clutter
+  stay skipped.
+- **Get realistic models…** downloads about 20 CC0 models (plants, rocks, furniture; about 50 MB with 1k textures)
+  from [Poly Haven](https://polyhaven.com) into the pack "Poly Haven models" in the data folder; Auto-assign prefers
+  them over the shipped Kenney models. Trees still use the shipped ones. Remove the pack under **Compendium > Packs**.
 
 ## Exporting maps
 

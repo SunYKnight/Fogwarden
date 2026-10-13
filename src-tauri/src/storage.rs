@@ -421,6 +421,13 @@ pub fn storage_read_file_text(path: String) -> Result<String, StorageError> {
     Ok(fs::read_to_string(picked_file(&path)?)?)
 }
 
+/// Whether the absolute path `path` names an existing file, for finding other programs' data.
+#[tauri::command]
+pub fn storage_is_file(path: String) -> bool {
+    let file = PathBuf::from(&path);
+    file.is_absolute() && file.is_file()
+}
+
 /// Bytes of a file the user picked (absolute path) outside the storage roots, as a raw response.
 #[tauri::command]
 pub fn storage_read_file_bytes(path: String) -> Result<Response, StorageError> {
