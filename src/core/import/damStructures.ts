@@ -152,7 +152,8 @@ export function withDamStructures(
       polygon: polygon.map(shift),
       floorFt: structure.floorFt,
       ceilingFt: structure.storeyFt,
-      roof: true,
+      // Dungeon Alchemist maps show rooms from above; the DM adds roofs.
+      roof: false,
       roofMaterial: 'wood',
     }));
   const notes =

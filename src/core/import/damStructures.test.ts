@@ -174,7 +174,7 @@ describe('withDamStructures', () => {
     const content = withDamStructures(EMPTY, exportOfRoom(), project, GRID);
     const room = content.walls.find((w) => w.closed && w.heightFt === 12 && w.points.length === 4)!;
     expect(new Set(room.points.map((p) => `${p.x},${p.y}`))).toEqual(new Set(['5,25', '20,25', '20,15', '5,15']));
-    expect(content.rooms).toMatchObject([{ name: 'Room 1', floorFt: 1, ceilingFt: 12, roof: true }]);
+    expect(content.rooms).toMatchObject([{ name: 'Room 1', floorFt: 1, ceilingFt: 12, roof: false }]);
     expect(content.rooms[0]!.polygon).toHaveLength(4);
     // No export portal on the door: a door. The window takes the export's.
     expect(content.openings.map((o) => [o.kind, o.widthFt, o.wallId === room.id])).toEqual([
