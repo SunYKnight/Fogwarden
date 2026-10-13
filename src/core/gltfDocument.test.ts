@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { gltfSize, splitGltfVariants } from './gltfDocument';
+import { gltfJsonSchema, gltfSize, splitGltfVariants } from './gltfDocument';
 
 // Two ferns side by side, each a unit cube mesh; the second root is scaled
 // and has a child offset upwards.
 function fernSet() {
-  return {
+  return gltfJsonSchema.parse({
     asset: { version: '2.0' },
     scene: 0,
     scenes: [{ nodes: [0, 1] }],
@@ -16,7 +16,7 @@ function fernSet() {
     meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
     accessors: [{ min: [-0.5, 0, -0.5], max: [0.5, 1, 0.5] }],
     buffers: [{ uri: 'fern_02.bin', byteLength: 36 }],
-  };
+  });
 }
 
 describe('gltfSize', () => {

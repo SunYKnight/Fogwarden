@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { StandInSlot } from '@/core/import/damCatalog';
-import { splitGltfVariants } from '@/core/gltfDocument';
+import { gltfJsonSchema, simplifyVariant, splitGltfVariants } from '@/core/gltfDocument';
 import type { AssetRef } from '@/core/model';
 import { PACK_FILE, PACKS_DIR, type PackManifest } from './packs';
 import type { Repository } from './repository';
@@ -20,13 +20,19 @@ const MODELS_DIR = `${PACKS_DIR}/${POLY_HAVEN_PACK.id}/models`;
 // 1k textures keep about 20 models with three maps each near 300 MB of video
 // memory; seen from above at battlemap scale 2k adds no visible detail.
 const RESOLUTION = '1k';
+// Poly Haven's scanned trees reach 700k triangles a variant; 30k keeps their
+// look from the DM's camera and lets a map hold dozens.
+const TRIANGLE_BUDGET = 30_000;
 
 /**
  * Poly Haven model per stand-in slot. `set` models hold several variants side by side
  * (a row of ferns) and are split into one file per variant.
  */
 const POLY_HAVEN_MODELS: { slot: StandInSlot; id: string; set: boolean }[] = [
+  { slot: 'conifer', id: 'fir_sapling_medium', set: true },
+  { slot: 'tree', id: 'searsia_burchellii', set: true },
   { slot: 'fern', id: 'fern_02', set: true },
+  { slot: 'flower', id: 'dandelion_01', set: true },
   { slot: 'ivy', id: 'weed_plant_02', set: true },
   // Not shrub_04: 27k triangles a plant is too heavy for a forest of them.
   { slot: 'bush', id: 'shrub_03', set: true },
@@ -34,6 +40,7 @@ const POLY_HAVEN_MODELS: { slot: StandInSlot; id: string; set: boolean }[] = [
   { slot: 'log', id: 'dead_tree_trunk', set: false },
   { slot: 'stump', id: 'tree_stump_01', set: false },
   { slot: 'rock', id: 'rock_07', set: false },
+  { slot: 'rock', id: 'namaqualand_boulder_02', set: false },
   { slot: 'table', id: 'WoodenTable_01', set: false },
   { slot: 'chair', id: 'gallinera_chair', set: false },
   { slot: 'barrel', id: 'wine_barrel_01', set: false },
@@ -135,7 +142,8 @@ function licenseText(plan: PlannedModel[]): string {
 
 /**
  * Downloads the models still needed into the user pack "Poly Haven models", one folder per
- * model. Set models get one `.gltf` per variant; `onProgress` gets the bytes done so far.
+ * model and one `.gltf` with its own `.bin` per variant (sets are split), simplified to
+ * `TRIANGLE_BUDGET`; textures are shared. `onProgress` gets the bytes downloaded so far.
  */
 export async function downloadPolyHaven(
   repository: Repository,
@@ -148,19 +156,27 @@ export async function downloadPolyHaven(
   // One file at a time keeps Poly Haven's servers and the progress readable.
   for (const model of plan.filter((m) => m.needed)) {
     const dir = `${MODELS_DIR}/${model.id}`;
+    const resources: Record<string, Uint8Array<ArrayBuffer>> = {};
     for (const file of model.files) {
       const bytes = new Uint8Array(await (await fetchOk(file.url)).arrayBuffer());
       if (bytes.length !== file.size) {
         throw new Error(`Poly Haven sent ${bytes.length} of ${file.size} bytes for ${file.url}`);
       }
-      await storage.writeBytes(`${dir}/${file.path}`, bytes);
+      resources[file.path] = bytes;
       done += file.size;
       onProgress(done);
     }
-    const document = z.record(z.string(), z.unknown()).parse(await (await fetchOk(model.gltfUrl)).json());
+    const document = gltfJsonSchema.parse(await (await fetchOk(model.gltfUrl)).json());
     const variants = model.set ? splitGltfVariants(document) : [{ name: model.id, document }];
+    const written = new Set<string>();
     for (const variant of variants) {
-      await storage.writeText(`${dir}/${variant.name}.gltf`, JSON.stringify(variant.document));
+      const files = await simplifyVariant(variant, resources, TRIANGLE_BUDGET);
+      // The .gltf goes last: its presence marks the model as downloaded.
+      for (const [path, bytes] of Object.entries(files.resources).filter(([path]) => !written.has(path))) {
+        await storage.writeBytes(`${dir}/${path}`, bytes);
+        written.add(path);
+      }
+      await storage.writeText(`${dir}/${variant.name}.gltf`, files.gltf);
     }
   }
   await storage.writeText(`${PACKS_DIR}/${POLY_HAVEN_PACK.id}/LICENSE.md`, licenseText(plan));

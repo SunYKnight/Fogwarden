@@ -2,12 +2,19 @@
 
 ## Unreleased
 
+- Settings > Graphics: lights with shadows (0-8, default 4 instead of 8), resolution (50-100 % of the screen's
+  pixel density) and prop shadows, with Low, Medium and High presets; the section shows the graphics card and
+  suggests Low for integrated graphics. Applies to the DM's map views at once and to the player window on the same
+  computer when it opens; LAN and relay players use the defaults. Blended leaf textures in props are cut out
+  instead (alpha test), which skips lighting their hidden pixels.
 - Dungeon Alchemist objects: with Dungeon Alchemist installed (Steam libraries are searched; **Locate Dungeon
   Alchemist…** otherwise), the import reads its object database (read only), so kinds get their real names and
   picked models are sized to fit the kind's box instead of a guessed scale. **Auto-assign stand-ins** gives every kind
   whose name or keywords match a tree, plant, rock or piece of furniture a model; new kinds get one on import.
-  **Get realistic models…** downloads 20 CC0 models from Poly Haven (1k textures, about 50 MB) into the data pack
-  "Poly Haven models"; sets of plants are split into one model per variant, and Auto-assign prefers these models.
+  **Get realistic models…** downloads 23 CC0 models from Poly Haven (fir and broadleaf trees, plants, flowers, rocks,
+  furniture; 1k textures, about 170 MB) into the data pack "Poly Haven models" (about 65 MB): sets are split into one
+  model per variant, meshes over 30,000 triangles are simplified, and Auto-assign prefers these models. New
+  dependencies: @gltf-transform/core, @gltf-transform/extensions, @gltf-transform/functions, meshoptimizer.
   Dungeon Alchemist rooms import without a roof.
 - Fix: models that load textures or buffers from files next to them (`.gltf`, and `.glb` files such as the shipped
   crate, barrel and chest) lost those files in the desktop app (HTTP 403).

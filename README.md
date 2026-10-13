@@ -281,9 +281,11 @@ with its count; pick a stand-in per kind: a shipped CC0 model, a downloaded Poly
 - **Auto-assign stand-ins** picks a model for every kind whose name or keywords match a tree, plant, rock or piece of
   furniture, and sizes it; kinds seen for the first time get one on import already. Food, cutlery and other clutter
   stay skipped.
-- **Get realistic models…** downloads about 20 CC0 models (plants, rocks, furniture; about 50 MB with 1k textures)
-  from [Poly Haven](https://polyhaven.com) into the pack "Poly Haven models" in the data folder; Auto-assign prefers
-  them over the shipped Kenney models. Trees still use the shipped ones. Remove the pack under **Compendium > Packs**.
+- **Get realistic models…** downloads 23 CC0 models from [Poly Haven](https://polyhaven.com): fir trees, a broadleaf
+  tree, plants, flowers, rocks and furniture (about 170 MB with 1k textures). They go into the pack "Poly Haven
+  models" in the data folder, about 65 MB after the download: sets are split into one model per variant and scanned
+  trees are simplified to 30,000 triangles. Auto-assign prefers them over the shipped Kenney models; models already
+  downloaded are kept, so the button only fetches what is missing. Remove the pack under **Compendium > Packs**.
 
 ## Exporting maps
 
@@ -308,6 +310,14 @@ Attach portraits from folder…** and pick a folder of PNG/JPEG/WebP files named
 preview lists matched and unmatched files before anything is copied into your data folder under the creatures' ids;
 existing pictures are only replaced when you tick the box. One picture per creature also works in the creature
 editor's Image/Token fields (the file is copied at once); for shipped creatures that keeps the creature shipped.
+
+## Graphics quality
+
+A slow 3D view (integrated graphics such as Intel UHD) gets faster in **Settings > Graphics**: fewer lights with
+shadows (each costs six extra render passes), a lower resolution and props without shadows. The section names the
+graphics card and suggests a preset (Low for integrated graphics, else High); the presets only fill in the three
+values. Changes apply at once to the DM's views; the player window on the same computer takes them when it opens,
+LAN/relay players use the defaults (4 lights, full resolution, prop shadows).
 
 ## License of shipped content
 

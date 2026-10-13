@@ -49,6 +49,9 @@ texts come with each package.
 
 | Package                    | Version | License           |
 | -------------------------- | ------- | ----------------- |
+| @gltf-transform/core       | 4.5.1   | MIT               |
+| @gltf-transform/extensions | 4.5.1   | MIT               |
+| @gltf-transform/functions  | 4.5.1   | MIT               |
 | @react-three/drei          | 10.7.9  | MIT               |
 | @react-three/fiber         | 9.8.1   | MIT               |
 | @tauri-apps/api            | 2.12.3  | Apache-2.0 OR MIT |
@@ -58,6 +61,7 @@ texts come with each package.
 | immer                      | 11.1.21 | MIT               |
 | react                      | 19.3.0  | MIT               |
 | react-dom                  | 19.3.0  | MIT               |
+| meshoptimizer              | 1.3.0   | MIT               |
 | three                      | 0.186.1 | MIT               |
 | three-mesh-bvh             | 0.8.3   | MIT               |
 | ulid                       | 3.0.2   | MIT               |

@@ -75,12 +75,13 @@ export function parseDamCatalog(blocksText: string, modelsText: string): DamCata
 
 /**
  * Words in a kind's name or keywords that pick a stand-in slot; first match wins: conifers
- * before other trees, ferns and ivy before other plants, shelves before cabinets.
+ * before other trees, ferns, flowers and ivy before other plants, shelves before cabinets.
  */
 const SLOT_WORDS = [
   ['conifer', ['conifer', 'evergreen', 'pine', 'spruce', 'fir', 'cedar']],
   ['tree', ['tree', 'oak', 'birch', 'willow', 'maple']],
   ['fern', ['fern']],
+  ['flower', ['flower', 'flowers', 'dandelion', 'daisy', 'blossom']],
   ['ivy', ['ivy', 'groundcover', 'weed', 'weeds', 'nettle']],
   ['bush', ['bush', 'shrub', 'hedge']],
   ['branch', ['branch', 'branches', 'twig', 'twigs']],

@@ -1,3 +1,7 @@
+import { WebIO, type Document, type GLTF } from '@gltf-transform/core';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { dedup, prune, simplify, unpartition, weld } from '@gltf-transform/functions';
+import { MeshoptSimplifier } from 'meshoptimizer';
 import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import { z } from 'zod';
 import type { Size3 } from './import/damCatalog';
@@ -53,10 +57,16 @@ export function gltfSize(document: unknown): Size3 {
   return { x: size.x, y: size.y, z: size.z };
 }
 
+/** A glTF JSON document; parsing checks only that it is one, loaders check the rest. */
+export const gltfJsonSchema = z.custom<GLTF.IGLTF>(
+  (value) => typeof value === 'object' && value !== null && 'asset' in value,
+  'Not a glTF document',
+);
+
 /** One model of a set saved as several side by side, as its own glTF document. */
 export interface GltfVariant {
   name: string;
-  document: Record<string, unknown>;
+  document: GLTF.IGLTF;
 }
 
 /**
@@ -64,13 +74,59 @@ export interface GltfVariant {
  * row) into one document per root, each standing at the origin. Buffers and textures stay
  * shared; loaders read only what the scene uses.
  */
-export function splitGltfVariants(document: Record<string, unknown>): GltfVariant[] {
+export function splitGltfVariants(document: GLTF.IGLTF): GltfVariant[] {
   const doc = documentSchema.parse(document);
-  const nodes = z.array(z.record(z.string(), z.unknown())).parse(document.nodes);
+  const nodes = document.nodes ?? [];
   return doc.scenes[doc.scene]!.nodes.map((root) => {
     const { translation: _offset, ...placed } = nodes[root]!;
     const name = doc.nodes[root]!.name.replace(/_LOD0$/, '').replace(/[^\w-]+/g, '_') || `variant-${root}`;
     const variantNodes = nodes.map((node, i) => (i === root ? placed : node));
     return { name, document: { ...document, scene: 0, scenes: [{ nodes: [root] }], nodes: variantNodes } };
   });
+}
+
+function triangleCount(doc: Document): number {
+  const primitives = doc
+    .getRoot()
+    .listMeshes()
+    .flatMap((mesh) => mesh.listPrimitives());
+  return primitives.reduce(
+    (sum, p) => sum + (p.getIndices()?.getCount() ?? p.getAttribute('POSITION')!.getCount()) / 3,
+    0,
+  );
+}
+
+/** A variant's files: the `.gltf` text and the files it names (its `.bin`, shared textures). */
+export interface VariantFiles {
+  gltf: string;
+  resources: Record<string, Uint8Array<ArrayBuffer>>;
+}
+
+/**
+ * Keeps only what the variant's scene uses, in one buffer `<name>.bin`, and simplifies meshes
+ * whose triangles exceed `budget` to about that many. `resources` holds the files the source
+ * document names, by URI.
+ */
+export async function simplifyVariant(
+  variant: GltfVariant,
+  resources: Record<string, Uint8Array<ArrayBuffer>>,
+  budget: number,
+): Promise<VariantFiles> {
+  // Poly Haven models use KHR_texture_transform and other extensions.
+  const io = new WebIO().registerExtensions(ALL_EXTENSIONS);
+  const doc = await io.readJSON({ json: variant.document, resources });
+  await doc.transform(prune(), unpartition());
+  const triangles = triangleCount(doc);
+  if (triangles > budget) {
+    await MeshoptSimplifier.ready;
+    // An error bound of 2 % of the mesh size keeps leaf cards in place.
+    const reduce = simplify({ simplifier: MeshoptSimplifier, ratio: budget / triangles, error: 0.02 });
+    await doc.transform(dedup(), weld(), reduce, prune());
+  }
+  doc
+    .getRoot()
+    .listBuffers()
+    .forEach((buffer) => buffer.setURI(`${variant.name}.bin`));
+  const written = await io.writeJSON(doc);
+  return { gltf: JSON.stringify(written.json), resources: written.resources };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LoadingManager, Mesh, type Object3D } from 'three';
+import { LoadingManager, Mesh, type Material, type Object3D } from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { AssetRef } from '@/core/model';
@@ -26,7 +26,21 @@ async function fetchGltf(storage: Storage, asset: AssetRef, url: string): Promis
   );
   const urls = new Map(sides);
   const manager = new LoadingManager().setURLModifier((uri) => urls.get(uri) ?? uri);
-  return new GLTFLoader(manager).parseAsync(bytes, '');
+  const gltf = await new GLTFLoader(manager).parseAsync(bytes, '');
+  // Leaf cards exported as blended shade every hidden pixel for every light;
+  // cut out at half alpha they are discarded first. Glass (opacity) blends.
+  gltf.scene.traverse((child) => {
+    if (child instanceof Mesh) {
+      [child.material].flat().forEach((material: Material) => {
+        if (material.transparent && material.opacity === 1 && 'map' in material && material.map) {
+          material.transparent = false;
+          material.alphaTest = 0.5;
+          material.depthWrite = true;
+        }
+      });
+    }
+  });
+  return gltf;
 }
 
 /** The parsed glTF/GLB stored at `asset`; clone its scene before adding it anywhere. */
@@ -43,7 +57,7 @@ export async function loadGltf(storage: Storage, asset: AssetRef): Promise<GLTF>
   return load;
 }
 
-/** Shadow-casting clone of a stored glTF/GLB model's scene, or null while it loads. */
+/** Shadow-receiving clone of a stored glTF/GLB model's scene, or null while it loads. */
 export function useModel(asset: AssetRef): Object3D | null {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
@@ -58,7 +72,6 @@ export function useModel(asset: AssetRef): Object3D | null {
         const object = clone(gltf.scene);
         object.traverse((child) => {
           if (child instanceof Mesh) {
-            child.castShadow = true;
             child.receiveShadow = true;
           }
         });
