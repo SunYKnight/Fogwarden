@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- UI follows the DM's order of work (see `docs/UI_CONCEPT.md` §10):
+  - **Rail:** Home · Campaigns · Maps · Compendium · Play on top; Search, Players and Settings at the bottom. The
+    Server page is gone; its LAN, online and server setup moved to Settings > Players (old links open there).
+  - **Home** is the current campaign's dashboard (switcher in the header): Continue, Next session (unfinished
+    encounters with Play, open quests, a quick note into the session journal) and Recent maps; the drop zone became
+    an Import… button with drop anywhere on Home. Campaign notes moved into the Journal tab (same file).
+  - **Players popover:** status and one button each for the player window, LAN and online; monitor, view and
+    fullscreen are in Settings > Players.
+  - **Settings** shows one section at a time (Data · Players · Graphics · Audio · Rules · Content · About); version
+    history opens from Data > Version history…; content packs moved from Compendium > Packs to Settings > Content;
+    graphics details sit under Advanced.
+  - **Map editor:** full-width canvas unless something is selected; step help behind an ⓘ button (shown once per
+    step); a Layers button on the canvas; light rings only in Light & objects or for the selected light; Map settings
+    in tabs Map · Grid (details under Advanced) · Lighting & ground; Export… in the header's ⋯ menu.
+  - **Compendium:** split button per tab (New creature ▾ holds Import from text and Attach portraits from folder…);
+    Type, CR, Source and Mine only behind a Filters button with removable chips.
+  - **Play** follows the fight (Set up · Combat · Wrap up) with one accent button for the next step: a set-up bar
+    (place tokens, Roll initiative, Start combat) before combat, the turn bar only during it; Roll all, NPCs and
+    Sort moved into the initiative ⋯ menu. The map toolbar keeps map tools plus Help; Sound, Show to players, Scene
+    and the player switches (players move their own tokens, push camera, turn order) are in a new Table tab. With
+    nothing selected the inspector shows the encounter overview (difficulty breakdown, party HP, monsters left); the
+    Creature tab puts HP, active conditions (+ Condition) and attacks first, Token and Stat block collapsed.
+  - **Ctrl+K command search** (also Search in the rail): destinations, settings sections, create actions, player
+    window/LAN, play actions (start combat, next turn, weather, …) and creatures, maps, campaigns and encounters by
+    name.
 - Play: doors, windows and other openings have a white outline at the wall top on the DM's map, also over trees
   and roofs; pointing at one thickens it, shows a hand cursor and says in the hint line what a click and
   Shift+click do (open, close, lock, unlock). Tokens show the hand cursor too. Trees and other props let clicks

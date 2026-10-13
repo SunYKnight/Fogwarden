@@ -145,7 +145,7 @@ export const settingsSchema = z.object({
   remote: remoteSettingsSchema,
   /** Player links per view for the LAN server and the relay. */
   playerLinks: playerLinksSchema,
-  /** Order and enabled state of the content packs (Compendium > Packs). */
+  /** Order and enabled state of the content packs (Settings > Content). */
   packs: packSettingsSchema,
   /** Sound volumes (Settings > Audio, Play > Sound). */
   audio: audioSettingsSchema,

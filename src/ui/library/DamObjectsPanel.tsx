@@ -154,7 +154,7 @@ export function DamObjectsPanel({ project, choices, preview, onChange }: DamObje
       message:
         `${count} realistic plant, rock and furniture models (CC0, ${Math.round(total / 1e6)} MB) from ` +
         'polyhaven.com go into the pack "Poly Haven models"; Auto-assign then prefers them. ' +
-        'Compendium > Packs removes them again.',
+        'Settings > Content removes them again.',
       confirmLabel: 'Download',
     });
     if (ok) {

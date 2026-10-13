@@ -10,9 +10,16 @@ export interface NavItem {
   matches: (route: Route) => boolean;
 }
 
-/** Main destinations in workflow order: prepare (maps, compendium, campaigns) then play. */
+/** Main destinations in workflow order: campaigns, then maps and creatures for its encounters, then play. */
 export const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Home', icon: 'home', route: { page: 'home' }, matches: (r) => r.page === 'home' },
+  {
+    id: 'campaigns',
+    label: 'Campaigns',
+    icon: 'swords',
+    route: { page: 'campaigns', campaignId: null },
+    matches: (r) => r.page === 'campaigns',
+  },
   {
     id: 'maps',
     label: 'Maps',
@@ -27,13 +34,5 @@ export const NAV_ITEMS: NavItem[] = [
     route: { page: 'compendium', tab: 'creatures' },
     matches: (r) => r.page === 'compendium' || r.page === 'creature-editor',
   },
-  {
-    id: 'campaigns',
-    label: 'Campaigns',
-    icon: 'swords',
-    route: { page: 'campaigns', campaignId: null },
-    matches: (r) => r.page === 'campaigns',
-  },
   { id: 'play', label: 'Play', icon: 'play', route: { page: 'play' }, matches: (r) => r.page === 'play' },
-  { id: 'server', label: 'Server', icon: 'server', route: { page: 'server' }, matches: (r) => r.page === 'server' },
 ];

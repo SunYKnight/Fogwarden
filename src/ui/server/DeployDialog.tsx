@@ -180,7 +180,8 @@ export function DeployDialog({ remote, onClose }: { remote: RemoteSettings; onCl
         )}
         {dmKey && (
           <p className="small">
-            Done. DM key: <code className="settings-path">{dmKey}</code> (saved under Remote server).
+            Done. DM key: <code className="settings-path">{dmKey}</code> (saved under Settings &gt; Players &gt;
+            Online).
           </p>
         )}
       </div>

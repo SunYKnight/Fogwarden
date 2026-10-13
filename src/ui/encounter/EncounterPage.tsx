@@ -14,9 +14,12 @@ import { EndCombatDialog } from './EndCombatDialog';
 import { HpPromptDialog } from './HpPromptDialog';
 import { InitiativeStrip } from './InitiativeStrip';
 import { Inspector } from './Inspector';
-import { PlayerMovesToggle } from './PlayerMovesToggle';
 import { PlayViewport } from './PlayViewport';
 import { TurnBar } from './TurnBar';
+
+type CombatStep = 'setup' | 'combat' | 'wrapup';
+
+const COMBAT_STEPS: Record<CombatStep, string> = { setup: 'Set up', combat: 'Combat', wrapup: 'Wrap up' };
 
 function historyStep(direction: 'undo' | 'redo'): void {
   const store = useEncounterStore.getState();
@@ -72,11 +75,28 @@ function usePlayShortcuts(): void {
   );
 }
 
+/** Where the fight stands: set up, combat or wrap up, the current one marked. */
+function CombatStepper({ step }: { step: CombatStep }) {
+  return (
+    <ol className="combat-stepper" aria-label="Combat steps">
+      {(Object.keys(COMBAT_STEPS) as CombatStep[]).map((s) => (
+        <li key={s} className={s === step ? 'current' : ''} aria-current={s === step ? 'step' : undefined}>
+          {COMBAT_STEPS[s]}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function PlayHeader({ encounter, campaignName }: { encounter: Encounter; campaignName: string }) {
   const dirty = useEncounterStore((s) => s.revision !== s.savedRevision);
   const canUndo = useEncounterStore((s) => s.canUndo);
   const canRedo = useEncounterStore((s) => s.canRedo);
+  const endCombatOpen = useEncounterUi((s) => s.endCombatOpen);
   const current = currentCombatant(encounter);
+  const started = encounter.round > 0;
+  const empty = encounter.combatants.length === 0;
+  const step: CombatStep = endCombatOpen ? 'wrapup' : started ? 'combat' : 'setup';
   const turn = current ? `Round ${encounter.round} · ${current.name}` : 'Combat not started';
   return (
     <PageHeader
@@ -87,8 +107,26 @@ function PlayHeader({ encounter, campaignName }: { encounter: Encounter; campaig
       ]}
       status={`${turn} · ${dirty ? 'Saving…' : 'Saved'}`}
     >
-      <DifficultyBadge combatants={encounter.combatants} />
-      <PlayerMovesToggle allowed={encounter.playersMoveTokens} />
+      <CombatStepper step={step} />
+      <DifficultyBadge
+        combatants={encounter.combatants}
+        onClick={() => {
+          useEncounterStore.getState().select(null);
+          useEncounterUi.setState({ inspectorTab: 'creature' });
+        }}
+      />
+      {started ? (
+        <Button icon="check" label="End combat" onClick={() => useEncounterUi.setState({ endCombatOpen: true })} />
+      ) : (
+        <Button
+          icon="next"
+          label="Start combat"
+          variant={empty ? 'default' : 'primary'}
+          shortcut="Space"
+          disabled={empty}
+          onClick={() => stepTurn('next')}
+        />
+      )}
       <Button
         icon="undo"
         label="Undo"
@@ -128,7 +166,7 @@ function PlayLayout({ campaignName }: { campaignName: string }) {
             <div className="play-viewport waiting">No map for this encounter: initiative tracker only.</div>
           )}
           <Inspector encounter={encounter} hasMap={map !== null} />
-          <TurnBar encounter={encounter} />
+          <TurnBar encounter={encounter} hasMap={map !== null} />
         </div>
         {addDialogOpen && <AddCombatantsDialog />}
         <HpPromptDialog />

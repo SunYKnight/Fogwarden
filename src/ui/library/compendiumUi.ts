@@ -26,7 +26,7 @@ export function openNewEncounter(campaignId: string | null, map: DocRef | null =
   useCompendiumDialogStore.setState({ dialog: { kind: 'new-encounter', campaignId, map } });
 }
 
-/** Import from Aurora Builder (Compendium > Packs, Add combatants > Player character). */
+/** Import from Aurora Builder (Settings > Content, Compendium Items/Spells, Add combatants > Player character). */
 export function openAuroraImport(): void {
   useCompendiumDialogStore.setState({ dialog: { kind: 'aurora-import' } });
 }

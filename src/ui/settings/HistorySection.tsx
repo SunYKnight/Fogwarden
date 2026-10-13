@@ -121,7 +121,7 @@ async function restoreDocument(listing: HistoryListing, folder: FolderView, view
   return ok;
 }
 
-/** Settings > Data > History: what the app kept before changing files, restore per document, clean-up. */
+/** Settings > Data > Version history: what the app kept before changing files, restore per document, clean-up. */
 export function HistorySection() {
   const reportError = useAppStore((s) => s.reportError);
   const notify = useAppStore((s) => s.notify);
@@ -169,7 +169,6 @@ export function HistorySection() {
 
   return (
     <div className="col">
-      <h3 className="history-title">History</h3>
       <p className="muted small">
         Before the app changes or deletes a file, it keeps the previous version: the first one each day, for 30 days and
         at most 2 GB (today&apos;s always stay). They are plain files in the history folder.

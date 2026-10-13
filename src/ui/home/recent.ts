@@ -1,18 +1,30 @@
-import type { BattleMap, Campaign, DocRef, Encounter } from '@/core/model';
+import type { BattleMap, Campaign, DocRef, Encounter, EncounterLocator } from '@/core/model';
 
-export type RecentItem =
-  | { kind: 'map'; ref: DocRef; map: BattleMap; updatedAt: string }
-  | { kind: 'encounter'; campaign: Campaign; encounter: Encounter; updatedAt: string };
+export interface MapEntry {
+  ref: DocRef;
+  doc: BattleMap;
+}
 
-/** The `limit` most recently changed maps and encounters, newest first. */
-export function recentItems(
-  maps: { ref: DocRef; doc: BattleMap }[],
-  encounters: { campaign: Campaign; encounter: Encounter }[],
-  limit: number,
-): RecentItem[] {
-  const items: RecentItem[] = [
-    ...maps.map(({ ref, doc }) => ({ kind: 'map' as const, ref, map: doc, updatedAt: doc.updatedAt })),
-    ...encounters.map((e) => ({ kind: 'encounter' as const, ...e, updatedAt: e.encounter.updatedAt })),
-  ];
-  return items.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit);
+/** The `limit` most recently changed maps, newest first. */
+export function recentMaps(maps: readonly MapEntry[], limit: number): MapEntry[] {
+  return [...maps].sort((a, b) => b.doc.updatedAt.localeCompare(a.doc.updatedAt)).slice(0, limit);
+}
+
+/**
+ * The campaign Home shows: the DM's pick, else the one of the last played encounter, else the most recently active
+ * one (its own last change or that of one of its encounters). Ids of deleted campaigns are skipped.
+ */
+export function homeCampaignId(
+  campaigns: readonly Campaign[],
+  encounters: readonly Encounter[],
+  picked: string | null,
+  last: EncounterLocator | null,
+): string | null {
+  const activity = (campaign: Campaign) =>
+    encounters
+      .filter((e) => e.campaignId === campaign.id)
+      .reduce((latest, e) => (e.updatedAt > latest ? e.updatedAt : latest), campaign.updatedAt);
+  const newest = [...campaigns].sort((a, b) => activity(b).localeCompare(activity(a)))[0]?.id ?? null;
+  const wanted = [picked, last?.campaignId ?? null].find((id) => campaigns.some((c) => c.id === id));
+  return wanted ?? newest;
 }

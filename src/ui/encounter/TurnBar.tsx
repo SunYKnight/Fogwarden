@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import type { Combatant, CreatureAction, Encounter } from '@/core/model';
-import { formatModifier } from '@/core/rules/abilities';
 import type { RollMode } from '@/core/rules/dice';
 import { SIDE_COLORS } from '@/render/tokens/tokenMaterials';
 import { useAppStore } from '@/state/appStore';
-import { currentCombatant, type AttackResult } from '@/state/encounterActions';
+import { currentCombatant } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { Button } from '../kit';
-import { changeHp, rollAction, stepTurn } from './combatantCommands';
+import { attackActions, attackLabel, resultSummary } from './attacks';
+import { changeHp, rollAction, rollInitiativeFor, stepTurn } from './combatantCommands';
 import { useCreature } from './creatureLookup';
 import { useEncounterUi } from './encounterUiStore';
+import { UnplacedChip } from './UnplacedChip';
 
 const ROLL_MODE_LABEL: Record<RollMode, string> = {
   normal: 'Normal',
@@ -17,19 +18,6 @@ const ROLL_MODE_LABEL: Record<RollMode, string> = {
   disadvantage: 'Disadvantage',
 };
 const ROLL_MODES = Object.keys(ROLL_MODE_LABEL) as RollMode[];
-
-function attackLabel(action: CreatureAction): string {
-  const damage = action.attack?.damage.map((d) => d.formula).join(' + ') ?? '';
-  return `${action.name} ${formatModifier(action.attack?.toHit ?? 0)}${damage ? ` · ${damage}` : ''}`;
-}
-
-/** Short inline form of the log line: "17 to hit · 5 slashing". */
-function resultSummary(result: AttackResult): string {
-  const natural = result.toHit.terms[0]?.kept[0];
-  const mark = result.critical ? ' CRITICAL' : natural === 1 ? ' (natural 1)' : '';
-  const damage = result.damage.map((d) => `${d.total} ${d.type}`).join(' + ');
-  return `${result.toHit.total} to hit${mark}${damage ? ` · ${damage}` : ''}`;
-}
 
 interface TurnProps {
   current: Combatant | null;
@@ -45,7 +33,7 @@ function TurnControls({ current, target }: TurnProps) {
   const [amount, setAmount] = useState('');
   const value = Math.round(Number(amount));
   const valid = target !== null && amount.trim() !== '' && Number.isFinite(value) && value > 0;
-  const attacks = [...(creature?.actions ?? []), ...(creature?.bonusActions ?? [])].filter((a) => a.attack);
+  const attacks = attackActions(creature);
 
   // Library data may carry dice formulas that don't parse.
   const attack = (action: CreatureAction) => {
@@ -70,13 +58,11 @@ function TurnControls({ current, target }: TurnProps) {
   return (
     <>
       <div className="turn-actions">
-        {current ? (
+        {current && (
           <span className="turn-name">
             <span className="side-bar" style={{ background: SIDE_COLORS[current.side] }} />
             {current.name}
           </span>
-        ) : (
-          <span className="muted">Roll initiative, then start combat.</span>
         )}
         {attacks.map((a) => (
           <Button
@@ -126,37 +112,42 @@ function TurnControls({ current, target }: TurnProps) {
   );
 }
 
-/** Bottom bar of Play: the current combatant's attacks, quick damage/heal and the turn buttons. */
-export function TurnBar({ encounter }: { encounter: Encounter }) {
+/** Before the first turn: place the tokens, roll initiative, start; the header carries the accent. */
+function SetupBar({ encounter, hasMap }: { encounter: Encounter; hasMap: boolean }) {
+  const empty = encounter.combatants.length === 0;
+  return (
+    <footer className="play-turnbar play-setupbar" aria-label="Set up">
+      <div className="turn-actions">
+        <span className="muted">{empty ? 'Add creatures and player characters to start.' : 'Set up the fight.'}</span>
+        {hasMap && <UnplacedChip />}
+      </div>
+      <Button
+        icon="dice"
+        label="Roll initiative"
+        disabled={empty}
+        title="Roll initiative for everyone and sort the order"
+        onClick={() => rollInitiativeFor(null)}
+      />
+      <Button icon="next" label="Start combat" shortcut="Space" disabled={empty} onClick={() => stepTurn('next')} />
+    </footer>
+  );
+}
+
+/**
+ * Bottom bar of Play. Set up: placing and initiative. Combat: the current combatant's attacks, quick
+ * damage/heal and the turn buttons.
+ */
+export function TurnBar({ encounter, hasMap }: { encounter: Encounter; hasMap: boolean }) {
   const selectedId = useEncounterStore((s) => s.selectedCombatantId);
   const current = currentCombatant(encounter);
   const target = encounter.combatants.find((c) => c.id === selectedId) ?? current;
-  const started = encounter.round > 0;
-  return (
+  return encounter.round > 0 ? (
     <footer className="play-turnbar" aria-label="Turn">
       <TurnControls key={current?.id ?? 'none'} current={current} target={target} />
-      <Button
-        icon="check"
-        label="End combat"
-        variant="ghost"
-        disabled={!started}
-        onClick={() => useEncounterUi.setState({ endCombatOpen: true })}
-      />
-      <Button
-        icon="previous"
-        label="Previous"
-        shortcut="Shift+Space"
-        disabled={!started}
-        onClick={() => stepTurn('previous')}
-      />
-      <Button
-        icon="next"
-        label={started ? 'Next turn' : 'Start combat'}
-        variant="primary"
-        shortcut="Space"
-        disabled={encounter.combatants.length === 0}
-        onClick={() => stepTurn('next')}
-      />
+      <Button icon="previous" label="Previous" shortcut="Shift+Space" onClick={() => stepTurn('previous')} />
+      <Button icon="next" label="Next turn" variant="primary" shortcut="Space" onClick={() => stepTurn('next')} />
     </footer>
+  ) : (
+    <SetupBar encounter={encounter} hasMap={hasMap} />
   );
 }

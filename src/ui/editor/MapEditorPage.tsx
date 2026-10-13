@@ -15,9 +15,9 @@ import { flushMap } from '@/state/autosave';
 import { LAYERS, useEditorStore, type LayerId } from '@/state/editorStore';
 import {
   Button,
+  openContextMenu,
   PageHeader,
-  Panel,
-  Section,
+  Popover,
   StatusBar,
   Tabs,
   ToolButton,
@@ -149,7 +149,6 @@ function EditorHeader({ map }: { map: BattleMap }) {
       <Button icon="undo" label="Undo" iconOnly shortcut="Ctrl+Z" disabled={!canUndo} onClick={undo} />
       <Button icon="redo" label="Redo" iconOnly shortcut="Ctrl+Y" disabled={!canRedo} onClick={redo} />
       <Button icon="settings" label="Map settings" onClick={() => setSettingsOpen(true)} />
-      <Button icon="download" label="Export…" onClick={() => setExportOpen(true)} />
       <div className="segmented" role="group" aria-label="Camera">
         <Button icon="map" label="Top" shortcut="T" active={camera === 'top'} onClick={() => setCamera('top')} />
         <Button
@@ -166,6 +165,18 @@ function EditorHeader({ map }: { map: BattleMap }) {
         active={preview}
         title="Show the map with the players' lighting"
         onClick={() => setPreviewAsPlayer(!preview)}
+      />
+      <Button
+        icon="more"
+        label="More map actions"
+        iconOnly
+        variant="ghost"
+        onClick={(e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          openContextMenu(box.left, box.bottom + 4, [
+            { label: 'Export…', icon: 'download', run: () => setExportOpen(true) },
+          ]);
+        }}
       />
     </PageHeader>
   );
@@ -199,36 +210,71 @@ function ToolBar({ tool, step }: { tool: EditorTool; step: EditorStep }) {
   );
 }
 
-function Inspector({ step }: { step: EditorStep }) {
-  const selection = useEditorStore((s) => s.selection);
-  const layers = useEditorStore((s) => s.layers);
-  const SelectionPanel = selection ? SELECTION_PANELS[selection.kind] : undefined;
+/** Step help on demand; the first visit of a step shows it on the canvas instead. */
+function StepHelpButton({ step }: { step: EditorStep }) {
   return (
-    <aside className="editor-inspector" aria-label="Inspector">
-      {SelectionPanel && selection ? (
-        <SelectionPanel id={selection.id} />
-      ) : (
-        <>
-          <Panel>
-            <h3>What to do in this step</h3>
-            <p className="muted">{STEP_HELP[step]}</p>
-          </Panel>
-          <Section title="Layers" collapsible>
-            {LAYERS.map((layer) => (
-              <label key={layer} className="row">
-                <input
-                  type="checkbox"
-                  checked={layers[layer]}
-                  onChange={() => useEditorStore.getState().toggleLayer(layer)}
-                />
-                {LAYER_LABELS[layer]}
-              </label>
-            ))}
-          </Section>
-        </>
+    <Popover
+      label="What to do in this step"
+      trigger={(open, toggle) => (
+        <Button icon="info" label="What to do in this step" iconOnly variant="ghost" active={open} onClick={toggle} />
       )}
-    </aside>
+    >
+      <p className="editor-step-help">{STEP_HELP[step]}</p>
+    </Popover>
   );
+}
+
+function StepHint({ step }: { step: EditorStep }) {
+  const seen = useEditorStore((s) => s.helpSeen[step]);
+  return seen ? null : (
+    <div className="editor-step-hint" role="note">
+      <p>{STEP_HELP[step]}</p>
+      <Button
+        icon="close"
+        label="Got it"
+        iconOnly
+        variant="ghost"
+        onClick={() => useEditorStore.getState().dismissHelp(step)}
+      />
+    </div>
+  );
+}
+
+function LayersButton() {
+  const layers = useEditorStore((s) => s.layers);
+  const hidden = LAYERS.filter((layer) => !layers[layer]).length;
+  return (
+    <Popover
+      label="Layers"
+      trigger={(open, toggle) => (
+        <Button icon="eye" label={hidden > 0 ? `Layers (${hidden} hidden)` : 'Layers'} active={open} onClick={toggle} />
+      )}
+    >
+      <div className="editor-layers">
+        {LAYERS.map((layer) => (
+          <label key={layer} className="row">
+            <input
+              type="checkbox"
+              checked={layers[layer]}
+              onChange={() => useEditorStore.getState().toggleLayer(layer)}
+            />
+            {LAYER_LABELS[layer]}
+          </label>
+        ))}
+      </div>
+    </Popover>
+  );
+}
+
+/** Shown only with a selection, so the canvas takes the full width otherwise. */
+function Inspector() {
+  const selection = useEditorStore((s) => s.selection);
+  const SelectionPanel = selection ? SELECTION_PANELS[selection.kind] : undefined;
+  return SelectionPanel && selection ? (
+    <aside className="editor-inspector" aria-label="Inspector">
+      <SelectionPanel id={selection.id} />
+    </aside>
+  ) : null;
 }
 
 function EditorStatus({ hint, terrain }: { hint?: string; terrain: HeightField }) {
@@ -305,7 +351,10 @@ function EditorLayout({ map, terrain }: { map: BattleMap; terrain: HeightField }
       <EditorHeader map={map} />
       <div className="map-editor-body">
         <div className="map-editor-main">
-          <Tabs tabs={STEP_TABS} value={step} onChange={showStep} label="Editor steps" />
+          <div className="editor-steps">
+            <Tabs tabs={STEP_TABS} value={step} onChange={showStep} label="Editor steps" />
+            <StepHelpButton step={step} />
+          </div>
           <ToolBar tool={tool} step={step} />
           <Viewport tool={tool}>
             <MapView
@@ -324,9 +373,13 @@ function EditorLayout({ map, terrain }: { map: BattleMap; terrain: HeightField }
               {Overlay && <Overlay />}
               <ModelDropTarget />
             </MapView>
+            <StepHint step={step} />
+            <div className="editor-canvas-tools">
+              <LayersButton />
+            </div>
           </Viewport>
         </div>
-        <Inspector step={step} />
+        <Inspector />
       </div>
       <EditorStatus hint={tool.hint} terrain={terrain} />
       {settingsOpen && <MapSettingsDialog />}

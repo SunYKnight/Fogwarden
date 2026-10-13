@@ -28,8 +28,8 @@ import { CompendiumPage } from './pages/CompendiumPage';
 import { MapsPage } from './pages/MapsPage';
 import { PlayPage } from './pages/PlayPage';
 import { refreshPlayerWindowState, usePlayerWindowStore } from './playerWindow';
-import { ServerPage } from './server/ServerPage';
 import { SettingsPage } from './settings/SettingsPage';
+import { CommandPalette } from './shell/CommandPalette';
 import { NavRail } from './shell/NavRail';
 
 function Page({ route }: { route: Route }) {
@@ -54,10 +54,7 @@ function Page({ route }: { route: Route }) {
       page = <PlayPage />;
       break;
     case 'settings':
-      page = <SettingsPage />;
-      break;
-    case 'server':
-      page = <ServerPage />;
+      page = <SettingsPage section={route.section ?? 'data'} />;
       break;
     case 'creature-editor':
       page = (
@@ -133,6 +130,7 @@ export function DmApp() {
       <ShortcutHost />
       <CompendiumDialogHost />
       <NewMapWizardHost />
+      <CommandPalette />
     </div>
   );
 }

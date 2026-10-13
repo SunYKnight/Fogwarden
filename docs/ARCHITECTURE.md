@@ -615,9 +615,9 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   dev server instead.
 - DM side: `useLanStore` (`src/state/lanStore.ts`) holds the DM's `ViewSocketTransport`, takes the player count
   from its status frames and pushes `linkTable` whenever the links change; `DmApp` adds the transport to
-  `startDmPublisher`. UI: `LanControls` (`src/ui/shell/LanControls.tsx`) on the Server page and in the rail's
-  Players popover (start/stop, address, `PlayerLinks`: view select, link, copy, QR code via `uqr`, New link); the
-  port is set under Settings.
+  `startDmPublisher`. UI: `LanControls` (`src/ui/shell/LanControls.tsx`) in Settings > Players > LAN and in the
+  rail's Players popover (start/stop, address, `PlayerLinks`: view select, link, copy, QR code via `uqr`, New link);
+  the port is under Settings > Players > LAN > Advanced.
 - Browser client: `player.html?token=` → `src/app/player.tsx` sets `useAppStore`'s repository to a read-only
   `LanStorage` (`src/data/lanStorage.ts`, `assetUrl` → `/asset/...`) before rendering `PlayerApp`.
 
@@ -661,9 +661,10 @@ setup)`, `deploy_host_key(host, port)` (`SHA256:` fingerprint, confirmed and sto
   from the `FOGWARDEN_DM_KEY=` line, which never reaches the log). The script installs Node 22 (NodeSource) when
   needed, user and systemd unit `fogwarden-relay`, `/etc/fogwarden-relay/relay.env` with the DM key (kept on re-runs),
   the nginx site (WebSocket upgrade on `/ws`) and, given an email, a certbot certificate.
-- UI: `src/ui/server/ServerPage.tsx` (rail entry Server): Local network (`LanControls`), Remote server (URL, DM key,
-  connect, connection test via `/health` + `/api/session`, link + QR), Set up a server (`DeployDialog`). Settings
-  `remote` (schema v5): `url`, `dmKey`, `setup`, `ssh` (no password), `knownHosts`.
+- UI: `src/ui/server/OnlineSection.tsx` in Settings > Players (`src/ui/settings/PlayersSection.tsx`): Online (URL,
+  DM key, connect, connection test via `/health` + `/api/session`, link + QR) and _Set up a server…_ (dialog with
+  domain, email, relay port and `DeployDialog`); the old `server` route redirects there. Settings `remote` (schema
+  v5): `url`, `dmKey`, `setup`, `ssh` (no password), `knownHosts`.
 
 ## Player devices
 
@@ -694,9 +695,10 @@ transports' `onPlayerRequest`, tagged with the view of the link it came over.
   unknown (no fog: every view).
 - Own token moves: with `ownMoves` set, the player drags their token (`usePlayerPointer.drag`, ghost and distance in
   `PlayerDragOverlay`) and the drop is sent as `move`; the token moves when the DM's encounter update arrives. The
-  switch is "Players move" in the Play header (`PlayerMovesToggle`, undoable).
+  switch is "Players move their own tokens" in Play's Table tab (`PlayerMovesToggle`, undoable).
 - Handouts: files in `campaigns/<id>/handouts/` (`src/data/handouts.ts`: `listHandouts`, `importHandout`; kinds by
-  extension in `src/core/handouts.ts`). The canvas toolbar's Show popover (`ShowMenu`) picks one, an audience
+  extension in `src/core/handouts.ts`). Show to players in Play's Table tab (`ShowPanel` in `ShowMenu.tsx`, rendered
+  by `TableTab`) picks one, an audience
   (everyone or one view) and shows or hides it through `useHandoutStore`; videos can also start Atmosphere's
   interlude. The publisher sends `handout` (text inline, pictures and videos as assets, which the relay transport
   uploads) to the audience and null to the other views; `HandoutOverlay` shows it until the player closes it, and a

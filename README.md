@@ -18,6 +18,11 @@ players a fog-of-war view on a second screen or in any browser on the local netw
   screen sees through one character's eyes or the whole party's (line of sight, light, darkvision, truesight), with
   explored areas remembered per character.
 
+The left rail follows the order of work: **Home** (dashboard of the current campaign: continue, next session,
+recent maps) · **Campaigns** · **Maps** · **Compendium** · **Play**, with **Search** (Ctrl+K: every command,
+creature, map, campaign and encounter by name), **Players** (player window, LAN and online status with one button
+each) and **Settings** at the bottom.
+
 Background and design: [`PLAN.md`](PLAN.md). Code layout and module contracts:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -90,14 +95,15 @@ Players outside your network connect through a relay on a server you control; th
 nothing at home needs to be reachable. You need an Ubuntu 22.04/24.04 server with root or sudo SSH access and a DNS
 name pointing to it (ports 80 and 443 open).
 
-1. **Server** page > _Set up a server_: enter the domain, an email for the Let's Encrypt certificate and the relay
-   port (default 7718, only nginx talks to it).
+1. **Settings > Players > Online > Set up a server…**: enter the domain, an email for the Let's Encrypt certificate
+   and the relay port (default 7718, only nginx talks to it).
 2. Either **Deploy via SSH** (host, user, key file or password; the password is never stored, the host key is shown
    for confirmation on first connect) or **Download install script** and run `sudo bash install.sh` in the copied
    folder on the server. The script installs Node.js 22, nginx, the `fogwarden-relay` systemd service and the
    certificate; it is safe to run again and keeps the DM key. It prints the DM key as `FOGWARDEN_DM_KEY=…`.
-3. _Remote server_: the URL (`https://<domain>`) and DM key are filled in after an SSH deploy; otherwise paste the
-   key. **Connect** uploads the player page and shows the player links with a QR code.
+3. _Online_: the URL (`https://<domain>`) and DM key are filled in after an SSH deploy; otherwise paste the key.
+   **Connect** (also in the rail's Players popover) uploads the player page and shows the player links with a QR
+   code.
 
 Only filtered player data, map images, token images and models reach the server. App updates upload the new player
 page on the next connect; the server only needs a redeploy for relay changes (see the changelog). The app refuses
@@ -105,17 +111,18 @@ an outdated relay and asks you to run the setup again.
 
 ## Player links
 
-On the Server page and in the rail's Players popover (LAN), _Link for_ picks a view: **Party** shows what all
-characters see and have explored, each player character's link only what that character sees and remembers. The
-links stay valid across restarts and work for LAN and relay alike (with the respective address); **New link**
-replaces a view's link and disconnects everyone still using the old one. Characters' links belong to the open
-encounter. The player window picks its view under Players > _Shows_.
+In Settings > Players (LAN and Online) and in the rail's Players popover, _Link for_ picks a view: **Party** shows
+what all characters see and have explored, each player character's link only what that character sees and
+remembers. The links stay valid across restarts and work for LAN and relay alike (with the respective address);
+**New link** replaces a view's link and disconnects everyone still using the old one. Characters' links belong to
+the open encounter. The player window picks its view under Settings > Players > _Shows_; Esc closes it.
 
 On a character's link players see their sheet (hit points, AC, speed, conditions, death saves, spell slots) with
 dice you roll and log for them, a "Your turn" banner (phones vibrate), and can hold the map to ping a spot; you ping
-with Alt+click on the Play canvas. **Players move** in the Play header lets them drag their own token (undo with
-Ctrl+Z). **Show** on the Play canvas toolbar shows a picture, video or text from the campaign's `handouts/` folder
-to everyone or one view.
+with Alt+click on the Play canvas. In Play's **Table** tab, **Players move their own tokens** lets them drag their
+own token (undo with Ctrl+Z), and **Show to players** shows a picture, video or text from the campaign's
+`handouts/` folder to everyone or one view; the tab also holds Sound, Scene (time of day, weather) and whether your
+camera and the turn order go to the players.
 
 ## Where things live
 
@@ -190,7 +197,7 @@ The history keeps 30 days and at most 2 GB (oldest days go first on start, today
 contents are stored once in `history/.objects/` and the dated files are hard links to them (file systems without
 hard links, such as FAT drives, get copies).
 
-**Settings > Data > History** lists the days with the documents changed on them. _Restore this version_ brings a
+**Settings > Data > Version history…** lists the days with the documents changed on them. _Restore this version_ brings a
 document back to how it was before that day's changes; what it replaces is kept in
 `history/<YYYY-MM-DD> <HH-MM-SS> before restore/`, listed there too, so a restore can be restored away again.
 _Open history folder_ shows the files, the size readout and _Clean up older than…_ free space. You can also copy a
@@ -200,7 +207,7 @@ relay). Command-line tools write without keeping a history.
 ## Content packs
 
 A content pack is a folder (or a `.zip` of it) with a `pack.json` and the usual library folders: `creatures/`,
-`markers/`, `maps/<id>/`, `tables/`, `items/`, `spells/`, `portraits/`, `models/`. **Compendium > Packs** lists the
+`markers/`, `maps/<id>/`, `tables/`, `items/`, `spells/`, `portraits/`, `models/`. **Settings > Content** lists the
 installed packs with their counts, switches each on or off, exports any pack (also your own content) to a `.zip`,
 removes imported packs and imports new ones (**Import pack…** for a `.zip`, **Import folder…** in the desktop app,
 **Import from Aurora Builder…**, see below).
@@ -227,7 +234,7 @@ removes imported packs and imports new ones (**Import pack…** for a `.zip`, **
 
 ### Aurora Builder
 
-**Compendium > Packs > Import from Aurora Builder…** (desktop app; also **Add combatants > Player character > From
+**Settings > Content > Import from Aurora Builder…** (desktop app; also **Add combatants > Player character > From
 Aurora…**) reads Aurora's documents folder (`Documents/5e Character Builder`: `custom/`, `portraits/`, `*.dnd5e`),
 shows what it found and writes the pack "Aurora Builder" into your data folder:
 
@@ -244,8 +251,8 @@ file names). The pack holds book content: it stays on your computer; export and 
 
 ## Battlemaps from map makers
 
-Besides plain images (PNG, JPEG, WebP), the New map wizard, the Home drop zone and the Maps page take exports that
-bring the grid, walls, doors, windows and lights along:
+Besides plain images (PNG, JPEG, WebP), the New map wizard, Home (drop a file or **Import…**) and the Maps page take
+exports that bring the grid, walls, doors, windows and lights along:
 
 | Format                                                      | Made by                                                           | What comes along                                                           |
 | ----------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -285,11 +292,11 @@ with its count; pick a stand-in per kind: a shipped CC0 model, a downloaded Poly
   tree, plants, flowers, rocks and furniture (about 170 MB with 1k textures). They go into the pack "Poly Haven
   models" in the data folder, about 65 MB after the download: sets are split into one model per variant and scanned
   trees are simplified to 30,000 triangles. Auto-assign prefers them over the shipped Kenney models; models already
-  downloaded are kept, so the button only fetches what is missing. Remove the pack under **Compendium > Packs**.
+  downloaded are kept, so the button only fetches what is missing. Remove the pack under **Settings > Content**.
 
 ## Exporting maps
 
-Right-click a map on the Maps page, or use **Export…** in the map editor's header, and pick a format; the save
+Right-click a map on the Maps page, or use **⋯ > Export…** in the map editor's header, and pick a format; the save
 dialog asks where the file goes (outside the app's data and content folders).
 
 | Format                    | Opens in                                           | What it holds                                                                                                                |
@@ -305,19 +312,20 @@ battlemap exports its first frame.
 
 Tokens show the creature picture: a disc in the top view, an upright standee in the 3D view (Settings > Rules
 switches standees off for you and your players). To give the shipped SRD creatures pictures, use **Compendium >
-Attach portraits from folder…** and pick a folder of PNG/JPEG/WebP files named after the creatures (`goblin.jpg`,
-`Adult Red Dragon.png`, `homebrew--werewolf.jpg`; case, accents, punctuation and `source--` prefixes don't matter). The
-preview lists matched and unmatched files before anything is copied into your data folder under the creatures' ids;
-existing pictures are only replaced when you tick the box. One picture per creature also works in the creature
-editor's Image/Token fields (the file is copied at once); for shipped creatures that keeps the creature shipped.
+New creature ▾ > Attach portraits from folder…** and pick a folder of PNG/JPEG/WebP files named after the creatures
+(`goblin.jpg`, `Adult Red Dragon.png`, `homebrew--werewolf.jpg`; case, accents, punctuation and `source--` prefixes
+don't matter). The preview lists matched and unmatched files before anything is copied into your data folder under
+the creatures' ids; existing pictures are only replaced when you tick the box. One picture per creature also works
+in the creature editor's Image/Token fields (the file is copied at once); for shipped creatures that keeps the
+creature shipped.
 
 ## Graphics quality
 
 A slow 3D view (integrated graphics such as Intel UHD) gets faster in **Settings > Graphics**: fewer lights with
 shadows (each costs six extra render passes), a lower resolution and props without shadows. The section names the
 graphics card and suggests a preset (Low for integrated graphics, else High); the presets only fill in the three
-values. Changes apply at once to the DM's views; the player window on the same computer takes them when it opens,
-LAN/relay players use the defaults (4 lights, full resolution, prop shadows).
+values, which sit under _Advanced_. Changes apply at once to the DM's views; the player window on the same computer
+takes them when it opens, LAN/relay players use the defaults (4 lights, full resolution, prop shadows).
 
 ## License of shipped content
 

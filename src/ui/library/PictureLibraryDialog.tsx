@@ -42,7 +42,7 @@ export function PictureLibraryDialog({ onPick, onClose }: { onPick: (ref: AssetR
           <EmptyState icon="image" title={portraits.length === 0 ? 'No pictures yet.' : 'No picture matches.'}>
             {portraits.length === 0 &&
               'Pictures in a portraits folder of your library or a pack show here, e.g. after importing ' +
-                'from Aurora Builder (Compendium > Packs).'}
+                'from Aurora Builder (Settings > Content).'}
           </EmptyState>
         ) : (
           <div className="picture-grid" role="listbox" aria-label="Pictures">

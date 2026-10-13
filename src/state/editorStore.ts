@@ -13,6 +13,8 @@ export type LayerId = 'image' | 'grid' | 'terrain' | 'walls' | 'rooms' | 'roofs'
 
 export const LAYERS: LayerId[] = ['image', 'grid', 'terrain', 'walls', 'rooms', 'roofs', 'regions', 'lights', 'props'];
 
+export type MapSettingsTab = 'map' | 'grid' | 'lighting';
+
 export type Selection = {
   kind: 'wall' | 'opening' | 'room' | 'region' | 'light' | 'prop';
   id: string;
@@ -35,11 +37,15 @@ interface EditorState {
   /** Step tab shown in the tool bar. */
   step: EditorStep;
   selection: Selection;
+  /** Steps whose first-visit hint was dismissed or left; kept across maps for the session. */
+  helpSeen: Record<EditorStep, boolean>;
   /** Object a click of the select tool would select, highlighted on the map. */
   hover: HitTag | null;
   /** Map point under the pointer, for the status bar readouts. */
   pointer: MapPoint | null;
   settingsOpen: boolean;
+  /** Kept while the dialog is closed, so a grid pick returns to the Grid tab. */
+  settingsTab: MapSettingsTab;
   exportOpen: boolean;
   layers: Record<LayerId, boolean>;
   camera: CameraMode;
@@ -61,9 +67,11 @@ interface EditorState {
   setTool(id: string, step?: EditorStep): void;
   setStep(step: EditorStep): void;
   select(selection: Selection): void;
+  dismissHelp(step: EditorStep): void;
   setHover(hover: HitTag | null): void;
   setPointer(pointer: MapPoint | null): void;
   setSettingsOpen(open: boolean): void;
+  setSettingsTab(tab: MapSettingsTab): void;
   setExportOpen(open: boolean): void;
   toggleLayer(id: LayerId): void;
   setCamera(mode: CameraMode): void;
@@ -79,6 +87,11 @@ function allLayers(): Record<LayerId, boolean> {
   return Object.fromEntries(LAYERS.map((l) => [l, true])) as Record<LayerId, boolean>;
 }
 
+// Leaving a step counts as having read its first-visit hint.
+function stepChange(s: EditorState, step: EditorStep): Pick<EditorState, 'step' | 'helpSeen'> {
+  return { step, helpSeen: step === s.step ? s.helpSeen : { ...s.helpSeen, [s.step]: true } };
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   map: null,
   terrain: null,
@@ -91,9 +104,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activeTool: 'select',
   step: 'ground',
   selection: null,
+  helpSeen: { ground: false, walls: false, areas: false, objects: false },
   hover: null,
   pointer: null,
   settingsOpen: false,
+  settingsTab: 'map',
   exportOpen: false,
   layers: allLayers(),
   camera: 'top',
@@ -185,9 +200,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   undo: () => applyHistoryEntry(get().history.takeUndo(), 'undo'),
   redo: () => applyHistoryEntry(get().history.takeRedo(), 'redo'),
 
-  setTool: (id, step) => set(step ? { activeTool: id, step, hover: null } : { activeTool: id, hover: null }),
-  setStep: (step) => set({ step }),
+  setTool: (id, step) =>
+    set((s) => (step ? { activeTool: id, hover: null, ...stepChange(s, step) } : { activeTool: id, hover: null })),
+  setStep: (step) => set((s) => stepChange(s, step)),
   select: (selection) => set({ selection }),
+  dismissHelp: (step) => set((s) => ({ helpSeen: { ...s.helpSeen, [step]: true } })),
   // Pointer moves repeat the same target; unchanged hovers must not re-render.
   setHover: (hover) => {
     const current = get().hover;
@@ -195,6 +212,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   setPointer: (pointer) => set({ pointer }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setSettingsTab: (settingsTab) => set({ settingsTab }),
   setExportOpen: (exportOpen) => set({ exportOpen }),
   toggleLayer: (id) => set((s) => ({ layers: { ...s.layers, [id]: !s.layers[id] } })),
   setCamera: (camera) => set({ camera }),

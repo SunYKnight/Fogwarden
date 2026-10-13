@@ -4,7 +4,7 @@ import { SIDE_COLORS } from '@/render/tokens/tokenMaterials';
 import { currentCombatant, moveCombatant } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { OptionalNumberInput } from '../creature/creatureFields';
-import { Button, Icon } from '../kit';
+import { Button, Icon, openContextMenu } from '../kit';
 import { patchCombatant, rollInitiativeFor, sortInitiative } from './combatantCommands';
 import { useEncounterUi } from './encounterUiStore';
 import { HpBar } from './HpBar';
@@ -98,28 +98,43 @@ export function InitiativeStrip({ encounter }: { encounter: Encounter }) {
         {empty && <p className="muted small strip-empty">Add creatures and player characters to start.</p>}
       </div>
       <div className="strip-foot">
-        <div className="row">
+        {encounter.round === 0 && (
           <Button
             icon="dice"
-            label="Roll all"
+            label="Roll initiative"
             disabled={empty}
-            title="Roll initiative for everyone"
+            title="Roll initiative for everyone and sort the order"
             onClick={() => rollInitiativeFor(null)}
           />
+        )}
+        <div className="row">
           <Button
-            label="NPCs"
-            disabled={empty}
-            title="Roll initiative for everyone except player characters"
-            onClick={() => rollInitiativeFor(encounter.combatants.filter((c) => c.side !== 'player').map((c) => c.id))}
+            icon="plus"
+            label="Add"
+            className="grow"
+            variant={empty ? 'primary' : 'default'}
+            onClick={() => useEncounterUi.setState({ addDialogOpen: true })}
           />
-          <Button label="Sort" disabled={empty} title="Sort by initiative, ties by Dex" onClick={sortInitiative} />
+          <Button
+            icon="more"
+            label="More initiative actions"
+            iconOnly
+            disabled={empty}
+            onClick={(e) => {
+              const box = e.currentTarget.getBoundingClientRect();
+              openContextMenu(box.left, box.bottom, [
+                { label: 'Roll for everyone', icon: 'dice', run: () => rollInitiativeFor(null) },
+                {
+                  label: 'Roll for NPCs only',
+                  icon: 'dice',
+                  run: () =>
+                    rollInitiativeFor(encounter.combatants.filter((c) => c.side !== 'player').map((c) => c.id)),
+                },
+                { label: 'Sort by initiative (ties by Dex)', icon: 'list', run: sortInitiative },
+              ]);
+            }}
+          />
         </div>
-        <Button
-          icon="plus"
-          label="Add"
-          variant="primary"
-          onClick={() => useEncounterUi.setState({ addDialogOpen: true })}
-        />
       </div>
     </aside>
   );

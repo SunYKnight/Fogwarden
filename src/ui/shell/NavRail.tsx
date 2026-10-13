@@ -1,5 +1,6 @@
 import { useAppStore } from '@/state/appStore';
 import { Icon } from '../kit';
+import { openCommandPalette } from './commandRegistry';
 import { NAV_ITEMS } from './nav';
 import { PlayersMenu } from './PlayersMenu';
 
@@ -34,6 +35,12 @@ export function NavRail() {
         );
       })}
       <div className="spacer" />
+      <button type="button" className="rail-item" title="Search commands (Ctrl+K)" onClick={openCommandPalette}>
+        <span className="rail-icon">
+          <Icon name="search" size={22} />
+        </span>
+        <span className="rail-label">Search</span>
+      </button>
       <PlayersMenu />
       <button
         type="button"

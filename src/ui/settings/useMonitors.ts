@@ -2,7 +2,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { primaryMonitor, type Monitor } from '@tauri-apps/api/window';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/state/appStore';
-import { listMonitors, monitorLabel } from '../playerWindow';
+import { listMonitors } from '../playerWindow';
 
 export interface MonitorList {
   /** In OS order; "Identify" numbers them the same way (index + 1). */
@@ -21,9 +21,4 @@ export function useMonitors(): MonitorList {
       .catch(reportError);
   }, [reportError]);
   return list;
-}
-
-/** "2 · DISPLAY2 (2560×1440)", numbered like the "Identify" windows. */
-export function describeMonitor(monitor: Monitor, index: number): string {
-  return `${index + 1} · ${monitorLabel(monitor.name)} (${monitor.size.width}×${monitor.size.height})`;
 }

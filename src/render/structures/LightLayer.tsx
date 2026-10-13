@@ -2,6 +2,7 @@ import { Line } from '@react-three/drei';
 import { defaultGraphicsSettings, type MapLight } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { useAppStore } from '@/state/appStore';
+import { useEditorStore } from '@/state/editorStore';
 import { useMapRender, type HitTag } from '../mapRenderContext';
 import { circlePoints, drapedPath } from './drape';
 import { noRaycast, useCarriedLights, useCombatantPositions, useLayerVisible } from './hooks';
@@ -18,6 +19,10 @@ function LightGizmo({ light, position, terrain }: { light: MapLight; position: W
   const ground = { x: position[0], y: position[2] };
   const hit: HitTag = { kind: 'light', id: light.id };
   const color = light.enabled ? light.color : '#555555';
+  // Rings of every light would hide the map while the DM works on walls or areas.
+  const rings = useEditorStore(
+    (s) => s.step === 'objects' || (s.selection?.kind === 'light' && s.selection.id === light.id),
+  );
   return (
     <group>
       <mesh position={position} userData={{ hit }}>
@@ -29,7 +34,7 @@ function LightGizmo({ light, position, terrain }: { light: MapLight; position: W
         color={color}
         raycast={noRaycast}
       />
-      {light.brightFt > 0 && (
+      {rings && light.brightFt > 0 && (
         <Line
           points={drapedPath(circlePoints(ground, light.brightFt), true, terrain, RING_LIFT_FT)}
           color={color}
@@ -37,7 +42,7 @@ function LightGizmo({ light, position, terrain }: { light: MapLight; position: W
           raycast={noRaycast}
         />
       )}
-      {light.dimFt > 0 && (
+      {rings && light.dimFt > 0 && (
         <Line
           points={drapedPath(circlePoints(ground, light.brightFt + light.dimFt), true, terrain, RING_LIFT_FT)}
           color={color}

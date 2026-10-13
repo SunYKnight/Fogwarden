@@ -623,7 +623,7 @@ export class Repository {
     const folders = await this.kindFolders(kind, disabled);
     const holder = disabled[folders.findIndex((entries) => docIds(kind, entries).includes(id))];
     const message = holder
-      ? `"${id}" is in the disabled pack "${holder.pack}"; enable it under Compendium > Packs`
+      ? `"${id}" is in the disabled pack "${holder.pack}"; enable it under Settings > Content`
       : `No ${kind} "${id}" in My content or an enabled pack`;
     const source = holder ?? MY_CONTENT_SOURCE;
     return new DataError(message, source.area, libraryDocPath(kind, source, id));

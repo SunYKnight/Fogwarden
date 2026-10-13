@@ -3,13 +3,13 @@ import type { ComponentType } from 'react';
 import type { LibraryKind } from '@/data/repository';
 import { useAppStore, type CompendiumTab } from '@/state/appStore';
 import { LoadProblems } from '../components/LoadProblems';
-import { Button, PageHeader, Tabs, type TabSpec } from '../kit';
+import { PageHeader, Tabs, type TabSpec } from '../kit';
 import { attachPortraitsFromFolder } from '../library/AttachPortraitsDialog';
 import { openCreatureImport } from '../library/compendiumUi';
 import { CreatureLibrary } from '../library/CreatureLibrary';
-import { ItemLibrary, SpellLibrary } from '../library/ItemSpellLibrary';
-import { MarkerLibrary } from '../library/MarkerLibrary';
-import { PackActions, PackLibrary } from '../library/PackLibrary';
+import { ItemLibrary, ReferenceActions, SpellLibrary } from '../library/ItemSpellLibrary';
+import { MarkerActions, MarkerLibrary } from '../library/MarkerLibrary';
+import { SplitButton } from '../library/SplitButton';
 import { TableActions, TableLibrary } from '../library/TableLibrary';
 
 interface CompendiumTabSpec extends TabSpec<CompendiumTab> {
@@ -17,29 +17,29 @@ interface CompendiumTabSpec extends TabSpec<CompendiumTab> {
   kinds: LibraryKind[];
   Body: ComponentType;
   /** Tab-specific actions, shown after the tab bar. */
-  Actions?: ComponentType;
+  Actions: ComponentType;
 }
 
 function CreatureActions() {
   const navigate = useAppStore((s) => s.navigate);
   const reportError = useAppStore((s) => s.reportError);
   return (
-    <>
-      <Button icon="upload" label="Import from text" onClick={() => openCreatureImport('')} />
-      <Button
-        icon="image"
-        label="Attach portraits from folder…"
-        disabled={!isTauri()}
-        title={isTauri() ? 'Match pictures to creatures by name' : 'Needs the desktop app'}
-        onClick={() => attachPortraitsFromFolder().catch(reportError)}
-      />
-      <Button
-        icon="plus"
-        label="New creature"
-        variant="primary"
-        onClick={() => navigate({ page: 'creature-editor', ref: null })}
-      />
-    </>
+    <SplitButton
+      icon="plus"
+      label="New creature"
+      variant="primary"
+      onClick={() => navigate({ page: 'creature-editor', ref: null })}
+      menuLabel="Other ways to add creatures"
+      items={[
+        { label: 'Import from text', icon: 'upload', run: () => openCreatureImport('') },
+        {
+          label: isTauri() ? 'Attach portraits from folder…' : 'Attach portraits from folder… (desktop app)',
+          icon: 'image',
+          disabled: !isTauri(),
+          run: () => attachPortraitsFromFolder().catch(reportError),
+        },
+      ]}
+    />
   );
 }
 
@@ -53,11 +53,17 @@ export const COMPENDIUM_TABS: CompendiumTabSpec[] = [
     Body: CreatureLibrary,
     Actions: CreatureActions,
   },
-  { id: 'items', label: 'Items', icon: 'shield', kinds: ['item'], Body: ItemLibrary },
-  { id: 'spells', label: 'Spells', icon: 'book', kinds: ['spell'], Body: SpellLibrary },
-  { id: 'markers', label: 'Area templates', icon: 'area', kinds: ['marker'], Body: MarkerLibrary },
+  { id: 'items', label: 'Items', icon: 'shield', kinds: ['item'], Body: ItemLibrary, Actions: ReferenceActions },
+  { id: 'spells', label: 'Spells', icon: 'book', kinds: ['spell'], Body: SpellLibrary, Actions: ReferenceActions },
+  {
+    id: 'markers',
+    label: 'Area templates',
+    icon: 'area',
+    kinds: ['marker'],
+    Body: MarkerLibrary,
+    Actions: MarkerActions,
+  },
   { id: 'tables', label: 'Tables', icon: 'dice', kinds: ['table'], Body: TableLibrary, Actions: TableActions },
-  { id: 'packs', label: 'Packs', icon: 'package', kinds: [], Body: PackLibrary, Actions: PackActions },
 ];
 
 export function CompendiumPage({ tab }: { tab: CompendiumTab }) {
@@ -75,11 +81,9 @@ export function CompendiumPage({ tab }: { tab: CompendiumTab }) {
           onChange={(t) => navigate({ page: 'compendium', tab: t })}
           label="Compendium"
         />
-        {Actions && (
-          <div className="compendium-actions">
-            <Actions />
-          </div>
-        )}
+        <div className="compendium-actions">
+          <Actions />
+        </div>
       </div>
       <div className="page-body">
         <LoadProblems kinds={spec.kinds} />

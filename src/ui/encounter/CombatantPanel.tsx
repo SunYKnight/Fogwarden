@@ -1,11 +1,20 @@
 import { useState } from 'react';
-import { CONDITIONS, SENSES, SIZES, sideSchema, type Combatant, type CreatureAction } from '@/core/model';
+import {
+  CONDITIONS,
+  SENSES,
+  SIZES,
+  sideSchema,
+  type Combatant,
+  type CreatureAction,
+  type Encounter,
+} from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { CheckboxField, NumberField, SelectField, TextField } from '../components/fields';
 import { OptionalNumberField } from '../creature/creatureFields';
 import { StatBlock, titleCase } from '../creature/StatBlock';
-import { Button, EmptyState, Section } from '../kit';
+import { Button, Popover, Section } from '../kit';
+import { attackActions, attackLabel, resultSummary } from './attacks';
 import {
   changeHp,
   confirmRemoveFromEncounter,
@@ -18,6 +27,7 @@ import {
 } from './combatantCommands';
 import { CarriedLightField, DeathSaves, EffectsSection, ResourcesSection } from './CombatantRules';
 import { useCreature, useDisabledPackOf } from './creatureLookup';
+import { EncounterOverview } from './EncounterOverview';
 import { HpBar } from './HpBar';
 import { startPlacing, useEncounterUi, type HpChange } from './encounterUiStore';
 
@@ -70,20 +80,39 @@ function HitPointControls({ c }: { c: Combatant }) {
   );
 }
 
-function ConditionChips({ c }: { c: Combatant }) {
+/** Active conditions as chips (click removes); the picker holds all of them. */
+function ConditionPicker({ c }: { c: Combatant }) {
   return (
     <div className="chips">
-      {CONDITIONS.map((cond) => (
+      {c.conditions.map((cond) => (
         <button
           key={cond}
           type="button"
-          aria-pressed={c.conditions.includes(cond)}
-          className={c.conditions.includes(cond) ? 'chip active' : 'chip'}
+          className="chip active"
+          title={`Remove ${cond}`}
           onClick={() => toggleCondition(c.id, cond)}
         >
           {cond}
         </button>
       ))}
+      <Popover
+        label="Conditions"
+        trigger={(open, toggle) => <Button icon="plus" label="Condition" active={open} onClick={toggle} />}
+      >
+        <div className="chips condition-popover">
+          {CONDITIONS.map((cond) => (
+            <button
+              key={cond}
+              type="button"
+              aria-pressed={c.conditions.includes(cond)}
+              className={c.conditions.includes(cond) ? 'chip active' : 'chip'}
+              onClick={() => toggleCondition(c.id, cond)}
+            >
+              {cond}
+            </button>
+          ))}
+        </div>
+      </Popover>
     </div>
   );
 }
@@ -157,10 +186,14 @@ function CombatantDetails({ c, hasMap }: { c: Combatant; hasMap: boolean }) {
   const rollMode = useEncounterUi((s) => s.rollMode);
   const creature = useCreature(c.creature);
   const disabledPack = useDisabledPackOf(c.creature);
+  const [result, setResult] = useState<string | null>(null);
+  const attacks = attackActions(creature);
 
+  // Library data may carry dice formulas that don't parse.
   const attack = (action: CreatureAction) => {
     try {
-      rollAction(c, action, rollMode);
+      const rolled = rollAction(c, action, rollMode);
+      if (rolled) setResult(`${action.name}: ${resultSummary(rolled)}`);
     } catch (error) {
       reportError(error);
     }
@@ -187,11 +220,31 @@ function CombatantDetails({ c, hasMap }: { c: Combatant; hasMap: boolean }) {
       <HitPointControls c={c} />
       {c.side === 'player' && c.hp.current <= 0 && <DeathSaves c={c} />}
       <Section title="Conditions">
-        <ConditionChips c={c} />
+        <ConditionPicker c={c} />
       </Section>
-      <EffectsSection c={c} />
+      {attacks.length > 0 && (
+        <Section title="Attacks">
+          <div className="col">
+            {attacks.map((a) => (
+              <Button
+                key={a.name}
+                icon="swords"
+                label={attackLabel(a)}
+                title="Roll to hit and damage"
+                onClick={() => attack(a)}
+              />
+            ))}
+            {result && (
+              <span className="turn-result" title={result}>
+                {result}
+              </span>
+            )}
+          </div>
+        </Section>
+      )}
       {creature && <ResourcesSection c={c} creature={creature} />}
-      <Section title="Players and map">
+      <EffectsSection c={c} />
+      <Section title="Token" collapsible defaultOpen={false}>
         <CheckboxField label="Hidden" value={c.hiddenFromPlayers} onChange={(v) => setHidden(c.id, v)} />
         <CheckboxField
           label="Vision source"
@@ -213,15 +266,20 @@ function CombatantDetails({ c, hasMap }: { c: Combatant; hasMap: boolean }) {
         <CombatStats c={c} />
       </Section>
       {creature && (
-        <Section title="Stat block" collapsible>
+        <Section title="Stat block" collapsible defaultOpen={false}>
           <StatBlock creature={creature} onAttack={attack} />
         </Section>
       )}
       {disabledPack && (
-        <p className="hint-bar" role="note">
-          No stat block: this creature is in the disabled pack &quot;{disabledPack}&quot;. Enable it under Compendium
-          &gt; Packs.
-        </p>
+        <div className="hint-bar" role="note">
+          No stat block: this creature is in the disabled pack &quot;{disabledPack}&quot;. Enable it under Settings &gt;
+          Content.
+          <Button
+            label="Open Settings > Content"
+            variant="ghost"
+            onClick={() => useAppStore.getState().navigate({ page: 'settings', section: 'content' })}
+          />
+        </div>
       )}
       <Button
         icon="trash"
@@ -233,15 +291,17 @@ function CombatantDetails({ c, hasMap }: { c: Combatant; hasMap: boolean }) {
   );
 }
 
-/** Creature tab: hit points, conditions, visibility, notes and stat block of the selected combatant. */
-export function CombatantPanel() {
-  const combatant = useEncounterStore((s) => s.encounter?.combatants.find((c) => c.id === s.selectedCombatantId));
+/**
+ * Creature tab: hit points, conditions, attacks, token and stat block of the selected combatant; with
+ * nothing selected, the encounter overview.
+ */
+export function CombatantPanel({ encounter }: { encounter: Encounter }) {
+  const selectedId = useEncounterStore((s) => s.selectedCombatantId);
+  const combatant = encounter.combatants.find((c) => c.id === selectedId);
   const hasMap = useEncounterStore((s) => s.map !== null);
   return combatant ? (
     <CombatantDetails key={combatant.id} c={combatant} hasMap={hasMap} />
   ) : (
-    <EmptyState icon="cursor" title="No combatant selected">
-      Click a token on the map or a name in the initiative list.
-    </EmptyState>
+    <EncounterOverview encounter={encounter} />
   );
 }

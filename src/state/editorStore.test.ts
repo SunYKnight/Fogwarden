@@ -57,3 +57,17 @@ describe('editor history', () => {
     expect(saved.data[2]).toBe(6);
   });
 });
+
+describe('step hints', () => {
+  it('shows a step hint until the step is left, also when a tool shortcut leaves it', () => {
+    useEditorStore.setState({
+      step: 'ground',
+      helpSeen: { ground: false, walls: false, areas: false, objects: false },
+    });
+    useEditorStore.getState().setStep('ground');
+    expect(useEditorStore.getState().helpSeen.ground).toBe(false);
+    useEditorStore.getState().setTool('wall', 'walls');
+    useEditorStore.getState().setStep('areas');
+    expect(useEditorStore.getState().helpSeen).toEqual({ ground: true, walls: true, areas: false, objects: false });
+  });
+});

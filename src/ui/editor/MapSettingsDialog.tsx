@@ -1,12 +1,18 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ComponentType } from 'react';
 import { isVideoFile, mediaTitle, VIDEO_ACCEPT } from '@/core/atmosphere/media';
 import { imageSize } from '@/core/imageSize';
 import { SIDE_MATERIALS, lightLevelSchema } from '@/core/model';
 import { GridFields } from '@/editor/tools/terrain/calibrate';
 import { useAppStore } from '@/state/appStore';
-import { useEditorStore } from '@/state/editorStore';
+import { useEditorStore, type MapSettingsTab } from '@/state/editorStore';
 import { ColorField, NumberField, SelectField, TextField } from '../components/fields';
-import { Button, Dialog, Section } from '../kit';
+import { Button, Dialog, Section, Tabs, type TabSpec } from '../kit';
+
+const SETTINGS_TABS: TabSpec<MapSettingsTab>[] = [
+  { id: 'map', label: 'Map', icon: 'map' },
+  { id: 'grid', label: 'Grid', icon: 'grid' },
+  { id: 'lighting', label: 'Lighting & ground', icon: 'sun' },
+];
 
 const PICTURE_ACCEPT = 'image/png,image/jpeg,image/webp';
 
@@ -79,13 +85,90 @@ function BattlemapFields() {
 // Stable identity: the dialog re-focuses its first field when onClose changes.
 const close = () => useEditorStore.getState().setSettingsOpen(false);
 
-/** Everything about the map as a whole: name, battlemap, grid calibration, lighting and ground. */
-export function MapSettingsDialog() {
+function MapFields() {
   const map = useEditorStore((s) => s.map);
   const edit = useEditorStore((s) => s.edit);
   if (!map) {
-    throw new Error('MapSettingsDialog needs an open map');
+    throw new Error('MapFields needs an open map');
   }
+  return (
+    <>
+      <TextField label="Name" value={map.name} onChange={(v) => edit('Rename map', (d) => void (d.name = v))} />
+      <TextField
+        label="Tags"
+        value={map.tags.join(', ')}
+        placeholder="comma separated"
+        onChange={(v) =>
+          edit('Edit tags', (d) => {
+            d.tags = v
+              .split(',')
+              .map((t) => t.trim())
+              .filter((t) => t.length > 0);
+          })
+        }
+      />
+      <TextField
+        label="Notes"
+        multiline
+        value={map.notes}
+        onChange={(v) => edit('Map notes', (d) => void (d.notes = v))}
+      />
+      <Section title="Battlemap">
+        <BattlemapFields />
+      </Section>
+    </>
+  );
+}
+
+function LightingFields() {
+  const map = useEditorStore((s) => s.map);
+  const edit = useEditorStore((s) => s.edit);
+  if (!map) {
+    throw new Error('LightingFields needs an open map');
+  }
+  return (
+    <>
+      <SelectField
+        label="Ambient light"
+        value={map.ambientLight}
+        options={lightLevelSchema.options}
+        onChange={(v) => edit('Ambient light', (d) => void (d.ambientLight = v))}
+      />
+      <ColorField
+        label="Ground color"
+        value={map.terrain.baseColor}
+        onChange={(v) => edit('Ground color', (d) => void (d.terrain.baseColor = v))}
+      />
+      <SelectField
+        label="Cliff material"
+        value={map.terrain.cliffMaterial}
+        options={SIDE_MATERIALS}
+        onChange={(v) => edit('Cliff material', (d) => void (d.terrain.cliffMaterial = v))}
+      />
+      <NumberField
+        label="Cliff from"
+        value={map.terrain.cliffSlopeDeg}
+        min={10}
+        max={89}
+        suffix="°"
+        title="Slopes steeper than this show the cliff material instead of the battlemap"
+        onChange={(v) => edit('Cliff slope', (d) => void (d.terrain.cliffSlopeDeg = v))}
+      />
+    </>
+  );
+}
+
+const TAB_BODIES: Record<MapSettingsTab, ComponentType> = {
+  map: MapFields,
+  grid: GridFields,
+  lighting: LightingFields,
+};
+
+/** Everything about the map as a whole: name, battlemap, grid calibration, lighting and ground. */
+export function MapSettingsDialog() {
+  const tab = useEditorStore((s) => s.settingsTab);
+  const setTab = useEditorStore((s) => s.setSettingsTab);
+  const Body = TAB_BODIES[tab];
   return (
     <Dialog
       title="Map settings"
@@ -93,62 +176,10 @@ export function MapSettingsDialog() {
       width={560}
       footer={<Button label="Done" variant="primary" onClick={close} />}
     >
-      <Section title="Map">
-        <TextField label="Name" value={map.name} onChange={(v) => edit('Rename map', (d) => void (d.name = v))} />
-        <TextField
-          label="Tags"
-          value={map.tags.join(', ')}
-          placeholder="comma separated"
-          onChange={(v) =>
-            edit('Edit tags', (d) => {
-              d.tags = v
-                .split(',')
-                .map((t) => t.trim())
-                .filter((t) => t.length > 0);
-            })
-          }
-        />
-        <TextField
-          label="Notes"
-          multiline
-          value={map.notes}
-          onChange={(v) => edit('Map notes', (d) => void (d.notes = v))}
-        />
-      </Section>
-      <Section title="Battlemap">
-        <BattlemapFields />
-      </Section>
-      <Section title="Grid">
-        <GridFields />
-      </Section>
-      <Section title="Lighting and ground">
-        <SelectField
-          label="Ambient light"
-          value={map.ambientLight}
-          options={lightLevelSchema.options}
-          onChange={(v) => edit('Ambient light', (d) => void (d.ambientLight = v))}
-        />
-        <ColorField
-          label="Ground color"
-          value={map.terrain.baseColor}
-          onChange={(v) => edit('Ground color', (d) => void (d.terrain.baseColor = v))}
-        />
-        <SelectField
-          label="Cliff material"
-          value={map.terrain.cliffMaterial}
-          options={SIDE_MATERIALS}
-          onChange={(v) => edit('Cliff material', (d) => void (d.terrain.cliffMaterial = v))}
-        />
-        <NumberField
-          label="Cliff from"
-          value={map.terrain.cliffSlopeDeg}
-          min={10}
-          max={89}
-          suffix="°"
-          title="Slopes steeper than this show the cliff material instead of the battlemap"
-          onChange={(v) => edit('Cliff slope', (d) => void (d.terrain.cliffSlopeDeg = v))}
-        />
-      </Section>
+      <Tabs tabs={SETTINGS_TABS} value={tab} onChange={setTab} label="Map settings" />
+      <div className="map-settings-body">
+        <Body />
+      </div>
     </Dialog>
   );
 }

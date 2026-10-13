@@ -1,17 +1,13 @@
 import { isTauri } from '@tauri-apps/api/core';
-import { PARTY_VIEW } from '@/core/model';
+import { useState, type ReactNode } from 'react';
 import { useAppStore } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLanStore } from '@/state/lanStore';
 import { useRelayStore } from '@/state/relayStore';
-import { useDmCameraStore } from '@/sync/cameraStore';
-import { usePlayerViewStore } from '@/sync/playerViewStore';
-import { useViewLinksStore } from '@/sync/views';
-import { CheckboxField, SelectField } from '../components/fields';
-import { Button, Icon, Popover, Section } from '../kit';
+import { Button, Icon, Popover, type IconName } from '../kit';
 import { closePlayerWindow, monitorLabel, openPlayerWindow, usePlayerWindowStore } from '../playerWindow';
-import { describeMonitor, useMonitors } from '../settings/useMonitors';
-import { LanControls } from './LanControls';
+import { LINK_TEXT, RelayButton } from '../server/OnlineSection';
+import { LanButton, LanLinks } from './LanControls';
 
 /** Short status of how players see the game right now, e.g. "Window on DISPLAY2 · LAN 2 players". */
 export function usePlayersStatus(): string {
@@ -44,104 +40,120 @@ function PlayersSee() {
   );
 }
 
-/** Monitor and fullscreen for the player window; the same settings as on the Settings page. */
-function WindowSection() {
-  const settings = useAppStore((s) => s.settings);
-  const setSettings = useAppStore((s) => s.setSettings);
-  const reportError = useAppStore((s) => s.reportError);
-  const windowOpen = usePlayerWindowStore((s) => s.open);
-  const views = useViewLinksStore((s) => s.views);
-  const savedView = settings?.playerWindow.view ?? PARTY_VIEW;
-  const shownView = views.some((v) => v.id === savedView) ? savedView : PARTY_VIEW;
-  const { monitors, primary } = useMonitors();
-  const toggle = () =>
-    (windowOpen ? closePlayerWindow() : settings ? openPlayerWindow(settings) : Promise.resolve()).catch(reportError);
-  const chosen = settings?.playerWindow.monitorName ?? '';
-  const connected = monitors.map((m) => m.name ?? '').filter((n) => n.length > 0);
-  // A monitor chosen earlier stays selectable while it is unplugged.
-  const names = ['', ...connected, ...(chosen === '' || connected.includes(chosen) ? [] : [chosen])];
-  const describe = (name: string) => {
-    const index = monitors.findIndex((m) => m.name === name);
-    const monitor = monitors[index];
-    return monitor
-      ? describeMonitor(monitor, index)
-      : name === ''
-        ? `Primary (${monitorLabel(primary)})`
-        : `${monitorLabel(name)} (not connected)`;
-  };
+interface LineProps {
+  icon: IconName;
+  title: string;
+  status: string;
+  /** Buttons at the right end of the line. */
+  actions: ReactNode;
+}
 
+function PlayersLine({ icon, title, status, actions }: LineProps) {
   return (
-    <Section title="Window">
-      <div className="col">
-        <Button
-          icon={windowOpen ? 'close' : 'external'}
-          label={windowOpen ? 'Close player window' : 'Open player window'}
-          variant={windowOpen ? 'default' : 'primary'}
-          disabled={!settings}
-          onClick={toggle}
-        />
-        {settings && (
-          <SelectField
-            label="Shows"
-            value={shownView}
-            options={views.map((v) => v.id)}
-            format={(id) => views.find((v) => v.id === id)?.name ?? id}
-            onChange={(view) =>
-              setSettings({ ...settings, playerWindow: { ...settings.playerWindow, view } }).catch(reportError)
-            }
-          />
-        )}
-        {settings && isTauri() && (
-          <>
-            <SelectField
-              label="Monitor"
-              value={chosen}
-              options={names}
-              format={describe}
-              onChange={(v) =>
-                setSettings({
-                  ...settings,
-                  playerWindow: { ...settings.playerWindow, monitorName: v === '' ? null : v },
-                }).catch(reportError)
-              }
-            />
-            <CheckboxField
-              label="Fullscreen"
-              value={settings.playerWindow.fullscreen}
-              onChange={(v) =>
-                setSettings({ ...settings, playerWindow: { ...settings.playerWindow, fullscreen: v } }).catch(
-                  reportError,
-                )
-              }
-            />
-            {windowOpen && <p className="muted small">Monitor and fullscreen apply when the window opens next.</p>}
-          </>
-        )}
-        {!isTauri() && <p className="muted small">In the browser the player view opens in a new tab.</p>}
+    <div className="players-line">
+      <Icon name={icon} size={20} />
+      <div className="players-line-text">
+        <strong>{title}</strong>
+        <span className="muted small">{status}</span>
       </div>
-    </Section>
+      <div className="row">{actions}</div>
+    </div>
   );
 }
 
-function ShowSection() {
-  const push = useDmCameraStore((s) => s.push);
-  const setPush = useDmCameraStore((s) => s.setPush);
-  const showTurnOrder = usePlayerViewStore((s) => s.showTurnOrder);
+function WindowLine() {
+  const settings = useAppStore((s) => s.settings);
+  const reportError = useAppStore((s) => s.reportError);
+  const { open, monitor } = usePlayerWindowStore();
+  const status = !isTauri()
+    ? 'Opens in a new browser tab'
+    : open
+      ? `Open on ${monitor ? monitorLabel(monitor) : 'an unknown monitor'}`
+      : 'Closed';
   return (
-    <Section title="Show">
-      <CheckboxField label="Push my camera to players" value={push} onChange={setPush} />
-      <CheckboxField
-        label="Show turn order to players"
-        value={showTurnOrder}
-        onChange={(v) => usePlayerViewStore.setState({ showTurnOrder: v })}
-      />
-    </Section>
+    <PlayersLine
+      icon="monitor"
+      title="Player window"
+      status={status}
+      actions={
+        open ? (
+          <Button icon="close" label="Close" onClick={() => closePlayerWindow().catch(reportError)} />
+        ) : (
+          <Button
+            icon="external"
+            label="Open"
+            variant="primary"
+            disabled={!settings}
+            onClick={() => (settings ? openPlayerWindow(settings).catch(reportError) : undefined)}
+          />
+        )
+      }
+    />
   );
 }
 
-/** Rail entry for the player view: status at a glance, window, LAN and what players see in a popover. */
+function LanLine() {
+  const info = useLanStore((s) => s.info);
+  const [showLinks, setShowLinks] = useState(false);
+  const desktop = isTauri();
+  const status = !desktop
+    ? 'Needs the desktop app'
+    : info
+      ? `On · ${info.players} ${info.players === 1 ? 'player' : 'players'}`
+      : 'Off';
+  return (
+    <>
+      <PlayersLine
+        icon="wifi"
+        title="LAN"
+        status={status}
+        actions={
+          desktop && (
+            <>
+              {info && (
+                <Button
+                  icon="qr"
+                  label="Links and QR codes"
+                  iconOnly
+                  variant="ghost"
+                  active={showLinks}
+                  onClick={() => setShowLinks(!showLinks)}
+                />
+              )}
+              <LanButton variant="default" />
+            </>
+          )
+        }
+      />
+      {info && showLinks && (
+        <div className="players-line-detail">
+          <LanLinks info={info} />
+        </div>
+      )}
+    </>
+  );
+}
+
+function OnlineLine() {
+  const remote = useAppStore((s) => s.settings?.remote ?? null);
+  const link = useRelayStore((s) => s.link);
+  const desktop = isTauri();
+  const host = remote?.url.replace(/^https?:\/\//, '').replace(/\/+$/, '') ?? '';
+  const status = !desktop ? 'Needs the desktop app' : link === 'online' ? `Connected to ${host}` : LINK_TEXT[link];
+  return (
+    <PlayersLine
+      icon="server"
+      title="Online"
+      status={status}
+      actions={desktop && remote && <RelayButton remote={remote} variant="default" />}
+    />
+  );
+}
+
+/** Rail entry for the player view: status at a glance and quick actions; setup lives in Settings > Players. */
 export function PlayersMenu() {
   const status = usePlayersStatus();
+  const navigate = useAppStore((s) => s.navigate);
   const live = status !== 'Off';
 
   return (
@@ -165,18 +177,29 @@ export function PlayersMenu() {
         </button>
       )}
     >
-      <div className="players-menu col">
-        <div className="row">
-          <h2 className="grow">Player view</h2>
-          <span className={live ? 'players-status live' : 'players-status'}>{status}</span>
+      {(close) => (
+        <div className="players-menu col">
+          <div className="row">
+            <h2 className="grow">Player view</h2>
+            <span className={live ? 'players-status live' : 'players-status'}>{status}</span>
+          </div>
+          <PlayersSee />
+          <WindowLine />
+          <LanLine />
+          <OnlineLine />
+          <div className="row">
+            <Button
+              icon="settings"
+              label="Player settings…"
+              variant="ghost"
+              onClick={() => {
+                close();
+                navigate({ page: 'settings', section: 'players' });
+              }}
+            />
+          </div>
         </div>
-        <PlayersSee />
-        <WindowSection />
-        <ShowSection />
-        <Section title="LAN">
-          <LanControls />
-        </Section>
-      </div>
+      )}
     </Popover>
   );
 }

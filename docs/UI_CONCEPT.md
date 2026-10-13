@@ -226,3 +226,29 @@ Verification per phase: GUI smoke in the running app over the WebView2 DevTools 
 - **Folder picker:** native folder dialog via `tauri-plugin-dialog`.
 - **Sample content:** a generated, license-free sample battlemap and a sample encounter built from SRD creatures.
 - **Editor steps:** tabs in the recommended order (Ground → Walls → Areas → Light & objects), free to switch.
+
+## 10. Declutter (order of work)
+
+Screens follow the DM's order: set up once → prepare a session → at the table → wrap up.
+
+- **Rail:** Home · Campaigns · Maps · Compendium · Play; Search (Ctrl+K), Players, Settings at the bottom. No Server
+  entry: online play lives in Settings > Players.
+- **One accent button per screen state:** only the next step of the flow is accent; everything else is default or
+  ghost. Rarely changed fields sit in collapsed _Advanced_ sections.
+- **Home** is the current campaign's dashboard: Continue, Next session (open encounters, open quests, quick journal
+  note), Recent maps. Campaign notes live in the Journal tab.
+- **Players popover** is status plus one button per channel (player window, LAN, online); the details are in
+  Settings > Players. **Settings** shows one section at a time (Data · Players · Graphics · Audio · Rules · Content ·
+  About); version history opens as a dialog; content packs moved from the Compendium to Settings > Content.
+- **Map editor:** the canvas uses the full width unless something is selected; step help is an ⓘ popover (shown
+  once per step), layers a button on the canvas, light rings only in step 4 or for the selected light; Map settings
+  has Map · Grid · Lighting & ground tabs; Export is in the header's ⋯ menu.
+- **Compendium:** one split button per tab (New creature ▾ with the imports), filters behind a Filters button with
+  removable chips.
+- **Play** follows the combat state (Set up · Combat · Wrap up): set-up bar before the fight, turn bar during it.
+  The map toolbar holds only map tools plus Help; Sound, Show to players, Scene and the player switches are in the
+  inspector's Table tab. With nothing selected the inspector shows the encounter overview; the Creature tab is
+  ordered by use (HP, conditions, attacks first; Token and Stat block collapsed). The hint line only shows context
+  hints.
+- **Command search (Ctrl+K):** every destination, create action, player action, play action and library item by
+  name, so rare actions don't need permanent buttons.

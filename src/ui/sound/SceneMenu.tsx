@@ -6,16 +6,16 @@ import { setCalendarTimeOfDay, useCalendarStore } from '@/state/calendarStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useDmScene } from '@/state/scene';
 import { CheckboxField } from '../components/fields';
-import { Button, Popover, ToolButton, type IconName } from '../kit';
+import { Button, type IconName } from '../kit';
 
 const PHASES: DayPhase[] = ['dawn', 'day', 'dusk', 'night'];
 const PHASE_LABEL: Record<DayPhase, string> = { dawn: 'Dawn', day: 'Day', dusk: 'Dusk', night: 'Night' };
-const WEATHER_LABEL: Record<Weather, string> = { none: 'Clear', rain: 'Rain', snow: 'Snow', fog: 'Fog' };
-const WEATHER_ICON: Record<Weather, IconName> = { none: 'sun', rain: 'rain', snow: 'snow', fog: 'fog' };
+export const WEATHER_LABEL: Record<Weather, string> = { none: 'Clear', rain: 'Rain', snow: 'Snow', fog: 'Fog' };
+export const WEATHER_ICON: Record<Weather, IconName> = { none: 'sun', rain: 'rain', snow: 'snow', fog: 'fog' };
 const NOON = 12 * 60;
 
 /** Time of day (DM and players' light) and weather; with a campaign calendar the slider moves its clock. */
-function ScenePanel({ onClose }: { onClose: () => void }) {
+export function ScenePanel() {
   const atmosphere = useEncounterStore((s) => s.encounter?.atmosphere);
   const calendar = useCalendarStore((s) => s.calendar);
   const sceneMinute = useDmScene()?.minute ?? null;
@@ -35,12 +35,7 @@ function ScenePanel({ onClose }: { onClose: () => void }) {
 
   return (
     atmosphere && (
-      <div className="scene-popover">
-        <div className="row">
-          <strong>Scene</strong>
-          <div className="spacer" />
-          <Button icon="close" label="Close scene menu" iconOnly variant="ghost" onClick={onClose} />
-        </div>
+      <div className="scene-panel">
         <CheckboxField
           label="Time of day"
           value={atmosphere.minute !== null}
@@ -68,7 +63,7 @@ function ScenePanel({ onClose }: { onClose: () => void }) {
                 {formatMinute(minute)} · {PHASE_LABEL[dayPhase(minute)]}
               </span>
             </div>
-            <div className="row" role="group" aria-label="Time of day">
+            <div className="row wrap" role="group" aria-label="Time of day">
               {PHASES.map((phase) => (
                 <Button
                   key={phase}
@@ -82,7 +77,7 @@ function ScenePanel({ onClose }: { onClose: () => void }) {
           </>
         )}
         <strong>Weather</strong>
-        <div className="row" role="group" aria-label="Weather">
+        <div className="row wrap" role="group" aria-label="Weather">
           {WEATHERS.map((weather) => (
             <Button
               key={weather}
@@ -95,17 +90,5 @@ function ScenePanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     )
-  );
-}
-
-/** Play canvas toolbar entry: the Scene popover. */
-export function SceneMenu() {
-  return (
-    <Popover
-      label="Scene"
-      trigger={(open, toggle) => <ToolButton icon="sun" label="Scene" active={open} onClick={toggle} />}
-    >
-      {(close) => <ScenePanel onClose={close} />}
-    </Popover>
   );
 }

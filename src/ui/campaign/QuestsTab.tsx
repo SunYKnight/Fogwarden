@@ -60,7 +60,7 @@ export function QuestsTab({ campaignId }: CampaignTabProps) {
         <div className="row">
           <span className="muted">{(docs ?? []).filter((q) => q.status === 'open').length} open</span>
           <div className="spacer" />
-          {newButton}
+          {docs?.length !== 0 && newButton}
         </div>
         <Problems problems={problems} />
         {QUEST_STATUSES.map((status) => {

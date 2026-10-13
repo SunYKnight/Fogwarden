@@ -2,11 +2,14 @@ import { useState, type ReactNode } from 'react';
 import { itemSubtitle, type Item } from '@/core/items';
 import { spellSubtitle } from '@/core/spells';
 import type { LibraryDocs, LibraryEntry } from '@/data/repository';
+import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { Markdown } from '../components/Markdown';
 import { Button, EmptyState, type IconName } from '../kit';
 import { openAuroraImport } from './compendiumUi';
+import { FilterRow, FilterSelect, type FilterChip } from './FilterRow';
 import { OriginBadge } from './OriginBadge';
+import { SplitButton } from './SplitButton';
 
 /** Rows rendered at once; more need a narrower search, so typing stays quick with thousands of entries. */
 const MAX_ROWS = 300;
@@ -16,25 +19,29 @@ function distinct(values: string[]): string[] {
   return [...new Set(values.filter((v) => v !== ''))].sort((a, b) => a.localeCompare(b));
 }
 
-function FilterSelect(props: {
-  label: string;
-  all: string;
-  value: string;
-  options: string[];
-  format?: (v: string) => string;
-  onChange: (v: string) => void;
-}) {
-  const { label, all, value, options, format = (v) => v, onChange } = props;
+/** Compendium header actions of the Items and Spells tabs: both only come from imports and packs. */
+export function ReferenceActions() {
+  const navigate = useAppStore((s) => s.navigate);
   return (
-    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{all}</option>
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {format(o)}
-        </option>
-      ))}
-    </select>
+    <SplitButton
+      icon="upload"
+      label="Import from Aurora Builder…"
+      onClick={openAuroraImport}
+      menuLabel="More ways to add content"
+      items={[
+        {
+          label: 'Manage content packs…',
+          icon: 'package',
+          run: () => navigate({ page: 'settings', section: 'content' }),
+        },
+      ]}
+    />
   );
+}
+
+/** Chip for a select filter that is set; `clear` resets it to "any". */
+function selectChip(value: string, label: string, clear: () => void): FilterChip[] {
+  return value === '' ? [] : [{ label, clear }];
 }
 
 interface SplitProps<K extends 'item' | 'spell'> {
@@ -42,6 +49,9 @@ interface SplitProps<K extends 'item' | 'spell'> {
   noun: string;
   total: number;
   entries: LibraryEntry<K>[];
+  search: { label: string; value: string; onChange: (text: string) => void };
+  chips: FilterChip[];
+  /** Fields of the Filters popover. */
   filters: ReactNode;
   reset: () => void;
   describe: (doc: LibraryDocs[K]) => string;
@@ -50,17 +60,16 @@ interface SplitProps<K extends 'item' | 'spell'> {
 
 /** List left (filters, rows), preview right (name, subtitle, facts, description). */
 function ReferenceSplit<K extends 'item' | 'spell'>(props: SplitProps<K>) {
-  const { icon, noun, total, entries, filters, reset, describe, facts } = props;
+  const { icon, noun, total, entries, search, chips, filters, reset, describe, facts } = props;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = entries.find((e) => e.ref.id === selectedId);
   const doc = selected?.doc;
   return (
     <div className="compendium-split">
       <div className="compendium-list">
-        <div className="row wrap compendium-filters">
+        <FilterRow search={search} chips={chips} reset={reset}>
           {filters}
-          <Button label="Reset" variant="ghost" onClick={reset} />
-        </div>
+        </FilterRow>
         <span className="muted">
           {entries.length} of {total}
           {entries.length > MAX_ROWS && `, showing ${MAX_ROWS}: refine the search`}
@@ -131,6 +140,7 @@ function ReferenceSplit<K extends 'item' | 'spell'>(props: SplitProps<K>) {
 }
 
 const NO_ITEM_FILTER = { text: '', type: '', rarity: '' };
+const formatRarity = (r: string) => (r === MUNDANE ? 'Mundane' : r);
 
 /** "Weapon (martial melee)" → "Weapon": the filter groups by the part before details. */
 function itemKind(item: Item): string {
@@ -155,6 +165,13 @@ export function ItemLibrary() {
       noun="item"
       total={listing.entries.length}
       entries={entries}
+      search={{ label: 'Search items', value: filter.text, onChange: (text) => setFilter({ ...filter, text }) }}
+      chips={[
+        ...selectChip(filter.type, `Type: ${filter.type}`, () => setFilter({ ...filter, type: '' })),
+        ...selectChip(filter.rarity, `Rarity: ${formatRarity(filter.rarity)}`, () =>
+          setFilter({ ...filter, rarity: '' }),
+        ),
+      ]}
       reset={() => setFilter(NO_ITEM_FILTER)}
       describe={itemSubtitle}
       facts={(item) => [
@@ -164,13 +181,6 @@ export function ItemLibrary() {
       ]}
       filters={
         <>
-          <input
-            type="search"
-            aria-label="Search items"
-            placeholder="Search items"
-            value={filter.text}
-            onChange={(e) => setFilter({ ...filter, text: e.target.value })}
-          />
           <FilterSelect
             label="Type"
             all="All types"
@@ -183,7 +193,7 @@ export function ItemLibrary() {
             all="All rarities"
             value={filter.rarity}
             options={[MUNDANE, ...distinct(docs.map((d) => d.rarity))]}
-            format={(r) => (r === MUNDANE ? 'Mundane' : r)}
+            format={formatRarity}
             onChange={(rarity) => setFilter({ ...filter, rarity })}
           />
         </>
@@ -193,6 +203,7 @@ export function ItemLibrary() {
 }
 
 const NO_SPELL_FILTER = { text: '', level: '', school: '', className: '' };
+const formatLevel = (l: string) => (l === '0' ? 'Cantrip' : `Level ${l}`);
 
 /** Compendium tab Spells: search with level, school and class filters. */
 export function SpellLibrary() {
@@ -213,6 +224,12 @@ export function SpellLibrary() {
       noun="spell"
       total={listing.entries.length}
       entries={entries}
+      search={{ label: 'Search spells', value: filter.text, onChange: (text) => setFilter({ ...filter, text }) }}
+      chips={[
+        ...selectChip(filter.level, formatLevel(filter.level), () => setFilter({ ...filter, level: '' })),
+        ...selectChip(filter.school, `School: ${filter.school}`, () => setFilter({ ...filter, school: '' })),
+        ...selectChip(filter.className, `Class: ${filter.className}`, () => setFilter({ ...filter, className: '' })),
+      ]}
       reset={() => setFilter(NO_SPELL_FILTER)}
       describe={spellSubtitle}
       facts={(spell) => [
@@ -225,19 +242,12 @@ export function SpellLibrary() {
       ]}
       filters={
         <>
-          <input
-            type="search"
-            aria-label="Search spells"
-            placeholder="Search spells"
-            value={filter.text}
-            onChange={(e) => setFilter({ ...filter, text: e.target.value })}
-          />
           <FilterSelect
             label="Level"
             all="All levels"
             value={filter.level}
             options={['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']}
-            format={(l) => (l === '0' ? 'Cantrip' : `Level ${l}`)}
+            format={formatLevel}
             onChange={(level) => setFilter({ ...filter, level })}
           />
           <FilterSelect

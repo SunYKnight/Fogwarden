@@ -1,18 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AssetRef, Campaign, DocRef, Encounter, EncounterLocator } from '@/core/model';
+import { QUESTS } from '@/data/campaignFiles';
 import { useAppStore } from '@/state/appStore';
 import { currentCombatant } from '@/state/encounterActions';
+import { appendToJournal } from '@/state/journalRecorder';
 import { useLibraryStore } from '@/state/libraryStore';
+import { Problems, useCampaignDocs } from '../campaign/campaignUi';
 import { AssetImage } from '../components/AssetImage';
 import { Button, EmptyState, Icon, PageHeader } from '../kit';
-import { openCreatureImport } from '../library/compendiumUi';
+import { openNewCampaign } from '../library/CampaignLibrary';
+import { openCreatureImport, openNewEncounter } from '../library/compendiumUi';
+import { encounterStatus, statusLabel } from '../library/encounterStatus';
 import { isDamFile, isMapSourceFile, useFileDrop } from '../library/fileDrop';
 import { openNewMapWizard } from '../library/NewMapWizard';
 import { FirstSteps } from './FirstSteps';
-import { recentItems, type RecentItem } from './recent';
+import { homeCampaignId, recentMaps, type MapEntry } from './recent';
 
 const RECENT_LIMIT = 6;
 const DROP_TYPES = 'image/png,image/jpeg,image/webp,.dd2vtt,.df2vtt,.uvtt,.dam,.txt,.glb';
+const IMPORT_HINT =
+  'A battlemap image or a .dd2vtt export becomes a new map; a .txt stat block opens the creature import. ' +
+  'Files can also be dropped anywhere on this page.';
 
 /** Battlemap image of a library map, for encounter thumbnails; a user copy shadows the shipped map. */
 function useMapImage(ref: DocRef | null): AssetRef | null {
@@ -21,22 +29,22 @@ function useMapImage(ref: DocRef | null): AssetRef | null {
   return entry?.doc.image?.asset ?? null;
 }
 
-type CampaignEncounter = { campaign: Campaign; encounter: Encounter };
+interface Loaded {
+  campaigns: Campaign[];
+  encounters: Encounter[];
+}
 
-/** Every encounter of every campaign; Home shows the newest and the one to continue. */
-function useEncounters(): CampaignEncounter[] | null {
+/** Every campaign and encounter; Home picks the campaign and its next steps from them. */
+function useCampaigns(): Loaded | null {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
-  const [loaded, setLoaded] = useState<CampaignEncounter[] | null>(null);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       const { campaigns } = await repository.listCampaigns();
       const lists = await Promise.all(campaigns.map((c) => repository.listEncounters(c.id)));
-      const all = lists.flatMap((list, i) =>
-        list.encounters.map((encounter) => ({ campaign: campaigns[i]!, encounter })),
-      );
-      if (!cancelled) setLoaded(all);
+      if (!cancelled) setLoaded({ campaigns, encounters: lists.flatMap((list) => list.encounters) });
     };
     load().catch(reportError);
     return () => {
@@ -75,25 +83,141 @@ function ContinueCard({ campaign, encounter }: { campaign: Campaign; encounter: 
   );
 }
 
-function RecentCard({ item }: { item: RecentItem }) {
-  const navigate = useAppStore((s) => s.navigate);
+function UpcomingEncounter({ encounter, primary }: { encounter: Encounter; primary: boolean }) {
   const openEncounter = useAppStore((s) => s.openEncounter);
   const reportError = useAppStore((s) => s.reportError);
-  const encounterMap = useMapImage(item.kind === 'encounter' ? item.encounter.map : null);
-  const isMap = item.kind === 'map';
-  const open = () =>
-    isMap
-      ? navigate({ page: 'map-editor', map: item.ref })
-      : openEncounter({ campaignId: item.campaign.id, encounterId: item.encounter.id }).catch(reportError);
+  const image = useMapImage(encounter.map);
+  const status = encounterStatus(encounter);
   return (
-    <button type="button" className="card recent-card" onClick={open}>
-      <AssetImage asset={isMap ? (item.map.image?.asset ?? null) : encounterMap} alt="" />
+    <div className="encounter-row">
+      <AssetImage asset={image} alt="" className="encounter-thumb" />
+      <div className="encounter-info">
+        <strong>{encounter.name}</strong>
+        <span className="muted">{encounter.combatants.length} combatants</span>
+      </div>
+      <span className={`status-chip ${status.kind}`}>{statusLabel(status)}</span>
+      <Button
+        icon="play"
+        label="Play"
+        variant={primary ? 'primary' : 'default'}
+        onClick={() =>
+          openEncounter({ campaignId: encounter.campaignId, encounterId: encounter.id }).catch(reportError)
+        }
+      />
+    </div>
+  );
+}
+
+function OpenQuests({ campaignId }: { campaignId: string }) {
+  const { docs, problems } = useCampaignDocs(campaignId, QUESTS);
+  const open = (docs ?? []).filter((q) => q.status === 'open').sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <div className="col">
+      <h3>Open quests</h3>
+      <Problems problems={problems} />
+      {docs !== null && open.length === 0 ? (
+        <span className="muted">No open quests.</span>
+      ) : (
+        <ul className="home-quests">
+          {open.map((quest) => (
+            <li key={quest.id}>
+              <Icon name="flag" size={14} /> {quest.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** One line into the current session's journal entry, the same place Play writes its events to. */
+function QuickJournal({ campaignId }: { campaignId: string }) {
+  const reportError = useAppStore((s) => s.reportError);
+  const [text, setText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const note = text.trim();
+
+  const add = async () => {
+    setSaving(true);
+    try {
+      const saved = await appendToJournal(campaignId, [note], null);
+      setText('');
+      useAppStore.getState().notify(`Added to "${saved.title}"`, 'success');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form
+      className="col"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (note !== '') add().catch(reportError);
+      }}
+    >
+      <h3>Journal</h3>
+      <div className="row">
+        <input
+          className="grow"
+          aria-label="Journal note"
+          placeholder="A note for this session's journal"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <Button icon="journal" label="Add" type="submit" disabled={note === '' || saving} />
+      </div>
+    </form>
+  );
+}
+
+/** Continue and Next session of one campaign; exactly one button is the accent: the next step. */
+function CampaignDashboard(props: { campaign: Campaign; encounters: Encounter[]; last: EncounterLocator | null }) {
+  const { campaign, encounters, last } = props;
+  const running = last?.campaignId === campaign.id ? encounters.find((e) => e.id === last.encounterId) : undefined;
+  const upcoming = encounters.filter((e) => e !== running && encounterStatus(e).kind !== 'finished');
+  return (
+    <>
+      {running && <ContinueCard campaign={campaign} encounter={running} />}
+      <section className="home-card" aria-label="Next session">
+        <div className="home-card-head">
+          <h2>Next session</h2>
+          <div className="spacer" />
+          <Button
+            icon="plus"
+            label="New encounter"
+            variant={running || upcoming.length > 0 ? 'default' : 'primary'}
+            onClick={() => openNewEncounter(campaign.id)}
+          />
+        </div>
+        <div className="home-next">
+          <div className="col">
+            <h3>Encounters</h3>
+            {upcoming.length === 0 ? (
+              <span className="muted">Nothing prepared yet: add the fights of the next session.</span>
+            ) : (
+              upcoming.map((e, i) => <UpcomingEncounter key={e.id} encounter={e} primary={!running && i === 0} />)
+            )}
+          </div>
+          <div className="col">
+            <OpenQuests campaignId={campaign.id} />
+            <QuickJournal campaignId={campaign.id} />
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function RecentMapCard({ entry }: { entry: MapEntry }) {
+  const navigate = useAppStore((s) => s.navigate);
+  return (
+    <button type="button" className="card recent-card" onClick={() => navigate({ page: 'map-editor', map: entry.ref })}>
+      <AssetImage asset={entry.doc.image?.asset ?? null} alt="" />
       <span className="body">
-        <strong>{isMap ? item.map.name : item.encounter.name}</strong>
+        <strong>{entry.doc.name}</strong>
         <span className="muted">
-          <Icon name={isMap ? 'map' : 'swords'} size={14} /> {isMap ? 'Map' : `Encounter · ${item.campaign.name}`}
-          {' · '}
-          {new Date(item.updatedAt).toLocaleDateString()}
+          <Icon name="map" size={14} /> {new Date(entry.doc.updatedAt).toLocaleDateString()}
         </span>
       </span>
     </button>
@@ -120,19 +244,12 @@ async function handleDrop(files: File[]): Promise<void> {
   }
 }
 
-function DropZone() {
+function ImportButton() {
   const reportError = useAppStore((s) => s.reportError);
   const input = useRef<HTMLInputElement>(null);
-  const { dragging, handlers } = useFileDrop((files) => handleDrop(files).catch(reportError));
   return (
-    <section className={dragging ? 'drop-zone home-drop dragging' : 'drop-zone home-drop'} {...handlers}>
-      <Icon name="upload" size={32} />
-      <strong>Drop files here</strong>
-      <span className="muted">
-        A battlemap image or a <code>.dd2vtt</code> export becomes a new map · a <code>.txt</code> stat block opens the
-        creature import
-      </span>
-      <Button icon="folder" label="Choose file" onClick={() => input.current?.click()} />
+    <>
+      <Button icon="upload" label="Import…" title={IMPORT_HINT} onClick={() => input.current?.click()} />
       <input
         ref={input}
         type="file"
@@ -144,40 +261,76 @@ function DropZone() {
           e.target.value = '';
         }}
       />
-    </section>
+    </>
   );
 }
 
 export function HomePage() {
   const last = useAppStore((s) => s.settings?.lastEncounter ?? null);
+  const reportError = useAppStore((s) => s.reportError);
+  const navigate = useAppStore((s) => s.navigate);
   const maps = useLibraryStore((s) => s.listings.map.entries);
-  const loaded = useEncounters();
-  const running = last && loaded?.find((e) => e.campaign.id === last.campaignId && e.encounter.id === last.encounterId);
-  const recent = loaded ? recentItems(maps, loaded, RECENT_LIMIT) : [];
+  const loaded = useCampaigns();
+  const [picked, setPicked] = useState<string | null>(null);
+  const { dragging, handlers } = useFileDrop((files) => handleDrop(files).catch(reportError));
+  const campaignId = loaded && homeCampaignId(loaded.campaigns, loaded.encounters, picked, last);
+  const campaign = loaded?.campaigns.find((c) => c.id === campaignId);
+  const recent = recentMaps(maps, RECENT_LIMIT);
   return (
-    <div className="page-frame">
-      <PageHeader crumbs={[{ label: 'Home' }]} />
+    <div className={dragging ? 'page-frame page-drop dragging' : 'page-frame page-drop'} {...handlers}>
+      <PageHeader crumbs={[{ label: 'Home' }]}>
+        {campaign && (
+          <>
+            <select aria-label="Campaign" value={campaign.id} onChange={(e) => setPicked(e.target.value)}>
+              {loaded?.campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <Button
+              icon="swords"
+              label="Open campaign"
+              onClick={() => navigate({ page: 'campaigns', campaignId: campaign.id })}
+            />
+          </>
+        )}
+        <ImportButton />
+      </PageHeader>
       <div className="page-body home">
-        {running && <ContinueCard campaign={running.campaign} encounter={running.encounter} />}
         <FirstSteps />
-        <DropZone />
-        <section aria-label="Recent">
-          <h2>Recent</h2>
-          {loaded && recent.length === 0 ? (
+        {campaign && loaded ? (
+          <CampaignDashboard
+            key={campaign.id}
+            campaign={campaign}
+            encounters={loaded.encounters.filter((e) => e.campaignId === campaign.id)}
+            last={last}
+          />
+        ) : (
+          loaded && (
             <EmptyState
-              icon="map"
-              title="Nothing here yet"
-              action={<Button icon="plus" label="New map" variant="primary" onClick={() => openNewMapWizard()} />}
+              icon="swords"
+              title="No campaigns yet."
+              action={<Button icon="plus" label="New campaign" variant="primary" onClick={openNewCampaign} />}
             >
-              Maps and encounters you work on appear here.
+              A campaign holds the encounters, journal and quests of one group; Home then shows its next session.
             </EmptyState>
+          )
+        )}
+        <section aria-label="Recent maps">
+          <div className="home-card-head">
+            <h2>Recent maps</h2>
+            <div className="spacer" />
+            <Button icon="plus" label="New map" onClick={() => openNewMapWizard()} />
+          </div>
+          {recent.length === 0 ? (
+            <span className="muted">
+              Maps you work on appear here. Drop a battlemap image on this page to start one.
+            </span>
           ) : (
             <div className="card-grid">
-              {recent.map((item) => (
-                <RecentCard
-                  key={item.kind === 'map' ? `map:${item.ref.area}:${item.ref.id}` : `enc:${item.encounter.id}`}
-                  item={item}
-                />
+              {recent.map((entry) => (
+                <RecentMapCard key={`${entry.ref.area}:${entry.ref.id}`} entry={entry} />
               ))}
             </div>
           )}

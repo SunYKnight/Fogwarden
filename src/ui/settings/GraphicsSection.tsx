@@ -49,28 +49,30 @@ export function GraphicsSection({ settings, save }: { settings: Settings; save: 
           />
         ))}
       </div>
-      <SliderField
-        label="Lights with shadows"
-        value={graphics.shadowedLights}
-        min={0}
-        max={8}
-        step={1}
-        onChange={(shadowedLights) => update({ shadowedLights })}
-      />
-      <SliderField
-        label="Resolution"
-        value={Math.round(graphics.resolutionScale * 100)}
-        min={50}
-        max={100}
-        step={5}
-        suffix="%"
-        onChange={(v) => update({ resolutionScale: v / 100 })}
-      />
-      <CheckboxField
-        label="Props cast shadows"
-        value={graphics.propShadows}
-        onChange={(propShadows) => update({ propShadows })}
-      />
+      <Section title="Advanced" collapsible defaultOpen={false}>
+        <SliderField
+          label="Lights with shadows"
+          value={graphics.shadowedLights}
+          min={0}
+          max={8}
+          step={1}
+          onChange={(shadowedLights) => update({ shadowedLights })}
+        />
+        <SliderField
+          label="Resolution"
+          value={Math.round(graphics.resolutionScale * 100)}
+          min={50}
+          max={100}
+          step={5}
+          suffix="%"
+          onChange={(v) => update({ resolutionScale: v / 100 })}
+        />
+        <CheckboxField
+          label="Props cast shadows"
+          value={graphics.propShadows}
+          onChange={(propShadows) => update({ propShadows })}
+        />
+      </Section>
     </Section>
   );
 }

@@ -48,7 +48,7 @@ export function JournalTab({ campaignId, encounters }: CampaignTabProps) {
         <div className="row">
           <span className="muted">{sorted.length} sessions</span>
           <div className="spacer" />
-          {newButton}
+          {sorted.length > 0 && newButton}
         </div>
         <Problems problems={problems} />
         <div className="list" role="listbox" aria-label="Journal entries">

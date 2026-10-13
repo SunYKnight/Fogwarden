@@ -9,6 +9,7 @@ import { CreatureThumb } from '../creatureTypes/CreatureThumb';
 import { StatBlock } from '../creature/StatBlock';
 import { Button, confirmDialog, EmptyState, openContextMenu, type MenuItem } from '../kit';
 import { openCreatureImport } from './compendiumUi';
+import { FilterRow, FilterSelect, type FilterChip } from './FilterRow';
 import { OriginBadge } from './OriginBadge';
 
 type SortKey = 'name' | 'cr' | 'type';
@@ -47,6 +48,21 @@ function matches(entry: Entry, f: Filter): boolean {
   );
 }
 
+/** Chips for the set filters; the free text stays in the search box. */
+function filterChips(filter: Filter, setFilter: (f: Filter) => void): FilterChip[] {
+  const crSet = filter.minCr !== NO_FILTER.minCr || filter.maxCr !== NO_FILTER.maxCr;
+  const chips: (FilterChip | false)[] = [
+    filter.type !== '' && { label: `Type: ${filter.type}`, clear: () => setFilter({ ...filter, type: '' }) },
+    crSet && {
+      label: `CR ${formatCr(filter.minCr)}–${formatCr(filter.maxCr)}`,
+      clear: () => setFilter({ ...filter, minCr: NO_FILTER.minCr, maxCr: NO_FILTER.maxCr }),
+    },
+    filter.source !== '' && { label: `Source: ${filter.source}`, clear: () => setFilter({ ...filter, source: '' }) },
+    filter.mineOnly && { label: 'Mine only', clear: () => setFilter({ ...filter, mineOnly: false }) },
+  ];
+  return chips.filter((c) => c !== false);
+}
+
 function FilterBar({
   filter,
   setFilter,
@@ -57,49 +73,44 @@ function FilterBar({
   sources: string[];
 }) {
   return (
-    <div className="row wrap compendium-filters">
-      <input
-        type="search"
-        aria-label="Search name or tag"
-        placeholder="Search name or tag"
-        value={filter.text}
-        onChange={(e) => setFilter({ ...filter, text: e.target.value })}
+    <FilterRow
+      search={{ label: 'Search name or tag', value: filter.text, onChange: (text) => setFilter({ ...filter, text }) }}
+      chips={filterChips(filter, setFilter)}
+      reset={() => setFilter(NO_FILTER)}
+    >
+      <FilterSelect
+        label="Type"
+        all="All types"
+        value={filter.type}
+        options={[...CREATURE_TYPES]}
+        onChange={(type) => setFilter({ ...filter, type })}
       />
-      <select aria-label="Type" value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })}>
-        <option value="">All types</option>
-        {CREATURE_TYPES.map((t) => (
-          <option key={t} value={t}>
-            {t}
-          </option>
-        ))}
-      </select>
-      <span className="muted">CR</span>
-      {(['minCr', 'maxCr'] as const).map((key) => (
-        <select
-          key={key}
-          aria-label={key === 'minCr' ? 'Minimum CR' : 'Maximum CR'}
-          value={filter[key]}
-          onChange={(e) => setFilter({ ...filter, [key]: Number(e.target.value) })}
-        >
-          {CR_OPTIONS.map((cr) => (
-            <option key={cr} value={cr}>
-              {formatCr(cr)}
-            </option>
+      <div className="filter-field">
+        <span className="muted">CR</span>
+        <div className="row">
+          {(['minCr', 'maxCr'] as const).map((key) => (
+            <select
+              key={key}
+              aria-label={key === 'minCr' ? 'Minimum CR' : 'Maximum CR'}
+              value={filter[key]}
+              onChange={(e) => setFilter({ ...filter, [key]: Number(e.target.value) })}
+            >
+              {CR_OPTIONS.map((cr) => (
+                <option key={cr} value={cr}>
+                  {formatCr(cr)}
+                </option>
+              ))}
+            </select>
           ))}
-        </select>
-      ))}
-      <select
-        aria-label="Source"
+        </div>
+      </div>
+      <FilterSelect
+        label="Source"
+        all="All sources"
         value={filter.source}
-        onChange={(e) => setFilter({ ...filter, source: e.target.value })}
-      >
-        <option value="">All sources</option>
-        {sources.map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </select>
+        options={sources}
+        onChange={(source) => setFilter({ ...filter, source })}
+      />
       <label className="row">
         <input
           type="checkbox"
@@ -108,8 +119,7 @@ function FilterBar({
         />
         Mine only
       </label>
-      <Button label="Reset" variant="ghost" onClick={() => setFilter(NO_FILTER)} />
-    </div>
+    </FilterRow>
   );
 }
 
@@ -231,12 +241,7 @@ export function CreatureLibrary() {
             title={listing.entries.length === 0 ? 'No creatures yet.' : 'No creatures match the filters.'}
             action={
               listing.entries.length === 0 ? (
-                <Button
-                  icon="upload"
-                  label="Import from text"
-                  variant="primary"
-                  onClick={() => openCreatureImport('')}
-                />
+                <Button icon="upload" label="Import from text" onClick={() => openCreatureImport('')} />
               ) : (
                 <Button label="Reset filters" onClick={() => setFilter(NO_FILTER)} />
               )
@@ -250,7 +255,7 @@ export function CreatureLibrary() {
             <div className="row">
               <OriginBadge entry={selected} />
               <div className="spacer" />
-              <Button icon="edit" label="Edit" variant="primary" onClick={() => edit(selected)} />
+              <Button icon="edit" label="Edit" onClick={() => edit(selected)} />
               <Button icon="copy" label="Duplicate" onClick={() => duplicate(selected.doc).catch(reportError)} />
               {selected.pack === MY_CONTENT && (
                 <Button

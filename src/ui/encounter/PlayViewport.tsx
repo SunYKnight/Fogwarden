@@ -13,13 +13,11 @@ import { useDmScene } from '@/state/scene';
 import { useDmCameraStore } from '@/sync/cameraStore';
 import { CheckboxField, SelectField, SliderField } from '../components/fields';
 import { Button, Dialog, Popover, ToolButton, type IconName } from '../kit';
-import { SceneMenu } from '../sound/SceneMenu';
-import { SoundMenu } from '../sound/SoundMenu';
 import { EncounterOverlay } from './EncounterOverlay';
 import { handleEncounterPointer } from './encounterPointer';
-import { cancelInteraction, chooseTool, startPlacing, useEncounterUi } from './encounterUiStore';
+import { cancelInteraction, chooseTool, useEncounterUi } from './encounterUiStore';
 import { AreaTemplatePicker } from './MarkerPanel';
-import { ShowMenu } from './ShowMenu';
+import { UnplacedChip } from './UnplacedChip';
 import { openCombatantMenu } from './tokenMenu';
 
 // A right release nearer than this to its press is a click (menu), not a pan.
@@ -75,10 +73,31 @@ function ViewportHint() {
         (openingState ? OPENING_ACTIONS[openingState] : ''),
     ],
   ];
-  const fallback =
-    'Click a token to select, drag to move, right-click for actions · ' +
-    'Click a door to open or close it, Shift+click to lock · Alt+click pings the spot for the players';
-  return <div className="viewport-hint">{hints.find(([active]) => active)?.[1] ?? fallback}</div>;
+  const hint = hints.find(([active]) => active)?.[1];
+  return hint && <div className="viewport-hint">{hint}</div>;
+}
+
+const MAP_CONTROLS = [
+  'Click a token to select it',
+  'Drag a token to move it',
+  'Right-click a token for actions',
+  'Click a door to open or close it, Shift+click to lock it',
+  'Alt+click pings the spot for the players',
+];
+
+function MapHelp() {
+  return (
+    <Popover
+      label="Map controls"
+      trigger={(open, toggle) => <ToolButton icon="help" label="Help" active={open} onClick={toggle} />}
+    >
+      <ul className="map-help">
+        {MAP_CONTROLS.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </Popover>
+  );
 }
 
 const ALL_CHARACTERS = '';
@@ -185,24 +204,6 @@ function FogPanel() {
   );
 }
 
-function UnplacedChip() {
-  const count = useEncounterStore((s) => s.encounter?.combatants.filter((c) => c.position === null).length ?? 0);
-  const firstId = useEncounterStore((s) => s.encounter?.combatants.find((c) => c.position === null)?.id);
-  const placingAll = useEncounterUi((s) => s.placingAll);
-  return (
-    firstId && (
-      <Button
-        className="unplaced-chip"
-        icon="users"
-        label={`${count} not on map`}
-        title={placingAll ? 'Stop placing (Esc)' : 'Place them one after another'}
-        active={placingAll}
-        onClick={() => (placingAll ? cancelInteraction() : startPlacing(firstId, true))}
-      />
-    )
-  );
-}
-
 function CanvasToolbar() {
   const tool = useEncounterUi((s) => s.tool);
   const camera = useEncounterUi((s) => s.camera);
@@ -263,25 +264,23 @@ function CanvasToolbar() {
           onClick={() => useEncounterUi.setState({ fogMenuOpen: !fogMenuOpen })}
         />
       </div>
-      <div className="canvas-group" role="toolbar" aria-label="Sound">
-        <SoundMenu />
-      </div>
-      <div className="canvas-group" role="toolbar" aria-label="Show">
-        <ShowMenu />
-      </div>
-      <div className="canvas-group" role="toolbar" aria-label="Scene">
-        <SceneMenu />
+      <div className="canvas-group" role="toolbar" aria-label="Help">
+        <MapHelp />
       </div>
     </div>
   );
 }
 
-/** Battle map of Play with its toolbar, fog menu, unplaced tray chip, hint line and token context menu. */
+/**
+ * Battle map of Play with its toolbar, fog menu, hint line and token context menu; during combat the
+ * unplaced tray chip, which the set-up bar carries before.
+ */
 export function PlayViewport({ map, terrain }: { map: BattleMap; terrain: HeightField }) {
   const reportError = useAppStore((s) => s.reportError);
   const camera = useEncounterUi((s) => s.camera);
   const fogMenuOpen = useEncounterUi((s) => s.fogMenuOpen);
   const showFog = useFogViewStore((s) => s.showFogToDm);
+  const inCombat = useEncounterStore((s) => (s.encounter?.round ?? 0) > 0);
   const minute = useDmScene()?.minute ?? null;
   const rightDown = useRef<{ x: number; y: number } | null>(null);
   const rightToken = useRef<string | null>(null);
@@ -352,7 +351,7 @@ export function PlayViewport({ map, terrain }: { map: BattleMap; terrain: Height
       </MapView>
       <CanvasToolbar />
       {fogMenuOpen && <FogPanel />}
-      <UnplacedChip />
+      {inCombat && <UnplacedChip className="unplaced-chip" />}
       <ViewportHint />
     </div>
   );

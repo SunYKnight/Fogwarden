@@ -4,19 +4,18 @@ import { newId } from '@/core/model';
 import { importHandout, listHandouts, type HandoutFile } from '@/data/handouts';
 import { startInterlude, stopInterlude, useInterludeStore } from '@/sound/interlude';
 import { useAppStore } from '@/state/appStore';
-import { useEncounterStore } from '@/state/encounterStore';
 import { useHandoutStore } from '@/sync/handoutStore';
 import type { PlayerHandout } from '@/sync/protocol';
 import { useViewLinksStore } from '@/sync/views';
 import { SelectField } from '../components/fields';
-import { Button, Icon, Popover, ToolButton, type IconName } from '../kit';
+import { Button, Icon, type IconName } from '../kit';
 
 const EVERYONE = '';
 const KIND_ICON: Record<HandoutKind, IconName> = { image: 'image', video: 'film', text: 'fileText' };
 const ACCEPT = '.png,.jpg,.jpeg,.webp,.gif,.avif,.mp4,.webm,.md,.txt';
 
 /** Handouts of the campaign: pick one, choose who sees it, show or hide it; videos also play as interludes. */
-function ShowPanel({ campaignId }: { campaignId: string }) {
+export function ShowPanel({ campaignId }: { campaignId: string }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const notify = useAppStore((s) => s.notify);
@@ -66,10 +65,8 @@ function ShowPanel({ campaignId }: { campaignId: string }) {
   };
 
   return (
-    <div className="show-popover">
+    <div className="show-panel">
       <div className="row">
-        <strong>Show to players</strong>
-        <div className="spacer" />
         <Button icon="upload" label="Add files" onClick={() => input.current?.click()} />
         <input
           ref={input}
@@ -115,7 +112,6 @@ function ShowPanel({ campaignId }: { campaignId: string }) {
         <Button
           icon="present"
           label="Show"
-          variant="primary"
           disabled={selected === null}
           onClick={() => {
             if (selected) show(selected).catch(reportError);
@@ -155,21 +151,5 @@ function ShowPanel({ campaignId }: { campaignId: string }) {
         </div>
       )}
     </div>
-  );
-}
-
-/** Play canvas toolbar entry: handouts and interludes for the players. */
-export function ShowMenu() {
-  const campaignId = useEncounterStore((s) => s.encounter?.campaignId);
-  const showing = useHandoutStore((s) => s.shown !== null);
-  return (
-    campaignId && (
-      <Popover
-        label="Show to players"
-        trigger={(open, toggle) => <ToolButton icon="present" label="Show" active={open || showing} onClick={toggle} />}
-      >
-        <ShowPanel campaignId={campaignId} />
-      </Popover>
-    )
   );
 }

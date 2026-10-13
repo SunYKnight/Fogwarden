@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, type ComponentType } from 'react';
+import { create } from 'zustand';
 import { createCampaign, nowIso, type Campaign, type Encounter } from '@/core/model';
 import type { LoadProblem } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { CalendarTab } from '../campaign/CalendarTab';
-import { NameDialog, Problems, type CampaignTabProps } from '../campaign/campaignUi';
+import { NameDialog, NotesEditor, Problems, type CampaignTabProps } from '../campaign/campaignUi';
 import { CastTab } from '../campaign/CastTab';
 import { JournalTab } from '../campaign/JournalTab';
 import { QuestsTab } from '../campaign/QuestsTab';
@@ -14,7 +15,15 @@ import { openNewEncounter } from './compendiumUi';
 import { encounterStatus, statusLabel } from './encounterStatus';
 
 const CAMPAIGNS = { page: 'campaigns', campaignId: null } as const;
-const NOTES_SAVE_MS = 800;
+
+/** The Campaigns list shows the name dialog while `open`, so any page can ask for a new campaign. */
+const useNewCampaignStore = create<{ open: boolean }>(() => ({ open: false }));
+
+/** Shows the Campaigns list with the New campaign dialog; Create opens the new campaign's page. */
+export function openNewCampaign(): void {
+  useAppStore.getState().navigate(CAMPAIGNS);
+  useNewCampaignStore.setState({ open: true });
+}
 
 type CampaignTab = 'encounters' | 'journal' | 'cast' | 'quests' | 'calendar';
 
@@ -50,7 +59,7 @@ export function CampaignList() {
   const navigate = useAppStore((s) => s.navigate);
   const [summaries, setSummaries] = useState<CampaignSummary[] | null>(null);
   const [problems, setProblems] = useState<LoadProblem[]>([]);
-  const [creating, setCreating] = useState(false);
+  const creating = useNewCampaignStore((s) => s.open);
 
   useEffect(() => {
     const load = async () => {
@@ -77,7 +86,9 @@ export function CampaignList() {
   return (
     <div className="page-frame">
       <PageHeader crumbs={[{ label: 'Campaigns' }]}>
-        <Button icon="plus" label="New campaign" variant="primary" onClick={() => setCreating(true)} />
+        {summaries?.length !== 0 && (
+          <Button icon="plus" label="New campaign" variant="primary" onClick={openNewCampaign} />
+        )}
       </PageHeader>
       <div className="page-body">
         <Problems problems={problems} />
@@ -105,7 +116,7 @@ export function CampaignList() {
           <EmptyState
             icon="swords"
             title="No campaigns yet."
-            action={<Button icon="plus" label="New campaign" variant="primary" onClick={() => setCreating(true)} />}
+            action={<Button icon="plus" label="New campaign" variant="primary" onClick={openNewCampaign} />}
           >
             A campaign groups the encounters you prepare and play.
           </EmptyState>
@@ -117,7 +128,7 @@ export function CampaignList() {
           initial=""
           confirmLabel="Create"
           onSubmit={create}
-          onClose={() => setCreating(false)}
+          onClose={() => useNewCampaignStore.setState({ open: false })}
         />
       )}
     </div>
@@ -173,7 +184,6 @@ function EncounterRow({ encounter, onChanged }: { encounter: Encounter; onChange
       <Button
         icon="play"
         label="Play"
-        variant="primary"
         onClick={() => useAppStore.getState().openEncounter(locator).catch(reportError)}
       />
       <Button icon="copy" label="Duplicate" iconOnly onClick={() => duplicate().catch(reportError)} />
@@ -182,39 +192,7 @@ function EncounterRow({ encounter, onChanged }: { encounter: Encounter; onChange
   );
 }
 
-function CampaignNotes({ campaign, onSaved }: { campaign: Campaign; onSaved: (c: Campaign) => void }) {
-  const repository = useAppStore((s) => s.repository);
-  const reportError = useAppStore((s) => s.reportError);
-  const [notes, setNotes] = useState(campaign.notes);
-  const pending = notes !== campaign.notes;
-
-  const flush = useCallback(() => {
-    if (notes !== campaign.notes) {
-      repository.saveCampaign({ ...campaign, notes }).then(onSaved, reportError);
-    }
-  }, [repository, campaign, notes, onSaved, reportError]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(flush, NOTES_SAVE_MS);
-    return () => window.clearTimeout(timer);
-  }, [flush]);
-
-  return (
-    <Section title="Notes" actions={<span className="muted">{pending ? 'Saving...' : 'Saved'}</span>}>
-      <textarea
-        className="campaign-notes"
-        rows={6}
-        aria-label="Campaign notes"
-        placeholder="Plot threads, NPCs, what happened last session"
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        onBlur={flush}
-      />
-    </Section>
-  );
-}
-
-/** One campaign: encounters with status and Play, notes, journal, people and places, quests, calendar. */
+/** One campaign: encounters with status and Play, journal and campaign notes, people and places, quests, calendar. */
 function TabBody({ tab, ...props }: CampaignTabProps & { tab: Exclude<CampaignTab, 'encounters'> }) {
   const Body = TAB_BODIES[tab];
   return <Body {...props} />;
@@ -245,6 +223,10 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
 
   const rename = async (name: string) => {
     if (campaign) setCampaign(await repository.saveCampaign({ ...campaign, name }));
+  };
+
+  const saveNotes = async (notes: string) => {
+    if (campaign) setCampaign(await repository.saveCampaign({ ...campaign, notes }));
   };
 
   const remove = async (target: Campaign) => {
@@ -292,12 +274,14 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
             <Section
               title={`Encounters (${encounters.length})`}
               actions={
-                <Button
-                  icon="plus"
-                  label="New encounter"
-                  variant="primary"
-                  onClick={() => openNewEncounter(campaignId)}
-                />
+                encounters.length > 0 && (
+                  <Button
+                    icon="plus"
+                    label="New encounter"
+                    variant="primary"
+                    onClick={() => openNewEncounter(campaignId)}
+                  />
+                )
               }
             >
               <Problems problems={listing?.problems ?? []} />
@@ -323,10 +307,22 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
                 </EmptyState>
               )}
             </Section>
-            {campaign && <CampaignNotes key={campaign.id} campaign={campaign} onSaved={setCampaign} />}
           </>
         ) : (
-          <TabBody tab={tab} campaignId={campaignId} encounters={encounters} />
+          <>
+            {tab === 'journal' && campaign && (
+              <Section title="Campaign notes" collapsible defaultOpen={campaign.notes.trim() !== ''}>
+                <NotesEditor
+                  key={campaign.id}
+                  label="Campaign notes"
+                  placeholder="Plot threads, NPCs, what happened last session. Markdown: # heading, - list, **bold**."
+                  value={campaign.notes}
+                  onCommit={saveNotes}
+                />
+              </Section>
+            )}
+            <TabBody tab={tab} campaignId={campaignId} encounters={encounters} />
+          </>
         )}
       </div>
       {renaming && campaign && (

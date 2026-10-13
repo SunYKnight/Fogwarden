@@ -1,4 +1,5 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
+import { create } from 'zustand';
 import {
   ABILITIES,
   AREA_SHAPES,
@@ -16,6 +17,25 @@ import { Button, confirmDialog, EmptyState, openContextMenu, Section } from '../
 import { OriginBadge } from './OriginBadge';
 
 type Entry = LibraryEntry<'marker'>;
+
+// The header action creates a template the list then selects.
+const useMarkerUi = create<{ selectedId: string | null }>(() => ({ selectedId: null }));
+
+async function createTemplate(): Promise<void> {
+  const repository = useAppStore.getState().repository;
+  const id = await repository.newLibraryId('marker', 'New area');
+  const stored = await repository.save('marker', { ...createMarkerTemplate('New area'), id });
+  await useLibraryStore.getState().refresh('marker');
+  useMarkerUi.setState({ selectedId: stored.id });
+}
+
+/** Compendium header actions of the Area templates tab. */
+export function MarkerActions() {
+  const reportError = useAppStore((s) => s.reportError);
+  return (
+    <Button icon="plus" label="New template" variant="primary" onClick={() => createTemplate().catch(reportError)} />
+  );
+}
 
 /** Which dimension fields a shape uses (see `areaDimensionsSchema`). */
 const SIZE_LABEL: Record<MarkerTemplate['shape'], string> = {
@@ -188,18 +208,11 @@ export function MarkerLibrary() {
   const reportError = useAppStore((s) => s.reportError);
   const listing = useLibraryStore((s) => s.listings.marker);
   const refresh = useLibraryStore((s) => s.refresh);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedId = useMarkerUi((s) => s.selectedId);
   const [text, setText] = useState('');
   const selected = listing.entries.find((e) => e.ref.id === selectedId);
   const needle = text.toLowerCase();
   const entries = listing.entries.filter((e) => e.doc.name.toLowerCase().includes(needle));
-
-  const create = async () => {
-    const id = await repository.newLibraryId('marker', 'New area');
-    const stored = await repository.save('marker', { ...createMarkerTemplate('New area'), id });
-    await refresh('marker');
-    setSelectedId(stored.id);
-  };
 
   const remove = async ({ ref, doc, overrides }: Entry) => {
     const original = overrides[0] && packName(useLibraryStore.getState().packs, overrides[0]);
@@ -221,7 +234,7 @@ export function MarkerLibrary() {
 
   const showMenu = (e: MouseEvent, entry: Entry) => {
     e.preventDefault();
-    setSelectedId(entry.ref.id);
+    useMarkerUi.setState({ selectedId: entry.ref.id });
     openContextMenu(e.clientX, e.clientY, [
       {
         label: entry.overrides.length > 0 ? 'Revert to pack version' : 'Delete',
@@ -236,17 +249,13 @@ export function MarkerLibrary() {
   return (
     <div className="compendium-split">
       <div className="compendium-list">
-        <div className="row">
-          <input
-            type="search"
-            aria-label="Search templates"
-            placeholder="Search templates"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <div className="spacer" />
-          <Button icon="plus" label="New template" variant="primary" onClick={() => create().catch(reportError)} />
-        </div>
+        <input
+          type="search"
+          aria-label="Search templates"
+          placeholder="Search templates"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
         <div className="list" role="listbox" aria-label="Area templates">
           {entries.map((entry) => (
             <div
@@ -255,7 +264,7 @@ export function MarkerLibrary() {
               tabIndex={0}
               aria-selected={entry.ref.id === selectedId}
               className={entry.ref.id === selectedId ? 'list-item selected' : 'list-item'}
-              onClick={() => setSelectedId(entry.ref.id)}
+              onClick={() => useMarkerUi.setState({ selectedId: entry.ref.id })}
               onContextMenu={(e) => showMenu(e, entry)}
             >
               <AreaPreview t={entry.doc} thumb />
@@ -271,7 +280,7 @@ export function MarkerLibrary() {
           <EmptyState
             icon="area"
             title={listing.entries.length === 0 ? 'No area templates yet.' : 'No templates match.'}
-            action={<Button icon="plus" label="New template" onClick={() => create().catch(reportError)} />}
+            action={<Button icon="plus" label="New template" onClick={() => createTemplate().catch(reportError)} />}
           />
         )}
       </div>

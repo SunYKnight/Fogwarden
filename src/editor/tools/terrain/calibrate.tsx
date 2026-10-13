@@ -6,7 +6,7 @@ import { useMapRender, type MapPointerEvent } from '@/render/mapRenderContext';
 import { imagePxToWorld, worldToImagePx } from '@/render/projection';
 import { useEditorStore } from '@/state/editorStore';
 import { CheckboxField, ColorField, Field, NumberField, SliderField } from '@/ui/components/fields';
-import { Button, useShortcuts } from '@/ui/kit';
+import { Button, Section, useShortcuts } from '@/ui/kit';
 import type { EditorTool } from '../../tool';
 import { OverlayLines, overlayPositions } from './overlays';
 import { editorTerrain } from './sculpt';
@@ -156,7 +156,6 @@ export function GridFields() {
         <Button
           icon="calibrate"
           label="Pick a square on the map"
-          variant="primary"
           title="Click two opposite corners of one grid square in the image, or drag across one"
           onClick={startGridPick}
         />
@@ -186,67 +185,69 @@ export function GridFields() {
         step={0.05}
         onChange={(v) => edit('Grid opacity', (d) => void (d.grid.opacity = v))}
       />
-      <NumberField
-        label="Px per square"
-        value={grid.pxPerSquare}
-        min={1}
-        step={0.1}
-        onChange={(v) => edit('Px per square', (d) => void (d.grid.pxPerSquare = v))}
-      />
-      <NumberField
-        label="Offset X"
-        value={grid.offsetPx.x}
-        step={0.5}
-        suffix="px"
-        onChange={(v) => edit('Grid offset', (d) => void (d.grid.offsetPx.x = v))}
-      />
-      <NumberField
-        label="Offset Y"
-        value={grid.offsetPx.y}
-        step={0.5}
-        suffix="px"
-        onChange={(v) => edit('Grid offset', (d) => void (d.grid.offsetPx.y = v))}
-      />
-      <NumberField
-        label="Rotation"
-        value={grid.rotationDeg}
-        step={0.1}
-        suffix="°"
-        onChange={(v) => edit('Grid rotation', (d) => void (d.grid.rotationDeg = v))}
-      />
-      <NumberField
-        label="Squares X"
-        value={grid.squaresX}
-        min={1}
-        max={1000}
-        step={1}
-        onChange={(v) => regrid('Grid size', { squaresX: Math.round(v) }, sps)}
-      />
-      <NumberField
-        label="Squares Y"
-        value={grid.squaresY}
-        min={1}
-        max={1000}
-        step={1}
-        onChange={(v) => regrid('Grid size', { squaresY: Math.round(v) }, sps)}
-      />
-      <NumberField
-        label="Feet per square"
-        value={grid.feetPerSquare}
-        min={0.5}
-        step={0.5}
-        suffix="ft"
-        onChange={(v) => regrid('Feet per square', { feetPerSquare: v }, sps)}
-      />
-      <NumberField
-        label="Samples per square"
-        value={sps}
-        min={1}
-        max={8}
-        step={1}
-        title="Terrain height samples along each square edge; more allows finer sculpting"
-        onChange={(v) => regrid('Terrain resolution', {}, Math.round(v))}
-      />
+      <Section title="Advanced" collapsible defaultOpen={false}>
+        <NumberField
+          label="Px per square"
+          value={grid.pxPerSquare}
+          min={1}
+          step={0.1}
+          onChange={(v) => edit('Px per square', (d) => void (d.grid.pxPerSquare = v))}
+        />
+        <NumberField
+          label="Offset X"
+          value={grid.offsetPx.x}
+          step={0.5}
+          suffix="px"
+          onChange={(v) => edit('Grid offset', (d) => void (d.grid.offsetPx.x = v))}
+        />
+        <NumberField
+          label="Offset Y"
+          value={grid.offsetPx.y}
+          step={0.5}
+          suffix="px"
+          onChange={(v) => edit('Grid offset', (d) => void (d.grid.offsetPx.y = v))}
+        />
+        <NumberField
+          label="Rotation"
+          value={grid.rotationDeg}
+          step={0.1}
+          suffix="°"
+          onChange={(v) => edit('Grid rotation', (d) => void (d.grid.rotationDeg = v))}
+        />
+        <NumberField
+          label="Squares X"
+          value={grid.squaresX}
+          min={1}
+          max={1000}
+          step={1}
+          onChange={(v) => regrid('Grid size', { squaresX: Math.round(v) }, sps)}
+        />
+        <NumberField
+          label="Squares Y"
+          value={grid.squaresY}
+          min={1}
+          max={1000}
+          step={1}
+          onChange={(v) => regrid('Grid size', { squaresY: Math.round(v) }, sps)}
+        />
+        <NumberField
+          label="Feet per square"
+          value={grid.feetPerSquare}
+          min={0.5}
+          step={0.5}
+          suffix="ft"
+          onChange={(v) => regrid('Feet per square', { feetPerSquare: v }, sps)}
+        />
+        <NumberField
+          label="Samples per square"
+          value={sps}
+          min={1}
+          max={8}
+          step={1}
+          title="Terrain height samples along each square edge; more allows finer sculpting"
+          onChange={(v) => regrid('Terrain resolution', {}, Math.round(v))}
+        />
+      </Section>
     </>
   );
 }

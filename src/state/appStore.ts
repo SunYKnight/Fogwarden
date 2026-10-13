@@ -8,7 +8,9 @@ import { Repository } from '@/data/repository';
 import type { StorageRoots } from '@/data/storage';
 import { pruneHistory, TauriStorage } from '@/data/tauriStorage';
 
-export type CompendiumTab = 'creatures' | 'items' | 'spells' | 'markers' | 'tables' | 'packs';
+export type CompendiumTab = 'creatures' | 'items' | 'spells' | 'markers' | 'tables';
+
+export type SettingsSection = 'data' | 'players' | 'graphics' | 'audio' | 'rules' | 'content' | 'about';
 
 export type Route =
   | { page: 'home' }
@@ -17,9 +19,11 @@ export type Route =
   | { page: 'compendium'; tab: CompendiumTab }
   | { page: 'campaigns'; campaignId: string | null }
   | { page: 'play' }
-  | { page: 'server' }
-  | { page: 'settings' }
+  | { page: 'settings'; section?: SettingsSection }
   | { page: 'creature-editor'; ref: DocRef | null };
+
+/** The former Server page; its features live in Settings > Players. */
+type LegacyRoute = { page: 'server' };
 
 export type NoticeKind = 'error' | 'success' | 'info';
 
@@ -37,7 +41,8 @@ interface AppState {
   notices: Notice[];
   /** Asked before leaving the page, e.g. to keep unsaved edits; resolves true to leave. */
   leaveGuard: (() => Promise<boolean>) | null;
-  navigate(route: Route): void;
+  /** `{ page: 'server' }` opens Settings > Players, where the server settings live. */
+  navigate(route: Route | LegacyRoute): void;
   setLeaveGuard(guard: (() => Promise<boolean>) | null): void;
   /** Makes the encounter the one on the Play screen and shows it. */
   openEncounter(locator: EncounterLocator): Promise<void>;
@@ -63,7 +68,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   route: { page: 'home' },
   notices: [],
   leaveGuard: null,
-  navigate: (route) => {
+  navigate: (requested) => {
+    const route: Route = requested.page === 'server' ? { page: 'settings', section: 'players' } : requested;
     const guard = get().leaveGuard;
     if (guard) {
       guard().then((ok) => ok && set({ route, leaveGuard: null }), get().reportError);

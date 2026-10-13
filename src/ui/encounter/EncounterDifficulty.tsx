@@ -1,5 +1,10 @@
 import type { Combatant } from '@/core/model';
-import { encounterDifficulty, type Difficulty } from '@/core/rules/difficulty';
+import {
+  encounterDifficulty,
+  type Difficulty,
+  type DifficultyReport,
+  type XpThresholds,
+} from '@/core/rules/difficulty';
 import { useLibraryStore } from '@/state/libraryStore';
 
 const DIFFICULTY_LABEL: Record<Difficulty, string> = {
@@ -10,19 +15,29 @@ const DIFFICULTY_LABEL: Record<Difficulty, string> = {
   deadly: 'Deadly',
 };
 
+const THRESHOLD_LABEL: Record<keyof XpThresholds, string> = {
+  easy: 'Easy',
+  medium: 'Medium',
+  hard: 'Hard',
+  deadly: 'Deadly',
+};
+const THRESHOLDS = Object.keys(THRESHOLD_LABEL) as (keyof XpThresholds)[];
+
 const xp = (n: number) => n.toLocaleString('en-US');
 
+interface Rating {
+  label: string;
+  /** Why: the XP sum and thresholds, or what is missing to rate. */
+  title: string;
+  tone: Difficulty | 'none';
+  report: DifficultyReport | null;
+}
+
 /**
- * DMG difficulty of the enemies (plus `extraXp`, monsters about to be added) for the player characters,
- * with the numbers in the tooltip; asks for the levels it still needs.
+ * DMG difficulty of the enemies (plus `extraXp`, monsters about to be added) for the player characters;
+ * without a report while levels are missing.
  */
-export function DifficultyBadge({
-  combatants,
-  extraXp = [],
-}: {
-  combatants: readonly Combatant[];
-  extraXp?: number[];
-}) {
+function useRating(combatants: readonly Combatant[], extraXp: readonly number[]): Rating {
   const entries = useLibraryStore((s) => s.listings.creature.entries);
   const party = combatants.filter((c) => c.side === 'player');
   const unknown = party.filter((c) => c.level === null).map((c) => c.name);
@@ -34,24 +49,82 @@ export function DifficultyBadge({
     party.flatMap((c) => (c.level === null ? [] : [c.level])),
     monsterXp,
   );
-  let label = 'Difficulty: no party';
-  let title = 'Add player characters with a level to rate the encounter.';
-  let tone = 'none';
+  let rating: Rating = {
+    label: 'Difficulty: no party',
+    title: 'Add player characters with a level to rate the encounter.',
+    tone: 'none',
+    report: null,
+  };
   if (unknown.length > 0) {
-    label = 'Difficulty: set PC levels';
-    title = `Level missing for ${unknown.join(', ')} (Creature tab).`;
+    rating = {
+      label: 'Difficulty: set PC levels',
+      title: `Level missing for ${unknown.join(', ')} (Creature tab).`,
+      tone: 'none',
+      report: null,
+    };
   } else if (report) {
     const { thresholds: t } = report;
-    label = DIFFICULTY_LABEL[report.difficulty];
-    tone = report.difficulty;
-    title =
-      `${xp(report.adjustedXp)} adjusted XP (${xp(report.baseXp)} × ${report.multiplier} for ` +
-      `${monsterXp.length} monsters, ${party.length} characters)\n` +
-      `Easy ${xp(t.easy)} · Medium ${xp(t.medium)} · Hard ${xp(t.hard)} · Deadly ${xp(t.deadly)}`;
+    rating = {
+      label: DIFFICULTY_LABEL[report.difficulty],
+      tone: report.difficulty,
+      report,
+      title:
+        `${xp(report.adjustedXp)} adjusted XP (${xp(report.baseXp)} × ${report.multiplier} for ` +
+        `${monsterXp.length} monsters, ${party.length} characters)\n` +
+        `Easy ${xp(t.easy)} · Medium ${xp(t.medium)} · Hard ${xp(t.hard)} · Deadly ${xp(t.deadly)}`,
+    };
   }
-  return (
-    <span className={`difficulty difficulty-${tone}`} title={title} aria-label={`${label}. ${title}`}>
+  return rating;
+}
+
+interface BadgeProps {
+  combatants: readonly Combatant[];
+  extraXp?: number[];
+  /** Makes the badge a button, e.g. to open the breakdown. */
+  onClick?: () => void;
+}
+
+/** Difficulty in one word with the numbers in the tooltip; asks for the levels it still needs. */
+export function DifficultyBadge({ combatants, extraXp = [], onClick }: BadgeProps) {
+  const { label, title, tone } = useRating(combatants, extraXp);
+  const className = `difficulty difficulty-${tone}`;
+  return onClick ? (
+    <button type="button" className={`${className} difficulty-link`} title={title} onClick={onClick}>
+      {label}
+    </button>
+  ) : (
+    <span className={className} title={title} aria-label={`${label}. ${title}`}>
       {label}
     </span>
+  );
+}
+
+/** What makes the rating: adjusted XP against each threshold, the reached one marked. */
+export function DifficultyBreakdown({ combatants }: { combatants: readonly Combatant[] }) {
+  const { label, title, tone, report } = useRating(combatants, []);
+  return (
+    <div className="col difficulty-breakdown">
+      <div className="row">
+        <span className={`difficulty difficulty-${tone}`}>{label}</span>
+        {report && <span className="muted small">{xp(report.adjustedXp)} adjusted XP</span>}
+      </div>
+      {report ? (
+        <>
+          <p className="muted small">
+            {xp(report.baseXp)} XP × {report.multiplier} for the number of monsters and characters
+          </p>
+          <ul className="difficulty-thresholds">
+            {THRESHOLDS.map((key) => (
+              <li key={key} className={report.adjustedXp >= report.thresholds[key] ? 'reached' : ''}>
+                <span>{THRESHOLD_LABEL[key]}</span>
+                <span>{xp(report.thresholds[key])}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="muted small">{title}</p>
+      )}
+    </div>
   );
 }

@@ -102,6 +102,7 @@ export const ICON_PATHS = {
   snow: ['M12 3v18', 'M4.2 7.5l15.6 9M4.2 16.5l15.6-9', 'M9.5 4.5L12 6l2.5-1.5M9.5 19.5L12 18l2.5 1.5'],
   package: ['M12 3l8 4v10l-8 4-8-4V7z', 'M4 7l8 4 8-4', 'M12 11v10', 'M8 5l8 4'],
   grip: ['M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01'],
+  filter: ['M3 5h18l-7 8v6l-4 2v-8z'],
 } satisfies Record<string, string[]>;
 
 export type IconName = keyof typeof ICON_PATHS;

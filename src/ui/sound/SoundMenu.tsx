@@ -19,7 +19,7 @@ import {
 import { useAppStore } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { CheckboxField, SelectField, SliderField } from '../components/fields';
-import { Button, Popover, ToolButton } from '../kit';
+import { Button } from '../kit';
 
 const KEEP_MUSIC = '';
 
@@ -162,7 +162,7 @@ function SoundBoard() {
 }
 
 /** Music by mood, volumes and the sound board; everything plays for the DM and every player view. */
-function SoundPanel({ onClose }: { onClose: () => void }) {
+export function SoundPanel() {
   const atmosphere = useEncounterStore((s) => s.encounter?.atmosphere);
   const inCombat = useEncounterStore((s) => (s.encounter?.round ?? 0) > 0);
   const moods = useSoundStore((s) => s.library.moods);
@@ -178,20 +178,14 @@ function SoundPanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="sound-popover">
-      <div className="row">
-        <strong>Sound</strong>
-        <span className="muted sound-now">
-          {playingName ? `${playingName} · ${track ? mediaTitle(track.name) : 'no music'}` : 'Silence'}
-        </span>
-        <div className="spacer" />
-        <Button icon="close" label="Close sound menu" iconOnly variant="ghost" onClick={onClose} />
-      </div>
+    <div className="sound-panel">
+      <span className="muted sound-now">
+        {playingName ? `${playingName} · ${track ? mediaTitle(track.name) : 'no music'}` : 'Silence'}
+      </span>
       <div className="row">
         <Button
           icon={music.playing ? 'pause' : 'play'}
           label={music.playing ? 'Pause' : 'Play'}
-          variant="primary"
           disabled={!track}
           onClick={togglePlaying}
         />
@@ -243,18 +237,5 @@ function SoundPanel({ onClose }: { onClose: () => void }) {
       )}
       <SoundBoard />
     </div>
-  );
-}
-
-/** Play canvas toolbar entry: the Sound popover. */
-export function SoundMenu() {
-  const playing = useSoundStore((s) => s.music.playing && currentTrack(s) !== null);
-  return (
-    <Popover
-      label="Sound"
-      trigger={(open, toggle) => <ToolButton icon="music" label="Sound" active={open || playing} onClick={toggle} />}
-    >
-      {(close) => <SoundPanel onClose={close} />}
-    </Popover>
   );
 }
