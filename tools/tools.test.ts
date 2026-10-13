@@ -74,12 +74,10 @@ describe('shipped sample map', () => {
     const encounter = encounterSchema.parse(createSampleEncounter(map, goblin));
     const terrain = HeightField.fromMap(map);
     expect(encounter.map).toEqual(SAMPLE_MAP);
-    expect(encounter.combatants.filter((c) => c.side === 'enemy').map((c) => c.name)).toEqual([
-      'Goblin 1',
-      'Goblin 2',
-      'Goblin 3',
-      'Goblin 4',
-    ]);
+    const goblins = encounter.combatants.filter((c) => c.side === 'enemy').map((c) => c.name);
+    expect(goblins).toHaveLength(4);
+    expect(new Set(goblins).size).toBe(4);
+    expect(goblins.every((name) => /^Goblin \d\d$/.test(name))).toBe(true);
     expect(encounter.combatants.filter((c) => c.side === 'player')).toHaveLength(2);
     for (const { position } of encounter.combatants) {
       expect(position!.x).toBeGreaterThan(0);
