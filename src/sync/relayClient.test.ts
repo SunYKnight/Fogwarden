@@ -41,9 +41,12 @@ describe('modelSideFiles', () => {
       images: [{ uri: 'textures/roof%20tiles.png' }, { uri: '../shared/wood.png' }, { uri: 'https://x.org/a.png' }],
     };
     expect(modelSideFiles(gltf, encode(JSON.stringify(model)))).toEqual([
-      { area: 'data', path: 'library/maps/m1/assets/house.bin' },
-      { area: 'data', path: 'library/maps/m1/assets/textures/roof tiles.png' },
-      { area: 'data', path: 'library/maps/m1/shared/wood.png' },
+      { uri: 'house.bin', ref: { area: 'data', path: 'library/maps/m1/assets/house.bin' } },
+      {
+        uri: 'textures/roof%20tiles.png',
+        ref: { area: 'data', path: 'library/maps/m1/assets/textures/roof tiles.png' },
+      },
+      { uri: '../shared/wood.png', ref: { area: 'data', path: 'library/maps/m1/shared/wood.png' } },
     ]);
   });
 
@@ -61,7 +64,7 @@ describe('modelSideFiles', () => {
     view.setUint32(16, 0x4e4f534a, true);
     glb.set(json, 20);
     expect(modelSideFiles({ area: 'content', path: 'models/orc.glb' }, glb)).toEqual([
-      { area: 'content', path: 'models/skin.png' },
+      { uri: 'skin.png', ref: { area: 'content', path: 'models/skin.png' } },
     ]);
     expect(() => modelSideFiles({ area: 'content', path: 'models/bad.glb' }, new Uint8Array(24))).toThrow(
       'not a binary glTF',

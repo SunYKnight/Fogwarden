@@ -1,17 +1,40 @@
 import { useEffect, useState } from 'react';
-import { Mesh, type Object3D } from 'three';
+import { LoadingManager, Mesh, type Object3D } from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { AssetRef } from '@/core/model';
+import type { Storage } from '@/data/storage';
 import { useAppStore } from '@/state/appStore';
+import { modelSideFiles } from '@/sync/relayClient';
 
 // One parse per file; every prop gets its own clone of the scene.
 const loads = new Map<string, Promise<GLTF>>();
 
-/** The parsed glTF/GLB at `url`; clone its scene before adding it anywhere. */
-export function loadGltf(url: string): Promise<GLTF> {
+async function fetchGltf(storage: Storage, asset: AssetRef, url: string): Promise<GLTF> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Cannot read the model ${asset.path}: HTTP ${response.status}`);
+  }
+  const bytes = await response.arrayBuffer();
+  // Storage URLs (desktop asset protocol, blob URLs) do not resolve relative
+  // paths, so each file the model names gets its own storage URL.
+  const sides = await Promise.all(
+    modelSideFiles(asset, new Uint8Array(bytes)).map(async (side): Promise<[string, string]> => [
+      side.uri,
+      await storage.assetUrl(side.ref),
+    ]),
+  );
+  const urls = new Map(sides);
+  const manager = new LoadingManager().setURLModifier((uri) => urls.get(uri) ?? uri);
+  return new GLTFLoader(manager).parseAsync(bytes, '');
+}
+
+/** The parsed glTF/GLB stored at `asset`; clone its scene before adding it anywhere. */
+export async function loadGltf(storage: Storage, asset: AssetRef): Promise<GLTF> {
+  // Keyed by URL: the same path names another file after a data root switch.
+  const url = await storage.assetUrl(asset);
   const cached = loads.get(url);
-  const load = cached ?? new GLTFLoader().loadAsync(url);
+  const load = cached ?? fetchGltf(storage, asset, url);
   if (!cached) {
     loads.set(url, load);
     // A failed load is retried next time; callers still get the error.
@@ -30,9 +53,7 @@ export function useModel(asset: AssetRef): Object3D | null {
 
   useEffect(() => {
     let cancelled = false;
-    repository.storage
-      .assetUrl({ area, path })
-      .then(loadGltf)
+    loadGltf(repository.storage, { area, path })
       .then((gltf) => {
         const object = clone(gltf.scene);
         object.traverse((child) => {

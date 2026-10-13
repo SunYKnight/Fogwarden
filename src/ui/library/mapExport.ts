@@ -100,7 +100,7 @@ async function exportBytes(
       const sources: MapGlbSources = {
         battlemap: picture,
         sideImage: sideTextureImage,
-        model: async (asset) => clone((await loadGltf(await repository.storage.assetUrl(asset))).scene),
+        model: async (asset) => clone((await loadGltf(repository.storage, asset)).scene),
       };
       bytes = await exportMapGlb(map, terrain, sources, { lights: options.lights });
       break;

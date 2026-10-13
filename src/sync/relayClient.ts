@@ -119,22 +119,29 @@ const fileListSchema = z.array(z.object({ uri: z.string().optional() })).optiona
 /** The parts of a glTF document that name external files; everything else passes untouched. */
 const gltfFilesSchema = z.object({ buffers: fileListSchema, images: fileListSchema });
 
-function modelFiles(ref: AssetRef, bytes: Uint8Array): z.infer<typeof gltfFilesSchema> {
+/** The JSON document of a `.gltf` file, or of a `.glb` file's JSON chunk. */
+export function readGltfJson(ref: AssetRef, bytes: Uint8Array): unknown {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const binary = fileExtension(ref.path) === 'glb';
   if (binary && (view.getUint32(0, true) !== GLB_MAGIC || view.getUint32(16, true) !== GLB_JSON_CHUNK)) {
     throw new Error(`${ref.path} is not a binary glTF file`);
   }
   const json = binary ? bytes.subarray(20, 20 + view.getUint32(12, true)) : bytes;
-  return gltfFilesSchema.parse(JSON.parse(new TextDecoder().decode(json)));
+  return JSON.parse(new TextDecoder().decode(json));
+}
+
+/** A file a glTF model loads by relative URI, with that URI as the model states it. */
+export interface ModelSideFile {
+  uri: string;
+  ref: AssetRef;
 }
 
 /**
- * Buffers and textures a glTF model loads by relative URI; the player's loader requests them next to the
- * model, so they must reach the relay too.
+ * Buffers and textures a glTF model loads by relative URI, resolved next to the model; the player's
+ * loader requests them there, so they must reach the relay too.
  */
-export function modelSideFiles(ref: AssetRef, bytes: Uint8Array): AssetRef[] {
-  const { buffers = [], images = [] } = modelFiles(ref, bytes);
+export function modelSideFiles(ref: AssetRef, bytes: Uint8Array): ModelSideFile[] {
+  const { buffers = [], images = [] } = gltfFilesSchema.parse(readGltfJson(ref, bytes));
   const uris = [...buffers, ...images]
     .map((entry) => entry.uri ?? '')
     .filter((uri) => uri !== '' && !URI_SCHEME.test(uri));
@@ -149,7 +156,7 @@ export function modelSideFiles(ref: AssetRef, bytes: Uint8Array): AssetRef[] {
         parts.push(segment);
       }
     }
-    return { area: ref.area, path: parts.join('/') };
+    return { uri, ref: { area: ref.area, path: parts.join('/') } };
   });
 }
 
@@ -196,7 +203,7 @@ export class RelayUploader {
     const ext = fileExtension(ref.path);
     const sides = ext === 'gltf' || ext === 'glb' ? modelSideFiles(ref, bytes) : [];
     const own = { target: assetTarget(ref.area, ref.path), sha256: await sha256Hex(bytes), bytes };
-    const sideFiles = await Promise.all(sides.map((side) => this.read(side)));
+    const sideFiles = await Promise.all(sides.map((side) => this.read(side.ref)));
     return [own, ...sideFiles.flat()];
   }
 
