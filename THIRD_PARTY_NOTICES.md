@@ -59,9 +59,9 @@ texts come with each package.
 | @tauri-apps/plugin-process | 2.4.0   | MIT OR Apache-2.0 |
 | @tauri-apps/plugin-updater | 2.13.3  | MIT OR Apache-2.0 |
 | immer                      | 11.1.21 | MIT               |
+| meshoptimizer              | 1.3.0   | MIT               |
 | react                      | 19.3.0  | MIT               |
 | react-dom                  | 19.3.0  | MIT               |
-| meshoptimizer              | 1.3.0   | MIT               |
 | three                      | 0.186.1 | MIT               |
 | three-mesh-bvh             | 0.8.3   | MIT               |
 | ulid                       | 3.0.2   | MIT               |
