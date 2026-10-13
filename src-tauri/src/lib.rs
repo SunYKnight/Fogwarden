@@ -4,6 +4,8 @@ mod history;
 mod lan;
 mod storage;
 
+use tauri::Manager;
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -13,6 +15,13 @@ pub fn run() {
         .setup(|app| {
             storage::init(app.handle())?;
             Ok(())
+        })
+        // A player window left alone on a second screen has no way back to the
+        // DM's controls, so closing the DM window ends the app.
+        .on_window_event(|window, event| {
+            if window.label() == "dm" && matches!(event, tauri::WindowEvent::Destroyed) {
+                window.app_handle().exit(0);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             storage::storage_roots,

@@ -1,8 +1,11 @@
+import { isTauri } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SCENE_LAYERS } from '@/render/layers';
 import type { MapPointerEvent } from '@/render/mapRenderContext';
 import { MapView } from '@/render/MapView';
 import { SIDE_COLORS } from '@/render/tokens/tokenMaterials';
+import { useAppStore } from '@/state/appStore';
 import type { PlayerEncounter, SyncPayload, SyncTransport } from '@/sync/protocol';
 import type { WebSocketTransport } from '@/sync/wsTransport';
 import { InterludeVideo } from './InterludeVideo';
@@ -72,6 +75,19 @@ export function PlayerApp({ transport, lan }: { transport: SyncTransport; lan: W
     [lan],
   );
 
+  // The window on the DM's second screen is fullscreen without a title bar;
+  // browser players close their own tab.
+  const local = lan === null && isTauri();
+  useEffect(() => {
+    const closeOnEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
+        getCurrentWindow().close().catch(useAppStore.getState().reportError);
+      }
+    };
+    if (local) window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [local]);
+
   const linkStatus: Record<Link, string | null> = {
     connecting: 'Connecting to the DM…',
     reconnecting: 'Connection lost, reconnecting…',
@@ -79,7 +95,8 @@ export function PlayerApp({ transport, lan }: { transport: SyncTransport; lan: W
     open: map ? null : 'Waiting for the DM to show a map',
   };
   const hint = map && link === 'open' ? 'Hold the map to point at a spot' : null;
-  const corner = [viewName, linkStatus[link], hint].filter((part) => part !== null).join(' · ');
+  const closeHint = local ? 'Esc closes this window' : null;
+  const corner = [viewName, linkStatus[link], hint, closeHint].filter((part) => part !== null).join(' · ');
   const ribbon = encounter && encounter.showTurnOrder && encounter.round > 0 && encounter.combatants.length > 0;
 
   return (

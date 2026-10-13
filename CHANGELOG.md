@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Play: doors, windows and other openings have a white outline at the wall top on the DM's map, also over trees
+  and roofs; pointing at one thickens it, shows a hand cursor and says in the hint line what a click and
+  Shift+click do (open, close, lock, unlock). Tokens show the hand cursor too. Trees and other props let clicks
+  through to tokens below them during play (walkable and draped props still catch them).
+- Player window: Esc closes the player window on the DM's computer (its corner says so); closing the DM window
+  quits the app instead of leaving the player window open on its own.
 - Settings > Graphics: lights with shadows (0-8, default 4 instead of 8), resolution (50-100 % of the screen's
   pixel density) and prop shadows, with Low, Medium and High presets; the section shows the graphics card and
   suggests Low for integrated graphics. Applies to the DM's map views at once and to the player window on the same
