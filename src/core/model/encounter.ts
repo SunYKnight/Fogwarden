@@ -11,7 +11,7 @@ import {
 import { conditionSchema, sensesSchema, sizeSchema } from './creature';
 import { areaMarkerSchema } from './marker';
 
-export const ENCOUNTER_SCHEMA_VERSION = 6;
+export const ENCOUNTER_SCHEMA_VERSION = 7;
 export const CAMPAIGN_SCHEMA_VERSION = 2;
 
 export const sideSchema = z.enum(['player', 'ally', 'enemy', 'neutral']);
@@ -160,6 +160,8 @@ export const encounterSchema = z.object({
   map: docRefSchema.nullable(),
   round: z.number().int().nonnegative(),
   turnIndex: z.number().int().nonnegative(),
+  /** Where the combatant whose turn it is stood when the turn began; null before combat or while off the map. */
+  turnStart: mapPointSchema.nullable(),
   combatants: z.array(combatantSchema),
   markers: z.array(areaMarkerSchema),
   /** Door states changed during play, keyed by opening id; the map document stays untouched. */

@@ -77,6 +77,8 @@ export interface TokenViewProps {
   interactive?: boolean;
   /** Extra text under the name, e.g. the movement distance while dragging. */
   caption?: string;
+  /** Colour of the name tag; null keeps the dark default. */
+  nameTag?: string | null;
 }
 
 interface PartProps {
@@ -84,7 +86,7 @@ interface PartProps {
   radius: number;
   texture: Texture | null;
   ghost: boolean;
-  raycast: typeof NO_RAYCAST | undefined;
+  raycast: Mesh['raycast'];
 }
 
 function Disc({ side, radius, texture, ghost, raycast }: PartProps) {
@@ -141,7 +143,7 @@ function Standee({ side, radius, texture, ghost, raycast, name, frame, cardWidth
 
   const border = cardWidth * CARD_BORDER;
   const picture = texture ? portraitLook(texture).card[look] : plain?.materials[look];
-  const cardRaycast = raycast ?? raycastToBase;
+  const cardRaycast = raycast === NO_RAYCAST ? NO_RAYCAST : raycastToBase;
   return (
     <>
       <mesh
@@ -195,7 +197,9 @@ export function TokenView(props: TokenViewProps) {
   const cardWidth = diameter * CARD_WIDTH;
   const cardHeight = cardWidth * (texture ? portraitLook(texture).cardRatio : cardHeightRatio(null));
   const hit: HitTag = { kind: 'token', id };
-  const raycast = interactive ? undefined : NO_RAYCAST;
+  // An explicit method, never undefined: R3F keeps the previous stub when a
+  // prop turns undefined, which would leave tokens unclickable after a drag.
+  const raycast = interactive ? Mesh.prototype.raycast : NO_RAYCAST;
   const part = { side, radius, texture, ghost, raycast };
   const frame = props.current ? 'current' : props.selected ? 'selected' : null;
   const labelLines: LabelLine[] = [
@@ -232,6 +236,9 @@ export function TokenView(props: TokenViewProps) {
         lines={labelLines}
         bar={health === null ? null : { fraction: health, color: healthColor(health) }}
         opacity={ghost ? 0.6 : 1}
+        background={props.nameTag ?? undefined}
+        // In the top view the name under the disc is the larger target.
+        pickable={interactive}
       />
     </group>
   );

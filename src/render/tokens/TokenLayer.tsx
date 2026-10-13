@@ -10,11 +10,12 @@ import { usePlayerStore } from '@/ui/player/playerStore';
 import { useMapRender } from '../mapRenderContext';
 import { TokenView } from './TokenView';
 
-const BAND_HEALTH: Record<NonNullable<PlayerCombatant['health']>, number> = {
-  unhurt: 1,
-  hurt: 0.75,
-  bloodied: 0.4,
-  down: 0,
+// Players read health from the name tag's colour, never from a bar.
+const BAND_TAG: Record<PlayerCombatant['health'], string> = {
+  healthy: 'rgba(46, 140, 70, 0.9)',
+  wounded: 'rgba(214, 120, 20, 0.9)',
+  critical: 'rgba(190, 40, 40, 0.9)',
+  down: 'rgba(0, 0, 0, 0.95)',
 };
 
 interface DmTokenProps {
@@ -84,7 +85,8 @@ function PlayerTokens() {
           position={c.position}
           token={c.token}
           icon={c.typeIcon}
-          health={c.health ? BAND_HEALTH[c.health] : null}
+          health={null}
+          nameTag={BAND_TAG[c.health]}
           current={c.id === encounter.activeCombatantId}
           interactive={!dragging}
         />

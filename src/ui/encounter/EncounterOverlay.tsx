@@ -7,6 +7,7 @@ import { snapTokenPoint } from '@/render/tokens/tokenPlacement';
 import { TextLabel } from '@/render/TextLabel';
 import { TokenView } from '@/render/tokens/TokenView';
 import { useAppStore } from '@/state/appStore';
+import { currentCombatant } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useCombatantToken } from '@/state/libraryStore';
 import { useCombatantTypeIcon } from './creatureLookup';
@@ -61,12 +62,18 @@ function MeasureOverlay() {
 function DragOverlay() {
   const drag = useEncounterUi((s) => s.drag);
   const combatant = useEncounterStore((s) => s.encounter?.combatants.find((c) => c.id === drag?.combatantId));
+  const current = useEncounterStore((s) => (s.encounter ? currentCombatant(s.encounter)?.id : undefined));
+  const turnStart = useEncounterStore((s) => s.encounter?.turnStart ?? null);
   const token = useCombatantToken(combatant);
   const icon = useCombatantTypeIcon(combatant?.creature);
   const { map } = useMapRender();
   const rule = useDiagonalRule();
   const moved = drag && (drag.from.x !== drag.to.x || drag.from.y !== drag.to.y);
   const feet = drag && gridDistanceFt(drag.from, drag.to, map.grid, rule);
+  // The turn's total matters for speed; this drag alone may be its second leg.
+  const turnFeet =
+    drag && current === drag.combatantId && turnStart ? gridDistanceFt(turnStart, drag.to, map.grid, rule) : null;
+  const caption = turnFeet === null || turnFeet === feet ? `${feet} ft` : `${feet} ft · ${turnFeet} ft this turn`;
   return moved && combatant ? (
     <>
       <TokenView
@@ -77,7 +84,7 @@ function DragOverlay() {
         health={null}
         ghost
         interactive={false}
-        caption={`${feet} ft`}
+        caption={caption}
       />
       <Line
         points={[

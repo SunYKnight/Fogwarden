@@ -184,15 +184,16 @@ describe('filterEncounterForPlayers', () => {
     expect(opened.openingStates).toEqual({ secret: 'open' });
   });
 
-  it('gives non-player combatants a health band instead of hit points', () => {
+  it('gives every combatant a health band instead of hit points', () => {
     const encounter = encounterWith([
-      combatant('goblin', { hp: { current: 3, max: 7, temp: 0 } }),
+      combatant('goblin', { hp: { current: 2, max: 7, temp: 0 } }),
       combatant('pc', { side: 'player', hp: { current: 1, max: 30, temp: 0 } }),
     ]);
     const [goblin, pc] = filterEncounterForPlayers(encounter, null, FOG).combatants;
-    expect(goblin).toMatchObject({ id: 'goblin', health: 'bloodied' });
+    expect(goblin).toMatchObject({ id: 'goblin', health: 'critical' });
     expect(goblin).not.toHaveProperty('hp');
-    expect(pc).toMatchObject({ id: 'pc', health: null });
+    expect(pc).toMatchObject({ id: 'pc', health: 'critical' });
+    expect(pc).not.toHaveProperty('hp');
   });
 
   it('sends the creature type icon of shown library creatures only', () => {
@@ -211,11 +212,14 @@ describe('filterEncounterForPlayers', () => {
 });
 
 describe('healthBand', () => {
-  it('maps hit points to bands', () => {
-    expect(healthBand({ current: 10, max: 10, temp: 0 })).toBe('unhurt');
-    expect(healthBand({ current: 6, max: 10, temp: 0 })).toBe('hurt');
-    expect(healthBand({ current: 5, max: 10, temp: 0 })).toBe('bloodied');
-    expect(healthBand({ current: 0, max: 10, temp: 0 })).toBe('down');
+  it('cuts at thirds of the maximum, the boundaries counting to the better band', () => {
+    expect(healthBand({ current: 9, max: 9, temp: 0 })).toBe('healthy');
+    expect(healthBand({ current: 6, max: 9, temp: 0 })).toBe('healthy');
+    expect(healthBand({ current: 5, max: 9, temp: 0 })).toBe('wounded');
+    expect(healthBand({ current: 3, max: 9, temp: 0 })).toBe('wounded');
+    expect(healthBand({ current: 2, max: 9, temp: 0 })).toBe('critical');
+    expect(healthBand({ current: 0, max: 9, temp: 0 })).toBe('down');
+    expect(healthBand({ current: -3, max: 9, temp: 0 })).toBe('down');
   });
 });
 

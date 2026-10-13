@@ -1,11 +1,12 @@
 import { produce } from 'immer';
 import { describe, expect, it } from 'vitest';
-import { createCreature, createEncounter, type Combatant, type Encounter } from '@/core/model';
+import { createCreature, createEncounter, createMap, type Combatant, type Encounter } from '@/core/model';
 import {
   applyDamage,
   applyHealing,
   createPc,
   currentCombatant,
+  movedThisTurnFt,
   grantTempHp,
   nextTurn,
   orderByInitiative,
@@ -68,19 +69,28 @@ describe('hit points', () => {
 });
 
 describe('spawning', () => {
-  it('numbers monsters with the first free number', () => {
-    expect(uniqueName('Goblin', [])).toBe('Goblin 1');
-    expect(uniqueName('Goblin', ['Goblin 1', 'Goblin 3'])).toBe('Goblin 2');
-    expect(uniqueName('Mira', [], false)).toBe('Mira');
-    expect(uniqueName('Mira', ['Mira'], false)).toBe('Mira 1');
+  it('numbers monsters with a random free two-digit number', () => {
+    const rng = seeded(3);
+    expect(uniqueName('Goblin', [], true, rng)).toMatch(/^Goblin \d\d$/);
+    expect(uniqueName('Mira', [], false, rng)).toBe('Mira');
+    expect(uniqueName('Mira', ['Mira'], false, rng)).toMatch(/^Mira \d\d$/);
+    const allButOne = Array.from({ length: 100 }, (_, n) => `Goblin ${String(n).padStart(2, '0')}`).filter(
+      (name) => name !== 'Goblin 42',
+    );
+    expect(uniqueName('Goblin', allButOne, true, rng)).toBe('Goblin 42');
+    expect(uniqueName('Goblin', [...allButOne, 'Goblin 42', 'Goblin 100'], true, rng)).toBe('Goblin 101');
   });
 
   it('gives every spawned goblin a unique name', () => {
     const names: string[] = [];
-    for (let i = 0; i < 5; i++) {
-      names.push(spawnCombatant(goblin(), goblinRef, { hpMode: 'average', side: 'enemy', takenNames: names }).name);
+    const rng = seeded(9);
+    for (let i = 0; i < 30; i++) {
+      names.push(
+        spawnCombatant(goblin(), goblinRef, { hpMode: 'average', side: 'enemy', takenNames: names, rng }).name,
+      );
     }
-    expect(names).toEqual(['Goblin 1', 'Goblin 2', 'Goblin 3', 'Goblin 4', 'Goblin 5']);
+    expect(new Set(names).size).toBe(30);
+    expect(names.every((n) => /^Goblin \d\d$/.test(n))).toBe(true);
   });
 
   it('uses the average or rolls within the formula bounds', () => {
@@ -193,5 +203,33 @@ describe('attacks', () => {
     expect(result.critical).toBe(false);
     expect(result.toHit.total).toBe(5);
     expect(result.damage[0]!.total).toBe(3);
+  });
+});
+
+describe('distance moved this turn', () => {
+  const grid = createMap({ name: 'm', image: null, squaresX: 20, squaresY: 20, pxPerSquare: 100 }).grid;
+  const at = (sx: number, sy: number) => ({ x: sx * 5 + 2.5, y: sy * 5 + 2.5, elevationFt: 0 });
+
+  it('counts from where the turn began, by the diagonal rule, and restarts with the next turn', () => {
+    const encounter = produce(encounterWith(['a', 'b']), (d) => {
+      d.combatants[0]!.position = at(0, 0);
+      d.combatants[1]!.position = at(5, 5);
+      nextTurn(d);
+      // Three diagonal squares: 15 ft by the PHB, 20 ft with every second diagonal at 10 ft.
+      d.combatants[0]!.position = at(3, 3);
+    });
+    expect(movedThisTurnFt(encounter, grid, '5-5-5')).toBe(15);
+    expect(movedThisTurnFt(encounter, grid, '5-10-5')).toBe(20);
+    const next = produce(encounter, (d) => void nextTurn(d));
+    expect(movedThisTurnFt(next, grid, '5-5-5')).toBe(0);
+    const back = produce(next, (d) => void previousTurn(d));
+    expect(movedThisTurnFt(back, grid, '5-5-5')).toBe(0);
+  });
+
+  it('is unknown before combat and for a combatant off the map', () => {
+    const encounter = encounterWith(['a']);
+    expect(movedThisTurnFt(encounter, grid, '5-5-5')).toBeNull();
+    const started = produce(encounter, (d) => void nextTurn(d));
+    expect(movedThisTurnFt(started, grid, '5-5-5')).toBeNull();
   });
 });

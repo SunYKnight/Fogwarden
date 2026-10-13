@@ -159,6 +159,7 @@ export function endCombat(xp: string | null, loot: readonly string[]): void {
     loot.forEach((line) => addLog(d, 'loot', `Loot: ${line}`));
     d.round = 0;
     d.turnIndex = 0;
+    d.turnStart = null;
     addLog(d, 'turn', 'Combat ended');
   }, 'End combat');
 }

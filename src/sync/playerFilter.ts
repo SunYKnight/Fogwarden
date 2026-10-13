@@ -35,9 +35,10 @@ export function filterMapForPlayers(map: BattleMap, encounter: Encounter): Battl
   };
 }
 
-/** Rough health for creatures whose exact hit points players don't know. */
-export function healthBand(hp: Combatant['hp']): NonNullable<PlayerCombatant['health']> {
-  return hp.current <= 0 ? 'down' : hp.current >= hp.max ? 'unhurt' : hp.current * 2 <= hp.max ? 'bloodied' : 'hurt';
+/** Rough health in thirds of the maximum, which players see as the colour of a token's name tag. */
+export function healthBand(hp: Combatant['hp']): PlayerCombatant['health'] {
+  const third = hp.max / 3;
+  return hp.current <= 0 ? 'down' : hp.current < third ? 'critical' : hp.current < 2 * third ? 'wounded' : 'healthy';
 }
 
 function visibleTo(combatant: Combatant, fog: FogCells | null): boolean {
@@ -57,7 +58,7 @@ function toPlayer(combatant: Combatant, token: AssetRef | null, typeIcon: Creatu
     conditions,
     token,
     visionSource,
-    health: side === 'player' ? null : healthBand(combatant.hp),
+    health: healthBand(combatant.hp),
     ...(typeIcon ? { typeIcon } : {}),
     ...(combatant.light ? { light: combatant.light } : {}),
   };

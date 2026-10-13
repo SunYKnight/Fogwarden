@@ -26,8 +26,8 @@ export type PlayerCombatant = Pick<
   Combatant,
   'id' | 'name' | 'side' | 'size' | 'position' | 'facingDeg' | 'conditions' | 'token' | 'visionSource'
 > & {
-  /** Rough health band instead of exact hit points for non-player combatants. */
-  health: 'unhurt' | 'hurt' | 'bloodied' | 'down' | null;
+  /** Rough health instead of exact hit points: at least 2/3, at least 1/3, above 0, or down. */
+  health: 'healthy' | 'wounded' | 'critical' | 'down';
   /** Creature type icon for a token without picture; absent for ad-hoc combatants, which show initials. */
   typeIcon?: CreatureIconKey;
   /** Torch or lantern the token carries; absent without one. */

@@ -1,7 +1,7 @@
 import { newId, type AreaMarker, type AreaShape, type MapPoint, type OpeningState } from '@/core/model';
 import type { MapPointerEvent } from '@/render/mapRenderContext';
 import { snapTokenPoint } from '@/render/tokens/tokenPlacement';
-import { addLog } from '@/state/encounterActions';
+import { addLog, currentCombatant } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useEncounterUi } from './encounterUiStore';
 
@@ -76,7 +76,13 @@ function placeToken(id: string, point: MapPoint): void {
   const store = useEncounterStore.getState();
   const placed = snapFor(id, point, null);
   const name = store.encounter?.combatants.find((c) => c.id === id)?.name;
-  if (placed) store.update((d) => void (d.combatants.find((c) => c.id === id)!.position = placed), `Place ${name}`);
+  if (placed) {
+    store.update((d) => {
+      d.combatants.find((c) => c.id === id)!.position = placed;
+      // Placed during its own turn: that is where its movement starts.
+      if (currentCombatant(d)?.id === id && d.turnStart === null) d.turnStart = { ...placed };
+    }, `Place ${name}`);
+  }
   const next = useEncounterUi.getState().placingAll
     ? useEncounterStore.getState().encounter?.combatants.find((c) => c.position === null && c.id !== id)
     : undefined;

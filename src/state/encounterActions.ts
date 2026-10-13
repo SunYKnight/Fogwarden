@@ -9,12 +9,15 @@ import {
   type DamageType,
   type DocRef,
   type Encounter,
+  type Grid,
   type LogEntry,
   type Senses,
+  type Settings,
   type Side,
 } from '@/core/model';
 import { abilityModifier, formatModifier } from '@/core/rules/abilities';
 import { rollDice, type DiceRoll, type RollMode } from '@/core/rules/dice';
+import { gridDistanceFt } from '@/core/rules/distance';
 
 /**
  * Pure encounter rules used inside `useEncounterStore.getState().update(recipe)`.
@@ -41,14 +44,26 @@ export function grantTempHp(hp: HitPoints, amount: number): HitPoints {
   return { ...hp, temp: Math.max(hp.temp, amount) };
 }
 
-/** First free `base N` (N from 1); `numberAlways` false keeps the plain name while it is free. */
-export function uniqueName(base: string, taken: readonly string[], numberAlways = true): string {
+/**
+ * `base NN` with a random free two-digit number (00-99), so players can't count a group from its numbers; past
+ * 100 of one name the numbers continue at 100. `numberAlways` false keeps the plain name while it is free.
+ */
+export function uniqueName(
+  base: string,
+  taken: readonly string[],
+  numberAlways = true,
+  rng: Rng = Math.random,
+): string {
   const names = new Set(taken);
-  let n = 1;
-  while (names.has(`${base} ${n}`)) {
-    n += 1;
+  const free = Array.from({ length: 100 }, (_, n) => String(n).padStart(2, '0')).filter(
+    (n) => !names.has(`${base} ${n}`),
+  );
+  let next = 100;
+  while (free.length === 0 && names.has(`${base} ${next}`)) {
+    next += 1;
   }
-  return !numberAlways && !names.has(base) ? base : `${base} ${n}`;
+  const number = free.length > 0 ? free[Math.floor(rng() * free.length)]! : String(next);
+  return !numberAlways && !names.has(base) ? base : `${base} ${number}`;
 }
 
 /** A rolled creature never starts with less than 1 hit point, even with negative Con modifiers. */
@@ -71,7 +86,7 @@ export function spawnCombatant(creature: Creature, ref: DocRef, options: SpawnOp
     id: newId(),
     creature: ref,
     // Monsters come in groups and need telling apart; player characters don't.
-    name: uniqueName(creature.name, options.takenNames, creature.kind !== 'player'),
+    name: uniqueName(creature.name, options.takenNames, creature.kind !== 'player', options.rng),
     side: options.side,
     size: creature.size,
     armorClass: creature.armorClass,
@@ -167,11 +182,19 @@ export function moveCombatant(encounter: Encounter, from: number, to: number): v
 export function removeCombatant(encounter: Encounter, id: string): void {
   const index = encounter.combatants.findIndex((c) => c.id === id);
   if (index >= 0) {
+    const current = currentCombatant(encounter)?.id;
     encounter.combatants.splice(index, 1);
     const shift = index < encounter.turnIndex ? 1 : 0;
     const last = Math.max(0, encounter.combatants.length - 1);
     encounter.turnIndex = Math.min(last, encounter.turnIndex - shift);
+    if (current === id) markTurnStart(encounter);
   }
+}
+
+/** Remembers where the combatant whose turn it now is stands, for "moved this turn". */
+function markTurnStart(encounter: Encounter): void {
+  const position = currentCombatant(encounter)?.position;
+  encounter.turnStart = position ? { ...position } : null;
 }
 
 /** Starts round 1 on the first call; wraps to the top of the order with a new round. */
@@ -186,6 +209,7 @@ export function nextTurn(encounter: Encounter): void {
   } else if (count > 0) {
     encounter.turnIndex += 1;
   }
+  markTurnStart(encounter);
 }
 
 /** Steps back, into the previous round when needed; never before the first turn of round 1. */
@@ -196,6 +220,17 @@ export function previousTurn(encounter: Encounter): void {
     encounter.round -= 1;
     encounter.turnIndex = Math.max(0, encounter.combatants.length - 1);
   }
+  markTurnStart(encounter);
+}
+
+/**
+ * Grid distance in feet between where the current combatant began its turn and where it stands now; null
+ * outside combat or when either place is unknown.
+ */
+export function movedThisTurnFt(encounter: Encounter, grid: Grid, rule: Settings['diagonalRule']): number | null {
+  const position = currentCombatant(encounter)?.position;
+  const start = encounter.turnStart;
+  return position && start ? gridDistanceFt(start, position, grid, rule) : null;
 }
 
 export function addLog(encounter: Encounter, kind: LogEntry['kind'], text: string): void {

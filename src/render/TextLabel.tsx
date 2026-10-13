@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
-import { CanvasTexture, LinearFilter, PerspectiveCamera, SRGBColorSpace, Vector3, type Sprite } from 'three';
+import { CanvasTexture, LinearFilter, PerspectiveCamera, SRGBColorSpace, Sprite, Vector3 } from 'three';
 
 export interface LabelLine {
   text: string;
@@ -14,6 +14,10 @@ interface TextLabelProps {
   /** Health-style bar under the text: filled fraction 0..1 in `color`. */
   bar?: { fraction: number; color: string } | null;
   opacity?: number;
+  /** Clicks on the label count as clicks on its parent (a token's name). */
+  pickable?: boolean;
+  /** Fill behind the text; dark by default. */
+  background?: string;
 }
 
 const FONT_PX = 11;
@@ -23,6 +27,7 @@ const BAR_PX = 3;
 // Drawn at 3x so the label stays sharp on high-DPI screens.
 const SUPERSAMPLE = 3;
 const NO_RAYCAST = () => undefined;
+const LABEL_BACKGROUND = 'rgba(0, 0, 0, 0.65)';
 
 interface LabelImage {
   texture: CanvasTexture;
@@ -30,7 +35,7 @@ interface LabelImage {
   heightPx: number;
 }
 
-function drawLabel(lines: LabelLine[], bar: TextLabelProps['bar']): LabelImage {
+function drawLabel(lines: LabelLine[], bar: TextLabelProps['bar'], background: string): LabelImage {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   if (!ctx) {
@@ -48,7 +53,7 @@ function drawLabel(lines: LabelLine[], bar: TextLabelProps['bar']): LabelImage {
   canvas.width = widthPx * SUPERSAMPLE;
   canvas.height = heightPx * SUPERSAMPLE;
   ctx.scale(SUPERSAMPLE, SUPERSAMPLE);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+  ctx.fillStyle = background;
   ctx.beginPath();
   ctx.roundRect(0, 0, widthPx, heightPx, 3);
   ctx.fill();
@@ -78,13 +83,14 @@ const scratch = new Vector3();
  * Screen-sized text drawn inside the scene; DOM overlays (drei Html) break when the canvas
  * unmounts under React 19, and in-scene labels also show up in the player view's rendering.
  */
-export function TextLabel({ position, lines, bar = null, opacity = 1 }: TextLabelProps) {
+export function TextLabel(props: TextLabelProps) {
+  const { position, lines, bar = null, opacity = 1, pickable = false, background = LABEL_BACKGROUND } = props;
   const sprite = useRef<Sprite>(null);
   // Parsing the key back keeps the memo honest without a lint suppression.
-  const key = JSON.stringify([lines, bar]);
+  const key = JSON.stringify([lines, bar, background]);
   const image = useMemo(() => {
-    const [l, b] = JSON.parse(key) as [LabelLine[], TextLabelProps['bar']];
-    return drawLabel(l, b);
+    const [l, b, fill] = JSON.parse(key) as [LabelLine[], TextLabelProps['bar'], string];
+    return drawLabel(l, b, fill);
   }, [key]);
   useEffect(() => () => image.texture.dispose(), [image]);
 
@@ -101,7 +107,12 @@ export function TextLabel({ position, lines, bar = null, opacity = 1 }: TextLabe
   });
 
   return (
-    <sprite ref={sprite} position={position} raycast={NO_RAYCAST} renderOrder={10}>
+    <sprite
+      ref={sprite}
+      position={position}
+      raycast={pickable ? Sprite.prototype.raycast : NO_RAYCAST}
+      renderOrder={10}
+    >
       <spriteMaterial map={image.texture} transparent opacity={opacity} depthTest={false} depthWrite={false} />
     </sprite>
   );

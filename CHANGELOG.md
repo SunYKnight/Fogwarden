@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Play: the turn bar shows how far the current creature is from where its turn began (e.g. "Moved 15 / 30 ft",
+  by the diagonal rule in Settings > Rules), and dragging it shows that total next to the drag distance
+  (encounter schema v7 stores the turn's starting square). Monsters get a random free number from 00 to 99
+  ("Goblin 37") instead of 1, 2, 3, so players can't count a group. Players see no hit point bars any more: name
+  tags are green from 2/3 of the hit points, orange below 2/3, red below 1/3 and black at 0, for every creature.
+- Fix: after the first token drag, tokens in the top view no longer reacted to clicks (a click on one cleared the
+  selection) until the encounter was reopened; clicking a token's name tag now also selects it.
 - UI follows the DM's order of work (see `docs/UI_CONCEPT.md` §10):
   - **Rail:** Home · Campaigns · Maps · Compendium · Play on top; Search, Players and Settings at the bottom. The
     Server page is gone; its LAN, online and server setup moved to Settings > Players (old links open there).

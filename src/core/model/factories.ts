@@ -125,6 +125,7 @@ export function createEncounter(name: string, campaignId: string, map: DocRef | 
     map,
     round: 0,
     turnIndex: 0,
+    turnStart: null,
     combatants: [],
     markers: [],
     openingStates: {},

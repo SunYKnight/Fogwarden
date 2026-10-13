@@ -72,6 +72,8 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     }),
     // v6: players may move their own tokens; off until the DM allows it.
     (doc) => ({ ...doc, playersMoveTokens: false }),
+    // v7: distance moved this turn; turns already running count from now.
+    (doc) => ({ ...doc, turnStart: null }),
   ],
   settings: [
     // v2: the never-used lastCampaignId became lastEncounter.

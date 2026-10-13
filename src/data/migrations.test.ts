@@ -137,10 +137,11 @@ describe('encounter migration', () => {
   });
 
   it('keeps players from moving their own tokens in a v5 encounter', () => {
-    const { playersMoveTokens: _unused, ...v5 } = { ...createEncounter('e', 'c1', null), version: 5 };
+    const { playersMoveTokens: _moves, turnStart: _start, ...v5 } = { ...createEncounter('e', 'c1', null), version: 5 };
     const migrated = encounterSchema.parse(migrate('encounter', v5));
-    expect(migrated.version).toBe(6);
+    expect(migrated.version).toBe(7);
     expect(migrated.playersMoveTokens).toBe(false);
+    expect(migrated.turnStart).toBeNull();
   });
 
   it('gives combatants of a v4 encounter no level, effects, death saves, spent resources or light', () => {

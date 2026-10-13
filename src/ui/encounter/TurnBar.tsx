@@ -3,7 +3,7 @@ import type { Combatant, CreatureAction, Encounter } from '@/core/model';
 import type { RollMode } from '@/core/rules/dice';
 import { SIDE_COLORS } from '@/render/tokens/tokenMaterials';
 import { useAppStore } from '@/state/appStore';
-import { currentCombatant } from '@/state/encounterActions';
+import { currentCombatant, movedThisTurnFt } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { Button } from '../kit';
 import { attackActions, attackLabel, resultSummary } from './attacks';
@@ -34,6 +34,11 @@ function TurnControls({ current, target }: TurnProps) {
   const value = Math.round(Number(amount));
   const valid = target !== null && amount.trim() !== '' && Number.isFinite(value) && value > 0;
   const attacks = attackActions(creature);
+  const encounter = useEncounterStore((s) => s.encounter);
+  const grid = useEncounterStore((s) => s.map?.grid);
+  const rule = useAppStore((s) => s.settings?.diagonalRule ?? '5-5-5');
+  const moved = encounter && grid ? movedThisTurnFt(encounter, grid, rule) : null;
+  const walk = creature?.speeds.walk;
 
   // Library data may carry dice formulas that don't parse.
   const attack = (action: CreatureAction) => {
@@ -62,6 +67,12 @@ function TurnControls({ current, target }: TurnProps) {
           <span className="turn-name">
             <span className="side-bar" style={{ background: SIDE_COLORS[current.side] }} />
             {current.name}
+          </span>
+        )}
+        {moved !== null && (
+          <span className="turn-moved muted" title="Grid distance from where this turn began">
+            Moved {moved}
+            {walk !== undefined ? ` / ${walk}` : ''} ft
           </span>
         )}
         {attacks.map((a) => (
