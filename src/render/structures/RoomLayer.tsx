@@ -13,7 +13,8 @@ import { roomFloorGeometry, roomRoofGeometry } from './roomGeometry';
 const HIDDEN_LAYER = 31;
 
 function createRoofMaterial(uniforms: ProjectionUniforms, side: SideMaterial): MeshStandardMaterial {
-  const material = createProjectedMaterial(uniforms, { side, sideFromSlopeDeg: 1 });
+  // Untinted: the battlemap below a roof is the room's floor.
+  const material = createProjectedMaterial(uniforms, { side, sideFromSlopeDeg: 1, sideTint: 0 });
   // Flat roofs would show the battlemap; a cosine above 1 makes every
   // face use the roof material (createProjectedMaterial exposes it).
   material.userData.projection.uSideCos.value = 2;
