@@ -3,6 +3,7 @@ import {
   CREATURE_SCHEMA_VERSION,
   defaultAtmosphere,
   defaultAudioSettings,
+  defaultGraphicsSettings,
   defaultOnboarding,
   defaultPackSettings,
   defaultPlayerLinks,
@@ -100,6 +101,9 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
       const { legacyImport: _unused, ...steps } = done;
       return { ...doc, onboarding: { ...onboarding, done: steps } };
     },
+    // v11: graphics quality; GPU detection needs a browser, so the Settings
+    // page only suggests a preset instead of choosing one here.
+    (doc) => ({ ...doc, graphics: defaultGraphicsSettings() }),
   ],
 };
 

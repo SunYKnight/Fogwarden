@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { Mesh, type Material, type Object3D } from 'three';
-import type { Prop, SideMaterial } from '@/core/model';
+import { defaultGraphicsSettings, type Prop, type SideMaterial } from '@/core/model';
+import { useAppStore } from '@/state/appStore';
 import { createProjectedMaterial, type ProjectionUniforms } from '../materials/projectedMaterial';
 import { useMapRender, type HitTag } from '../mapRenderContext';
 import { useLayerVisible } from '../structures/hooks';
@@ -20,6 +21,16 @@ function PropView({ prop, uniforms, cliffMaterial, cliffSlopeDeg }: PropViewProp
   const model = useModel(prop.asset);
   const register = usePropObjects((s) => s.register);
   const { id, projectMap } = prop;
+  // Player windows load no settings and keep the defaults.
+  const { propShadows } = useAppStore((s) => s.settings?.graphics) ?? defaultGraphicsSettings();
+
+  useEffect(() => {
+    model?.traverse((child) => {
+      if (child instanceof Mesh) {
+        child.castShadow = propShadows;
+      }
+    });
+  }, [model, propShadows]);
 
   // Projected props drape the battlemap; steep faces look like cliffs.
   useEffect(() => {

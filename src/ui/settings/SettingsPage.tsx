@@ -4,6 +4,7 @@ import { CheckboxField, NumberField, SelectField, SliderField } from '../compone
 import { PageHeader, Section } from '../kit';
 import { AboutSection } from './AboutSection';
 import { DataSection } from './DataSection';
+import { GraphicsSection } from './GraphicsSection';
 import { PlayerViewSection } from './PlayerViewSection';
 
 export function SettingsPage() {
@@ -50,6 +51,7 @@ export function SettingsPage() {
                 onChange={(v) => save({ ...settings, audio: { ...settings.audio, dmVolume: v / 100 } })}
               />
             </Section>
+            <GraphicsSection settings={settings} save={save} />
             <Section title="Rules">
               <SelectField
                 label="Diagonals"

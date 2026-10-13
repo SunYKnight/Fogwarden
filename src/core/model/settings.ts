@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const SETTINGS_SCHEMA_VERSION = 10;
+export const SETTINGS_SCHEMA_VERSION = 11;
 
 /** View of all player characters together; any other view is one player character's combatant id. */
 export const PARTY_VIEW = 'party';
@@ -109,6 +109,20 @@ export function defaultUpdateSettings(): UpdateSettings {
   return { autoCheck: true, lastCheck: null };
 }
 
+export const graphicsSettingsSchema = z.object({
+  /** Map lights casting shadows; each one renders six depth maps a frame. */
+  shadowedLights: z.number().int().min(0).max(8),
+  /** Fraction of the device pixel ratio the 3D views render at. */
+  resolutionScale: z.number().min(0.5).max(1),
+  /** Props cast shadows; they always receive them. */
+  propShadows: z.boolean(),
+});
+export type GraphicsSettings = z.infer<typeof graphicsSettingsSchema>;
+
+export function defaultGraphicsSettings(): GraphicsSettings {
+  return { shadowedLights: 4, resolutionScale: 1, propShadows: true };
+}
+
 export const settingsSchema = z.object({
   schema: z.literal('settings'),
   version: z.number().int().positive(),
@@ -137,6 +151,8 @@ export const settingsSchema = z.object({
   audio: audioSettingsSchema,
   /** Release checks of the desktop app (Settings > About). */
   updates: updateSettingsSchema,
+  /** Render cost of the 3D views on this computer (Settings > Graphics). */
+  graphics: graphicsSettingsSchema,
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -155,5 +171,6 @@ export function defaultSettings(): Settings {
     packs: defaultPackSettings(),
     audio: defaultAudioSettings(),
     updates: defaultUpdateSettings(),
+    graphics: defaultGraphicsSettings(),
   };
 }

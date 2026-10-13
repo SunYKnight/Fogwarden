@@ -1,12 +1,11 @@
 import { Line } from '@react-three/drei';
-import type { MapLight } from '@/core/model';
+import { defaultGraphicsSettings, type MapLight } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
+import { useAppStore } from '@/state/appStore';
 import { useMapRender, type HitTag } from '../mapRenderContext';
 import { circlePoints, drapedPath } from './drape';
 import { noRaycast, useCarriedLights, useCombatantPositions, useLayerVisible } from './hooks';
 
-// Each shadowed point light renders six depth maps; more stall weak GPUs.
-const MAX_SHADOWED_LIGHTS = 8;
 const SHADOW_MAP_SIZE = 512;
 const LIGHT_INTENSITY = 3;
 // Carried torches and lanterns sit at hand height above the token's feet.
@@ -62,6 +61,8 @@ export function LightLayer() {
   const visible = useLayerVisible('lights');
   const combatants = useCombatantPositions();
   const carried = useCarriedLights();
+  // Player windows load no settings and keep the defaults.
+  const { shadowedLights } = useAppStore((s) => s.settings?.graphics) ?? defaultGraphicsSettings();
   const placed = [...map.lights, ...carried].flatMap((light) => {
     const carrier = light.attachedTo && mode !== 'editor' ? combatants[light.attachedTo] : undefined;
     const position: WorldPoint = carrier
@@ -84,7 +85,7 @@ export function LightLayer() {
             intensity={LIGHT_INTENSITY}
             distance={range}
             decay={0}
-            castShadow={i < MAX_SHADOWED_LIGHTS}
+            castShadow={i < shadowedLights}
             shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
             shadow-bias={-0.002}
             shadow-camera-near={0.5}

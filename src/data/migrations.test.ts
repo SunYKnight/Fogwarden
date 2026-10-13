@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createEncounter,
+  defaultGraphicsSettings,
   defaultPlayerLinks,
   defaultRemoteSettings,
   defaultSettings,
@@ -92,7 +93,14 @@ describe('settings migration', () => {
       dismissed: true,
       done: { dataFolder: true, mapFromImage: false, sampleEncounter: true },
     });
-    expect(settingsSchema.parse(migrated).version).toBe(10);
+    expect(settingsSchema.parse(migrated).version).toBe(11);
+  });
+
+  it('adds the default graphics quality to v10 settings and keeps the rest', () => {
+    const { graphics: _unused, ...v10 } = { ...defaultSettings(), tokenStandees: false };
+    const migrated = settingsSchema.parse(migrate('settings', { ...v10, version: 10 }));
+    expect(migrated.graphics).toEqual(defaultGraphicsSettings());
+    expect(migrated.tokenStandees).toBe(false);
   });
 });
 

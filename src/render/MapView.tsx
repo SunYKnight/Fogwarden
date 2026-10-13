@@ -2,8 +2,9 @@ import { Canvas, type ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import type { Object3D } from 'three';
 import { daylight, skyTint } from '@/core/atmosphere/timeOfDay';
-import type { BattleMap, LightLevel } from '@/core/model';
+import { defaultGraphicsSettings, type BattleMap, type LightLevel } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
+import { useAppStore } from '@/state/appStore';
 import { CameraRig, type CameraMode, type CameraState } from './CameraRig';
 import type { FogMode } from './materials/projectedMaterial';
 import {
@@ -95,10 +96,12 @@ export function MapView(props: MapViewProps) {
   const daylit = minute === null ? 1 : AMBIENT_INTENSITY.darkness + (1 - AMBIENT_INTENSITY.darkness) * daylight(minute);
   const intensity = Math.min(AMBIENT_INTENSITY[ambient], daylit);
   const tint = minute === null ? '#ffffff' : skyTint(minute);
+  // Player windows load no settings and keep the defaults.
+  const graphics = useAppStore((s) => s.settings?.graphics) ?? defaultGraphicsSettings();
   return (
     <Canvas
       shadows="percentage"
-      dpr={[1, 2]}
+      dpr={Math.min(window.devicePixelRatio, 2) * graphics.resolutionScale}
       gl={{ antialias: true }}
       onContextMenu={(e) => e.preventDefault()}
       style={{ background: '#111318' }}

@@ -31,6 +31,12 @@ const params = new URLSearchParams(location.search);
 const token = params.get('token') ?? params.get(RELAY_LINK_PARAM);
 const identify = params.get('identify');
 const lan = token === null ? null : lanTransport(params, token);
+// The player window on the DM's computer shares its GPU, so it follows the
+// DM's graphics settings; browser players render with the defaults.
+if (lan === null && identify === null) {
+  const { repository, reportError } = useAppStore.getState();
+  repository.loadSettings().then((settings) => useAppStore.setState({ settings }), reportError);
+}
 // `?identify=` windows only label a monitor for the DM's monitor test.
 createRoot(root).render(
   <StrictMode>
