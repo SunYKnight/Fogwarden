@@ -13,7 +13,10 @@ players a fog-of-war view on a second screen or in any browser on the local netw
   markers, maps, random tables (names, loot, rumours as editable text), a picture library, campaigns; Aurora Builder
   characters, items, spells and portraits import into a local pack.
 - **Campaigns**: encounters, a session journal that Play fills with combat events, people and places with
-  pictures, quests, and an in-game calendar with rests.
+  pictures, quests, and an in-game calendar with rests. Campaigns export to one `.zip` with the maps, creatures and
+  pictures of My content they use, for another computer or a co-DM; packs they use are named, not copied. "Open the
+  sample encounter" on Home sets up a sample campaign around a ruined chapel that shows all of this, including a
+  night encounter with vision, light and fog of war.
 - **Player view**: second window, LAN browser or any browser on the internet through a small relay server; each
   screen sees through one character's eyes or the whole party's (line of sight, light, darkvision, truesight), with
   explored areas remembered per character.

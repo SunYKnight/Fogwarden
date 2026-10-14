@@ -257,9 +257,23 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
   version, author, license, counts (also portraits), "n overridden by …", enable switch, Export, Remove (imported
   packs, confirmed); header actions Import from Aurora Builder… and Import folder… (desktop), Import pack… (.zip).
   `OriginBadge` names an entry's pack. Compendium tabs Items and Spells (`ItemSpellLibrary.tsx`): search, filters
-  (item type and rarity; spell level, school and class), at most 300 rows at once, preview with the facts and the
+  (item type and rarity; spell level, school and class; source book for both), rows with the source book (the
+  pack shows in the preview), at most 300 rows at once, preview with the facts and the
   Markdown description. `PictureLibraryDialog` (creature editor Image/Token "Library…", Add combatants' hand-typed
   player character) shows `repository.listPortraits()` as thumbnails.
+- Campaign archives (`src/data/campaignArchive.ts`, `<campaign id>.fogwarden-campaign.zip`) mirror the data root:
+  `fogwarden-campaign.json` (`manifestSchema`: `format` 1, `app`, `exportedAt`, `campaign {id, name}`,
+  `library [{kind: creature|marker|map, id, files}]`, `assets`, `packs [{id, name}]`), `campaigns/<id>/…` (whole
+  folder), `library/…` (My content maps, creatures with pictures and area templates its encounters use) and other
+  data files its JSON or bundled maps refer to. `exportCampaign(repository, campaignId, now)` bundles a document when
+  My content holds it, else lists its pack. `readCampaignZip` validates the manifest with zod and the file layout.
+  `importCampaign(repository, archive, 'fail' | 'replace' | 'copy')`: `CampaignExistsError` for `'fail'`; a copy is
+  `Name (2)`… under `newCampaignId`; documents identical to My content's are shared, others whose id is taken get
+  `newLibraryId(kind, id)` and the references follow; assets keep their path when free or identical, else go to
+  `campaigns/<id>/imported-assets/<path>`; staged in `campaigns.importing/<id>`, read back, then swapped in; the
+  result names `missingPacks`. UI (`src/ui/campaign/campaignArchiveUi.ts`): campaign page Export…, campaign card
+  context menu Export…, Campaigns header Import campaign…, Home Import…/drop (`.zip`), commands `campaign:import`
+  and `campaign:export`; Replace campaign / Import as copy via `choiceDialog` (kit). Sound moods are not bundled.
 
 ## Rules and imports
 
@@ -712,8 +726,12 @@ transports' `onPlayerRequest`, tagged with the view of the link it came over.
 - Routes: `Route` union in `src/state/appStore.ts` + `Page` switch in `src/ui/DmApp.tsx`.
 - Home (`src/ui/home/HomePage.tsx`, default route): Continue card (`settings.lastEncounter`), recent maps and
   encounters, `FirstSteps` (progress in `settings.onboarding`, `completeOnboardingStep(step)`), drop zone.
-  `openSampleEncounter()` (`onboarding.ts`) creates campaign `sample-campaign` / encounter `sample-goblin-ambush`
-  once from `sampleContent.ts` and opens it.
+  `openSampleEncounter()` (`onboarding.ts`) calls `ensureSampleCampaign(repository)` (`sampleCampaign.ts`). While
+  campaign `sample-campaign` does not exist it creates all of it (notes, journal, quests, people and places,
+  calendar; encounters `sample-goblin-ambush`, `sample-night-vigil`, `sample-midnight-rite` built in
+  `sampleContent.ts`; `campaign.json` written last so a failed run starts over); afterwards it only recreates a
+  missing `sample-goblin-ambush`. Then it opens the goblin ambush. A shipped map's Delete (`MapLibrary.tsx`) turns
+  its pack off after a confirm naming the rest of the pack.
 - New map wizard: `openNewMapWizard(files?)` (`src/ui/library/NewMapWizard.tsx`, host in `DmApp`); image → grid
   (`calibrateFromSquare` from a drag or two clicks, SVG overlay in image pixels) → `createCalibratedMap`
   (`mapImport.ts`) saves the map already calibrated. A Universal VTT file skips the grid ("Check grid" opens it with

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Campaigns can be **exported and imported** as one `.zip` (`<campaign id>.fogwarden-campaign.zip`): Export… on
+  the campaign page (also right-click a campaign card, or Search › Export campaign…), Import campaign… on the
+  Campaigns page (also Search, and Home's Import… or a drop on Home). The archive holds the whole campaign folder
+  (encounters with fog, journal, people and places, quests, calendar, handouts) plus the maps, creatures (with
+  pictures), area templates and pictures of My content its encounters use; content from packs is not copied, the
+  archive names the packs instead and the import says which of them are not installed. Importing a campaign that
+  exists asks: Replace campaign, or Import as copy ("Name (2)" under a new id). A bundled document whose id is taken
+  by a different document gets a free id, and the campaign's references follow; identical documents are shared.
+  Sound moods are not included.
+- "Open the sample encounter" now creates a showcase campaign, "The chapel in the woods (sample)": campaign notes,
+  two journal sessions, open, done and failed quests, people and places linked to the encounters, a Harptos
+  calendar with events, and three encounters on the sample chapel map: the goblin ambush, a night vigil
+  (darkvision, a torch, a shadow hidden from the players, a Moonbeam area, Bless and Turn Undead with durations,
+  fog weather) and Brother Aldric's midnight rite, prepared with nobody placed yet. It is created once; afterwards
+  only a deleted goblin ambush comes back.
+- Maps: the sample map (and any map from a pack) can be deleted; that turns its pack off (the confirm names what
+  else the pack holds), and Settings > Content turns it back on.
+- Compendium Items and Spells: rows show the source book ("Player’s Handbook", "Xanathar’s Guide to Everything")
+  instead of the pack "Aurora Builder", and both tabs filter by source; the pack still shows in the preview.
 - Players popover: with LAN on, the player link and its QR code show right away (the QR button folds them), and
   the popover moves up when its content grows; before, the QR code opened below the bottom of the window.
 - Play: the right Creature tab and the bottom turn bar became one **creature dock** under the map: the selected
