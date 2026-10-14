@@ -2,11 +2,14 @@ import { create } from 'zustand';
 import type { DocRef } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 
+/** Where creature pictures come from: a folder on disk or the D&D 5e API. */
+export type PortraitSource = { kind: 'folder'; folder: string } | { kind: 'api' };
+
 /** Dialogs reachable from every page; `CompendiumDialogHost` renders them. */
 export type CompendiumDialog =
   | { kind: 'creature-import'; text: string }
   | { kind: 'new-encounter'; campaignId: string | null; map: DocRef | null }
-  | { kind: 'attach-portraits'; folder: string; files: string[] }
+  | { kind: 'attach-portraits'; source: PortraitSource; files: string[] }
   | { kind: 'aurora-import' };
 
 export const useCompendiumDialogStore = create<{ dialog: CompendiumDialog | null }>(() => ({ dialog: null }));

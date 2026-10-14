@@ -8,6 +8,7 @@ import { packName, useLibraryStore } from '@/state/libraryStore';
 import { CreatureThumb } from '../creatureTypes/CreatureThumb';
 import { StatBlock } from '../creature/StatBlock';
 import { Button, confirmDialog, EmptyState, openContextMenu, type MenuItem } from '../kit';
+import { attachPortraitsFromApi } from './AttachPortraitsDialog';
 import { openCreatureImport } from './compendiumUi';
 import { FilterRow, FilterSelect, type FilterChip } from './FilterRow';
 import { OriginBadge } from './OriginBadge';
@@ -139,6 +140,8 @@ export function CreatureLibrary() {
     [listing, filter, sort],
   );
   const selected = listing.entries.find((e) => e.ref.id === selectedId) ?? null;
+  // The D&D 5e API only has pictures of the shipped SRD monsters.
+  const unpictured = useMemo(() => listing.entries.filter((e) => e.pack === 'srd' && !e.doc.image).length, [listing]);
 
   const edit = (entry: Entry) => navigate({ page: 'creature-editor', ref: entry.ref });
 
@@ -198,6 +201,19 @@ export function CreatureLibrary() {
     <div className="compendium-split">
       <div className="compendium-list">
         <FilterBar filter={filter} setFilter={setFilter} sources={sources} />
+        {unpictured > 0 && (
+          <div className="row">
+            <span className="muted grow">
+              {unpictured === 1 ? '1 SRD monster has' : `${unpictured} SRD monsters have`} no picture.
+            </span>
+            <Button
+              icon="download"
+              label="Download pictures…"
+              variant="ghost"
+              onClick={() => attachPortraitsFromApi().catch(reportError)}
+            />
+          </div>
+        )}
         <div className="row">
           <span className="muted">
             {entries.length} of {listing.entries.length}

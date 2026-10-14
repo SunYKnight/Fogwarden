@@ -254,7 +254,7 @@ export function CompendiumDialogHost() {
   } else if (dialog?.kind === 'new-encounter') {
     shown = <NewEncounterDialog campaignId={dialog.campaignId} initialMap={dialog.map} />;
   } else if (dialog?.kind === 'attach-portraits') {
-    shown = <AttachPortraitsDialog folder={dialog.folder} files={dialog.files} />;
+    shown = <AttachPortraitsDialog source={dialog.source} files={dialog.files} />;
   } else if (dialog?.kind === 'aurora-import') {
     shown = <AuroraImportDialog onClose={closeCompendiumDialog} />;
   }

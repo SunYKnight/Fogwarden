@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { OnboardingStep } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import { Button, Icon, type IconName } from '../kit';
+import { attachPortraitsFromApi } from '../library/AttachPortraitsDialog';
 import { openNewMapWizard } from '../library/NewMapWizard';
 import { completeOnboardingStep, dismissFirstSteps, openSampleEncounter } from './onboarding';
 
@@ -35,6 +36,13 @@ const STEPS: StepSpec[] = [
     text: 'Four goblins ambush two heroes at a ruined chapel, part of a sample campaign with journal and quests.',
     action: 'Open sample',
   },
+  {
+    id: 'monsterPictures',
+    icon: 'download',
+    title: 'Download monster pictures',
+    text: 'Painted pictures for the SRD monsters from the free D&D 5e API: about 580 MB download, 45 MB stored.',
+    action: 'Download',
+  },
 ];
 
 /** Next actions for a new user; hidden once dismissed or all done. */
@@ -57,6 +65,7 @@ export function FirstSteps() {
         setBusy(false);
       }
     },
+    monsterPictures: () => attachPortraitsFromApi(),
   };
 
   const remaining = onboarding ? STEPS.filter((s) => !onboarding.done[s.id]).length : 0;

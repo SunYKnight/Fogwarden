@@ -1,6 +1,8 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { useMemo, useState } from 'react';
+import { completeOnboardingStep } from '@/ui/home/onboarding';
 import { matchPortraits } from '@/core/import/portraitMatch';
+import { downloadApiPictures, listApiPictures } from '@/data/dnd5eapiPictures';
 import { MY_CONTENT_SOURCE } from '@/data/packs';
 import { creaturePictureRef, type LibraryEntry } from '@/data/repository';
 import { importFile, listFolder } from '@/data/tauriStorage';
@@ -8,7 +10,7 @@ import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { CheckboxField } from '../components/fields';
 import { Button, Dialog } from '../kit';
-import { closeCompendiumDialog, useCompendiumDialogStore } from './compendiumUi';
+import { closeCompendiumDialog, useCompendiumDialogStore, type PortraitSource } from './compendiumUi';
 
 type Entry = LibraryEntry<'creature'>;
 
@@ -24,13 +26,21 @@ export async function attachPortraitsFromFolder(): Promise<void> {
   const folder = await open({ directory: true, title: 'Choose a folder with creature pictures' });
   if (folder !== null) {
     const files = (await listFolder(folder)).filter((e) => !e.isDir).map((e) => e.name);
-    useCompendiumDialogStore.setState({ dialog: { kind: 'attach-portraits', folder, files } });
+    useCompendiumDialogStore.setState({
+      dialog: { kind: 'attach-portraits', source: { kind: 'folder', folder }, files },
+    });
   }
+}
+
+/** Asks the D&D 5e API which monster pictures it has and shows which creatures they fit. */
+export async function attachPortraitsFromApi(): Promise<void> {
+  const files = await listApiPictures();
+  useCompendiumDialogStore.setState({ dialog: { kind: 'attach-portraits', source: { kind: 'api' }, files } });
 }
 
 // The copy's file name in My content attaches it, also to pack creatures,
 // whose text files stay untouched.
-async function attach(folder: string, plan: PlannedPortrait[]): Promise<void> {
+async function attachFromFolder(folder: string, plan: PlannedPortrait[]): Promise<void> {
   const { repository } = useAppStore.getState();
   const base = folder.replace(/[\\/]+$/, '');
   for (const { fileName, entry } of plan) {
@@ -39,15 +49,51 @@ async function attach(folder: string, plan: PlannedPortrait[]): Promise<void> {
     await importFile(`${base}/${fileName}`, image.path);
     await repository.storeCreaturePictures(entry.ref.id, { image, token: entry.doc.token });
   }
-  await useLibraryStore.getState().refresh('creature');
-  useAppStore.getState().notify(`Attached ${plan.length} portraits`);
 }
 
-export function AttachPortraitsDialog({ folder, files }: { folder: string; files: string[] }) {
+async function attach(source: PortraitSource, plan: PlannedPortrait[], onProgress: (done: number) => void) {
+  const { repository, notify } = useAppStore.getState();
+  const lacking =
+    source.kind === 'folder'
+      ? await attachFromFolder(source.folder, plan).then(() => [])
+      : await downloadApiPictures(
+          repository,
+          plan.map((p) => ({ creatureId: p.entry.ref.id, fileName: p.fileName })),
+          onProgress,
+        );
+  await useLibraryStore.getState().refresh('creature');
+  if (source.kind === 'api') {
+    await completeOnboardingStep('monsterPictures');
+  }
+  const missed = lacking.length > 0 ? `; the API had no picture for ${lacking.length}` : '';
+  notify(`Attached ${pictures(plan.length - lacking.length)}${missed}`);
+}
+
+function pictures(count: number): string {
+  return `${count} ${count === 1 ? 'picture' : 'pictures'}`;
+}
+
+const SOURCE_TEXT: Record<PortraitSource['kind'], { title: string; intro: string }> = {
+  folder: {
+    title: 'Attach portraits from folder',
+    intro:
+      'Pictures are matched by creature name or id; case, accents, punctuation and prefixes such as ' +
+      '"homebrew--" don\'t matter.',
+  },
+  api: {
+    title: 'Download pictures from the D&D 5e API',
+    intro:
+      'dnd5eapi.co has one painted picture per SRD 5.1 monster, for your own use; they are matched to the ' +
+      'shipped SRD monsters, downloaded (about 1.7 MB each), shrunk to 768 px and saved in My content on this ' +
+      'computer.',
+  },
+};
+
+export function AttachPortraitsDialog({ source, files }: { source: PortraitSource; files: string[] }) {
   const reportError = useAppStore((s) => s.reportError);
   const entries = useLibraryStore((s) => s.listings.creature.entries);
   const [replace, setReplace] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
 
   const matching = useMemo(
     () =>
@@ -67,28 +113,36 @@ export function AttachPortraitsDialog({ folder, files }: { folder: string; files
   );
   const existing = planned.filter((p) => p.replaces).length;
   const plan = planned.filter((p) => replace || !p.replaces);
+  const text = SOURCE_TEXT[source.kind];
+  const busy = progress !== null;
+  const action = source.kind === 'api' ? 'Download' : 'Attach';
 
   const apply = async () => {
-    setBusy(true);
+    setProgress(0);
     try {
-      await attach(folder, plan);
+      await attach(source, plan, setProgress);
       closeCompendiumDialog();
     } finally {
-      setBusy(false);
+      setProgress(null);
     }
   };
 
   return (
     <Dialog
-      title="Attach portraits from folder"
+      title={text.title}
       onClose={closeCompendiumDialog}
       width={640}
       footer={
         <>
-          <Button label="Cancel" onClick={closeCompendiumDialog} />
+          {busy && source.kind === 'api' && (
+            <span className="muted grow">
+              {progress} of {plan.length} downloaded…
+            </span>
+          )}
+          <Button label="Cancel" onClick={closeCompendiumDialog} disabled={busy} />
           <Button
-            icon="image"
-            label={`Attach ${plan.length} portraits`}
+            icon={source.kind === 'api' ? 'download' : 'image'}
+            label={`${action} ${pictures(plan.length)}`}
             variant="primary"
             disabled={plan.length === 0 || busy}
             onClick={() => apply().catch(reportError)}
@@ -97,10 +151,9 @@ export function AttachPortraitsDialog({ folder, files }: { folder: string; files
       }
     >
       <div className="col portrait-attach">
-        <p className="muted portrait-folder">{folder}</p>
+        {source.kind === 'folder' && <p className="muted portrait-folder">{source.folder}</p>}
         <p>
-          <strong>{planned.length}</strong> creatures matched. Pictures are matched by creature name or id; case,
-          accents, punctuation and prefixes such as "homebrew--" don't matter.
+          <strong>{planned.length}</strong> creatures matched. {text.intro}
         </p>
         {existing > 0 && (
           <CheckboxField

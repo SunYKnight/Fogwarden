@@ -15,6 +15,8 @@ export const onboardingSchema = z.object({
     dataFolder: z.boolean(),
     mapFromImage: z.boolean(),
     sampleEncounter: z.boolean(),
+    // Absent in settings written before this step existed.
+    monsterPictures: z.boolean().default(false),
   }),
 });
 export type Onboarding = z.infer<typeof onboardingSchema>;
@@ -23,7 +25,7 @@ export type OnboardingStep = keyof Onboarding['done'];
 export function defaultOnboarding(): Onboarding {
   return {
     dismissed: false,
-    done: { dataFolder: false, mapFromImage: false, sampleEncounter: false },
+    done: { dataFolder: false, mapFromImage: false, sampleEncounter: false, monsterPictures: false },
   };
 }
 

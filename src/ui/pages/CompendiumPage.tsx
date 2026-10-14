@@ -4,7 +4,7 @@ import type { LibraryKind } from '@/data/repository';
 import { useAppStore, type CompendiumTab } from '@/state/appStore';
 import { LoadProblems } from '../components/LoadProblems';
 import { PageHeader, Tabs, type TabSpec } from '../kit';
-import { attachPortraitsFromFolder } from '../library/AttachPortraitsDialog';
+import { attachPortraitsFromApi, attachPortraitsFromFolder } from '../library/AttachPortraitsDialog';
 import { openCreatureImport } from '../library/compendiumUi';
 import { CreatureLibrary } from '../library/CreatureLibrary';
 import { ItemLibrary, ReferenceActions, SpellLibrary } from '../library/ItemSpellLibrary';
@@ -37,6 +37,11 @@ function CreatureActions() {
           icon: 'image',
           disabled: !isTauri(),
           run: () => attachPortraitsFromFolder().catch(reportError),
+        },
+        {
+          label: 'Download pictures from the D&D 5e API…',
+          icon: 'download',
+          run: () => attachPortraitsFromApi().catch(reportError),
         },
       ]}
     />
