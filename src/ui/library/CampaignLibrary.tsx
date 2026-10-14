@@ -9,6 +9,7 @@ import { CalendarTab } from '../campaign/CalendarTab';
 import { NameDialog, NotesEditor, Problems, type CampaignTabProps } from '../campaign/campaignUi';
 import { CastTab } from '../campaign/CastTab';
 import { JournalTab } from '../campaign/JournalTab';
+import { PartyTab } from '../campaign/PartyTab';
 import { QuestsTab } from '../campaign/QuestsTab';
 import { AssetImage } from '../components/AssetImage';
 import { Button, confirmDialog, EmptyState, openContextMenu, PageHeader, Section, Tabs, type TabSpec } from '../kit';
@@ -26,17 +27,21 @@ export function openNewCampaign(): void {
   useNewCampaignStore.setState({ open: true });
 }
 
-type CampaignTab = 'encounters' | 'journal' | 'cast' | 'quests' | 'calendar';
+type CampaignTab = 'encounters' | 'party' | 'journal' | 'cast' | 'quests' | 'calendar';
+
+/** Tabs the page renders itself, with the campaign's encounter list or document; the others are `TAB_BODIES`. */
+type PageTab = 'encounters' | 'party';
 
 const CAMPAIGN_TABS: TabSpec<CampaignTab>[] = [
   { id: 'encounters', label: 'Encounters', icon: 'swords' },
+  { id: 'party', label: 'Party', icon: 'shield' },
   { id: 'journal', label: 'Journal', icon: 'journal' },
   { id: 'cast', label: 'People & places', icon: 'users' },
   { id: 'quests', label: 'Quests', icon: 'flag' },
   { id: 'calendar', label: 'Calendar', icon: 'calendar' },
 ];
 
-const TAB_BODIES: Record<Exclude<CampaignTab, 'encounters'>, ComponentType<CampaignTabProps>> = {
+const TAB_BODIES: Record<Exclude<CampaignTab, PageTab>, ComponentType<CampaignTabProps>> = {
   journal: JournalTab,
   cast: CastTab,
   quests: QuestsTab,
@@ -205,7 +210,7 @@ function EncounterRow({ encounter, onChanged }: { encounter: Encounter; onChange
 }
 
 /** One campaign: encounters with status and Play, journal and campaign notes, people and places, quests, calendar. */
-function TabBody({ tab, ...props }: CampaignTabProps & { tab: Exclude<CampaignTab, 'encounters'> }) {
+function TabBody({ tab, ...props }: CampaignTabProps & { tab: Exclude<CampaignTab, PageTab> }) {
   const Body = TAB_BODIES[tab];
   return <Body {...props} />;
 }
@@ -327,6 +332,10 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
               )}
             </Section>
           </>
+        ) : tab === 'party' ? (
+          campaign && (
+            <PartyTab campaign={campaign} onChange={async (next) => setCampaign(await repository.saveCampaign(next))} />
+          )
         ) : (
           <>
             {tab === 'journal' && campaign && (

@@ -122,18 +122,19 @@ async function campaignReferences(storage: Storage, root: string, paths: string[
         assets.push(ref);
         return ref;
       });
-      const encounter = ENCOUNTER_FILE.test(path.slice(root.length + 1))
-        ? encounterFileSchema.parse(migrate('encounter', json))
-        : null;
-      const refs: { kind: BundledKind; id: string }[] = encounter
-        ? [
-            ...(encounter.map ? [{ kind: 'map' as const, id: encounter.map.id }] : []),
-            ...encounter.combatants.flatMap((c) =>
-              c.creature ? [{ kind: 'creature' as const, id: c.creature.id }] : [],
-            ),
-            ...encounter.markers.flatMap((m) => (m.templateId ? [{ kind: 'marker' as const, id: m.templateId }] : [])),
-          ]
-        : [];
+      const relative = path.slice(root.length + 1);
+      const encounter = ENCOUNTER_FILE.test(relative) ? encounterFileSchema.parse(migrate('encounter', json)) : null;
+      const campaign = relative === CAMPAIGN_FILE ? campaignFileSchema.parse(migrate('campaign', json)) : null;
+      const refs: { kind: BundledKind; id: string }[] = [
+        ...(encounter?.map ? [{ kind: 'map' as const, id: encounter.map.id }] : []),
+        ...(encounter?.combatants ?? []).flatMap((c) =>
+          c.creature ? [{ kind: 'creature' as const, id: c.creature.id }] : [],
+        ),
+        ...(encounter?.markers ?? []).flatMap((m) =>
+          m.templateId ? [{ kind: 'marker' as const, id: m.templateId }] : [],
+        ),
+        ...(campaign?.party ?? []).map((m) => ({ kind: 'creature' as const, id: m.creature.id })),
+      ];
       refs.forEach((ref) => docs.set(`${ref.kind}:${ref.id}`, ref));
     } catch (error) {
       throw new Error(`${path}: ${errorMessage(error)}`, { cause: error });
@@ -323,18 +324,23 @@ async function placeDoc(
   }
 }
 
+/** `ref` with the document's new id when the import gave it one. */
+function placedRef(placement: Placement, kind: BundledKind, ref: DocRef): DocRef {
+  const id = placement.renamed[kind].get(ref.id);
+  return id ? { area: 'data', id } : ref;
+}
+
 /** An encounter of the imported campaign, pointing at the campaign's id and the documents' new ids. */
 function placedEncounter(encounter: EncounterFile, placement: Placement): unknown {
   const { renamed } = placement;
-  const rename = (kind: BundledKind, ref: DocRef | null): DocRef | null => {
-    const id = ref && renamed[kind].get(ref.id);
-    return id ? { area: 'data', id } : ref;
-  };
   const placed: EncounterFile = {
     ...encounter,
     campaignId: placement.id,
-    map: rename('map', encounter.map),
-    combatants: encounter.combatants.map((c) => ({ ...c, creature: rename('creature', c.creature) })),
+    map: encounter.map && placedRef(placement, 'map', encounter.map),
+    combatants: encounter.combatants.map((c) => ({
+      ...c,
+      creature: c.creature && placedRef(placement, 'creature', c.creature),
+    })),
     markers: encounter.markers.map((m) => ({
       ...m,
       templateId: m.templateId && (renamed.marker.get(m.templateId) ?? m.templateId),
@@ -349,10 +355,12 @@ function placedCampaignFile(relative: string, bytes: Uint8Array, placement: Plac
   const idsChanged = id !== from || Object.values(renamed).some((m) => m.size > 0);
   const path = `campaigns/${from}/${relative}`;
   const placed =
-    relative === CAMPAIGN_FILE && id !== from
-      ? rewriteJson(path, bytes, (text) =>
-          formatJson({ ...campaignFileSchema.parse(migrate('campaign', JSON.parse(text))), id, name }),
-        )
+    relative === CAMPAIGN_FILE && idsChanged
+      ? rewriteJson(path, bytes, (text) => {
+          const campaign = campaignFileSchema.parse(migrate('campaign', JSON.parse(text)));
+          const party = campaign.party.map((m) => ({ ...m, creature: placedRef(placement, 'creature', m.creature) }));
+          return formatJson({ ...campaign, id, name, party });
+        })
       : ENCOUNTER_FILE.test(relative) && idsChanged
         ? rewriteJson(path, bytes, (text) =>
             formatJson(placedEncounter(encounterFileSchema.parse(migrate('encounter', JSON.parse(text))), placement)),

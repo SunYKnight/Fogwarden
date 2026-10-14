@@ -12,7 +12,7 @@ import { conditionSchema, sensesSchema, sizeSchema } from './creature';
 import { areaMarkerSchema } from './marker';
 
 export const ENCOUNTER_SCHEMA_VERSION = 7;
-export const CAMPAIGN_SCHEMA_VERSION = 2;
+export const CAMPAIGN_SCHEMA_VERSION = 3;
 
 export const sideSchema = z.enum(['player', 'ally', 'enemy', 'neutral']);
 export type Side = z.infer<typeof sideSchema>;
@@ -95,6 +95,11 @@ export const combatantSchema = z.object({
   deathSaves: deathSavesSchema,
   resources: combatResourcesSchema,
   light: carriedLightSchema.nullable(),
+  /**
+   * Party member this combatant was spawned from; absent for everyone else. Such a combatant takes the
+   * member's id as its own, so the player's link, window view and fog key stay the same in every encounter.
+   */
+  partyMemberId: idSchema.optional(),
 });
 export type Combatant = z.infer<typeof combatantSchema>;
 
@@ -175,9 +180,19 @@ export const encounterSchema = z.object({
 });
 export type Encounter = z.infer<typeof encounterSchema>;
 
+/** A player character of the campaign's group: a library creature and who plays it. */
+export const partyMemberSchema = z.object({
+  id: idSchema,
+  creature: docRefSchema,
+  /** Name of the person playing the character; empty while unknown. */
+  player: z.string(),
+});
+export type PartyMember = z.infer<typeof partyMemberSchema>;
+
 export const campaignSchema = z.object({
   ...docHeader('campaign'),
   notes: z.string(),
+  party: z.array(partyMemberSchema),
 });
 export type Campaign = z.infer<typeof campaignSchema>;
 

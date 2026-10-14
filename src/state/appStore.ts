@@ -1,6 +1,6 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { create } from 'zustand';
-import type { DocRef, EncounterLocator, Settings } from '@/core/model';
+import type { CreatureKind, DocRef, EncounterLocator, Settings } from '@/core/model';
 import { BrowserStorage } from '@/data/browserStorage';
 import { migrateDataRoot } from '@/data/layoutMigration';
 import { migrateToPacks } from '@/data/packMigration';
@@ -8,7 +8,7 @@ import { Repository } from '@/data/repository';
 import type { StorageRoots } from '@/data/storage';
 import { pruneHistory, TauriStorage } from '@/data/tauriStorage';
 
-export type CompendiumTab = 'creatures' | 'items' | 'spells' | 'markers' | 'tables';
+export type CompendiumTab = 'creatures' | 'players' | 'items' | 'spells' | 'markers' | 'tables';
 
 export type SettingsSection = 'data' | 'players' | 'graphics' | 'audio' | 'rules' | 'content' | 'about';
 
@@ -20,7 +20,8 @@ export type Route =
   | { page: 'campaigns'; campaignId: string | null }
   | { page: 'play' }
   | { page: 'settings'; section?: SettingsSection }
-  | { page: 'creature-editor'; ref: DocRef | null };
+  /** `ref` null starts a new creature of `kind` (default monster). */
+  | { page: 'creature-editor'; ref: DocRef | null; kind?: CreatureKind };
 
 /** The former Server page; its features live in Settings > Players. */
 type LegacyRoute = { page: 'server' };

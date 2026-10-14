@@ -11,6 +11,7 @@ import {
   type Encounter,
   type Grid,
   type LogEntry,
+  type PartyMember,
   type Senses,
   type Settings,
   type Side,
@@ -137,6 +138,25 @@ export function createPc(options: PcOptions): Combatant {
     notes: '',
     ...freshCombatState(options.level ?? null),
   };
+}
+
+/**
+ * Adds the party members that are not in the encounter yet as player characters and vision sources; returns
+ * the names they got. Each takes its member's id (see `combatantSchema.partyMemberId`).
+ */
+export function addParty(
+  encounter: Encounter,
+  members: readonly { member: PartyMember; creature: Creature }[],
+): string[] {
+  const present = new Set(encounter.combatants.map((c) => c.id));
+  const names: string[] = [];
+  for (const { member, creature } of members.filter((m) => !present.has(m.member.id))) {
+    const takenNames = encounter.combatants.map((c) => c.name);
+    const spawned = spawnCombatant(creature, member.creature, { hpMode: 'average', side: 'player', takenNames });
+    encounter.combatants.push({ ...spawned, id: member.id, partyMemberId: member.id, visionSource: true });
+    names.push(spawned.name);
+  }
+  return names;
 }
 
 export function rollInitiative(dexScore: number, rng?: Rng): DiceRoll {

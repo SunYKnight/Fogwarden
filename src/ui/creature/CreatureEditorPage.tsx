@@ -1,14 +1,24 @@
 import { produce } from 'immer';
 import { useEffect, useState } from 'react';
-import { createCreature, type Creature, type DocRef } from '@/core/model';
+import { createCreature, type Creature, type CreatureKind, type DocRef } from '@/core/model';
 import { MY_CONTENT } from '@/data/packs';
-import { useAppStore } from '@/state/appStore';
+import { useAppStore, type CompendiumTab } from '@/state/appStore';
 import { packName, useLibraryStore } from '@/state/libraryStore';
 import { Button, confirmDialog, EmptyState, PageHeader } from '../kit';
 import { CreatureForm, type Change } from './CreatureEditor';
 import { StatBlock } from './StatBlock';
 
-const COMPENDIUM = { page: 'compendium', tab: 'creatures' } as const;
+const COMPENDIUM_TAB: Record<CreatureKind, CompendiumTab> = {
+  monster: 'creatures',
+  npc: 'creatures',
+  player: 'players',
+};
+
+const NEW_CREATURE: Record<CreatureKind, () => Creature> = {
+  monster: () => createCreature('New creature'),
+  npc: () => ({ ...createCreature('New creature'), kind: 'npc' }),
+  player: () => ({ ...createCreature('New player character'), kind: 'player', level: 1 }),
+};
 
 function confirmDiscard(): Promise<boolean> {
   return confirmDialog({
@@ -35,6 +45,7 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
     return pack === undefined ? null : packName(s.packs, pack);
   });
   const change: Change = (recipe) => setDraft((c) => produce(c, recipe));
+  const compendium = { page: 'compendium', tab: COMPENDIUM_TAB[saved.kind] } as const;
 
   useEffect(() => {
     setLeaveGuard(dirty ? confirmDiscard : null);
@@ -93,7 +104,7 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
   return (
     <div className="page-frame">
       <PageHeader
-        crumbs={[{ label: 'Compendium', route: COMPENDIUM }, { label: draft.name || 'Unnamed creature' }]}
+        crumbs={[{ label: 'Compendium', route: compendium }, { label: draft.name || 'Unnamed creature' }]}
         status={dirty ? 'Unsaved changes' : entry ? 'Saved' : 'Not saved yet'}
       >
         {entry !== undefined && entry.overrides.length > 0 && (
@@ -106,7 +117,7 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
           disabled={(!dirty && entry !== undefined) || busy}
           onClick={() => save().catch(reportError)}
         />
-        <Button icon="close" label="Close" onClick={() => useAppStore.getState().navigate(COMPENDIUM)} />
+        <Button icon="close" label="Close" onClick={() => useAppStore.getState().navigate(compendium)} />
       </PageHeader>
       {shipped && (
         <div className="hint-bar" role="note">
@@ -124,22 +135,23 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
   );
 }
 
-/** Creature editor as a page; `creatureRef` null starts a new creature. */
-export function CreatureEditorPage({ creatureRef }: { creatureRef: DocRef | null }) {
+/** Creature editor as a page; `creatureRef` null starts a new creature of `kind`. */
+export function CreatureEditorPage({ creatureRef, kind }: { creatureRef: DocRef | null; kind: CreatureKind }) {
   const [creature] = useState(() => {
     const entries = useLibraryStore.getState().listings.creature.entries;
     const entry = creatureRef && entries.find((e) => e.ref.id === creatureRef.id);
-    return creatureRef ? entry?.doc : createCreature('New creature');
+    return creatureRef ? entry?.doc : NEW_CREATURE[kind]();
   });
+  const compendium = { page: 'compendium', tab: COMPENDIUM_TAB[kind] } as const;
   return creature ? (
     <CreatureEditorBody creature={creature} />
   ) : (
     <div className="page-frame">
-      <PageHeader crumbs={[{ label: 'Compendium', route: COMPENDIUM }, { label: 'Missing creature' }]} />
+      <PageHeader crumbs={[{ label: 'Compendium', route: compendium }, { label: 'Missing creature' }]} />
       <EmptyState
         icon="alert"
         title="This creature no longer exists."
-        action={<Button label="Back to the compendium" onClick={() => useAppStore.getState().navigate(COMPENDIUM)} />}
+        action={<Button label="Back to the compendium" onClick={() => useAppStore.getState().navigate(compendium)} />}
       />
     </div>
   );

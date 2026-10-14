@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BitSet } from '@/core/binary';
 import { formatCreatureFile } from '@/core/import/creatureFile';
 import {
+  CAMPAIGN_SCHEMA_VERSION,
   createCampaign,
   createCreature,
   createEncounter,
@@ -41,7 +42,8 @@ function oldDataRoot() {
   const map = { ...base, id: 'm1', version: 1, terrain: { ...base.terrain, heights: field.encode() } };
   files.set('library/maps/m1/map.json', json(map));
 
-  files.set('campaigns/c1/campaign.json', json({ ...createCampaign('Saga'), id: 'c1', version: 1, notes: '# Notes' }));
+  const { party: _party, ...saga } = createCampaign('Saga');
+  files.set('campaigns/c1/campaign.json', json({ ...saga, id: 'c1', version: 1, notes: '# Notes' }));
   const size = fogSize(map.grid, 2);
   const bits = new BitSet(size.cellsX * size.cellsY);
   bits.set(3, true);
@@ -85,7 +87,9 @@ describe('migrateDataRoot', () => {
     expect(HeightField.fromMap(loadedMap).data).toEqual(field.data);
 
     const { campaigns } = await repository.listCampaigns();
-    expect(campaigns.map((c) => [c.id, c.version, c.notes])).toEqual([['c1', 2, '# Notes']]);
+    expect(campaigns.map((c) => [c.id, c.version, c.notes, c.party])).toEqual([
+      ['c1', CAMPAIGN_SCHEMA_VERSION, '# Notes', []],
+    ]);
     const loadedEncounter = await repository.loadEncounter('c1', 'e1');
     expect(loadedEncounter.combatants[0]!.token).toEqual(orcRef);
     expect(loadedEncounter.fog).toEqual(encounter.fog);

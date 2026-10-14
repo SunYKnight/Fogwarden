@@ -55,6 +55,8 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
   campaign: [
     // v2: campaign notes moved into notes.md.
     LAYOUT,
+    // v3: the group's player characters; nobody had named them before.
+    (doc) => ({ ...doc, party: [] }),
   ],
   encounter: [
     // v2: explored fog per character; nobody knows who saw what before, so

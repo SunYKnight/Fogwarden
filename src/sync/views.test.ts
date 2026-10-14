@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createEncounter, PARTY_VIEW } from '@/core/model';
-import { createPc } from '@/state/encounterActions';
+import { createCreature, createEncounter, PARTY_VIEW, type Encounter } from '@/core/model';
+import { addParty, createPc } from '@/state/encounterActions';
 import { RELAY_TOKEN_PATTERN } from './relayApi';
 import { linkTable, linkToken, playerViews } from './views';
 
@@ -41,5 +41,26 @@ describe('player links', () => {
       { id: PARTY_VIEW, name: 'Party' },
       { id: thorin.id, name: 'Thorin' },
     ]);
+  });
+
+  it("keeps a party member's view and link the same in every encounter of the campaign", async () => {
+    const thorin = { ...createCreature('Thorin'), kind: 'player' as const };
+    const member = { id: 'm-thorin', creature: { area: 'data', id: thorin.id }, player: 'Anna' } as const;
+    const viewsOf = (name: string) => {
+      const encounter: Encounter = createEncounter(name, 'c1', null);
+      addParty(encounter, [{ member, creature: thorin }]);
+      return { combatant: encounter.combatants[0]!, views: playerViews(encounter) };
+    };
+    const ambush = viewsOf('Ambush');
+    const lair = viewsOf('Lair');
+    expect(ambush.views).toEqual([
+      { id: PARTY_VIEW, name: 'Party' },
+      { id: member.id, name: 'Thorin' },
+    ]);
+    expect(lair.views).toEqual(ambush.views);
+    // Fog, moves and sheets find the view's character by combatant id.
+    expect(ambush.combatant.id).toBe(member.id);
+    expect(lair.combatant.partyMemberId).toBe(member.id);
+    expect(await linkToken(SECRET, lair.views[1]!.id, 0)).toBe(await linkToken(SECRET, ambush.views[1]!.id, 0));
   });
 });

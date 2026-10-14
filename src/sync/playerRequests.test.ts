@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createEncounter, createMap, PARTY_VIEW, type Combatant, type Encounter } from '@/core/model';
+import { createCreature, createEncounter, createMap, PARTY_VIEW, type Combatant, type Encounter } from '@/core/model';
 import { HeightField } from '@/core/terrain/heightfield';
 import { FOG_EXPLORED, FOG_UNKNOWN, FOG_VISIBLE, fogSize, type FogCells } from '@/core/vision/fog';
-import { createPc } from '@/state/encounterActions';
+import { addParty, createPc } from '@/state/encounterActions';
 import { checkPlayerMove, pingAudience } from './playerRequests';
+import { playerViews } from './views';
 
 const map = createMap({ name: 'm', image: null, squaresX: 6, squaresY: 6, pxPerSquare: 50 });
 const terrain = HeightField.fromMap(map);
@@ -64,6 +65,17 @@ describe('checkPlayerMove', () => {
   it('refuses moves in an encounter without a map', () => {
     const check = checkPlayerMove({ ...rules(), map: null, terrain: null }, thorin.id, move(thorin.id));
     expect(check).toEqual({ refused: 'the encounter has no map' });
+  });
+
+  it("lets a party member's view move that member's token", () => {
+    const creature = { ...createCreature('Brom'), kind: 'player' as const };
+    const member = { id: 'm-brom', creature: { area: 'data', id: creature.id }, player: 'Ben' } as const;
+    const { encounter } = rules();
+    addParty(encounter, [{ member, creature }]);
+    const brom = { ...encounter.combatants[2]!, position: at(2.5, 2.5) };
+    const view = playerViews(encounter)[3]!.id;
+    const check = checkPlayerMove(rules({ combatants: [brom] }), view, move(brom.id));
+    expect(check).toMatchObject({ combatant: { name: 'Brom', partyMemberId: member.id }, feet: 10 });
   });
 });
 

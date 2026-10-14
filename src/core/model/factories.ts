@@ -115,7 +115,7 @@ export function createMarkerTemplate(name: string): MarkerTemplate {
 }
 
 export function createCampaign(name: string): Campaign {
-  return { ...header('campaign', CAMPAIGN_SCHEMA_VERSION, name), notes: '' };
+  return { ...header('campaign', CAMPAIGN_SCHEMA_VERSION, name), notes: '', party: [] };
 }
 
 export function createEncounter(name: string, campaignId: string, map: DocRef | null): Encounter {

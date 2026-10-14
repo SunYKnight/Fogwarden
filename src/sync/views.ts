@@ -5,7 +5,7 @@ import { useEncounterStore } from '@/state/encounterStore';
 
 /** What a player screen can show: the party or one player character. */
 export interface PlayerView {
-  /** `PARTY_VIEW` or the player character's combatant id. */
+  /** `PARTY_VIEW` or the player character's combatant id: a party member's id in every encounter. */
   id: string;
   name: string;
 }
@@ -17,7 +17,9 @@ const TOKEN_HEX_CHARS = 32;
 
 /** Party first, then the encounter's player characters in turn order. */
 export function playerViews(encounter: Encounter): PlayerView[] {
-  const pcs = encounter.combatants.filter((c) => c.side === 'player').map(({ id, name }) => ({ id, name }));
+  const pcs = encounter.combatants
+    .filter((c) => c.side === 'player')
+    .map(({ id, partyMemberId, name }) => ({ id: partyMemberId ?? id, name }));
   return [PARTY, ...pcs];
 }
 

@@ -3,7 +3,6 @@ import {
   assetRefSchema,
   campaignFileSchema,
   campaignSchema,
-  CAMPAIGN_SCHEMA_VERSION,
   creatureSchema,
   CREATURE_SCHEMA_VERSION,
   encounterSchema,
@@ -194,12 +193,13 @@ class LayoutMigration {
   async campaign(id: string): Promise<void> {
     const { raw, version } = await this.version(campaignPath(id));
     if (version === 1) {
-      await this.convertCampaign(id, campaignSchema.parse(migrate('campaign', raw, 1)));
+      // The new layout is v2; later steps are pure and run on top of it.
+      const upgraded = migrate('campaign', { ...migrate('campaign', raw, 1), version: 2 });
+      await this.convertCampaign(id, campaignSchema.parse(upgraded));
     }
   }
 
-  private async convertCampaign(id: string, old: Campaign): Promise<void> {
-    const expected = { ...old, version: CAMPAIGN_SCHEMA_VERSION };
+  private async convertCampaign(id: string, expected: Campaign): Promise<void> {
     const notesPath = campaignNotesPath(id);
     await this.storage.writeText(notesPath, expected.notes);
     try {

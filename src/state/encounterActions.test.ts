@@ -2,6 +2,7 @@ import { produce } from 'immer';
 import { describe, expect, it } from 'vitest';
 import { createCreature, createEncounter, createMap, type Combatant, type Encounter } from '@/core/model';
 import {
+  addParty,
   applyDamage,
   applyHealing,
   createPc,
@@ -112,6 +113,30 @@ describe('spawning', () => {
     const rng = seeded(7);
     const hp = spawnCombatant(weak, goblinRef, { hpMode: 'rolled', side: 'enemy', takenNames: [], rng }).hp.max;
     expect(hp).toBe(1);
+  });
+
+  it("adds the party members not in the encounter yet as player characters under their members' ids", () => {
+    const character = (name: string) => ({
+      ...createCreature(name),
+      kind: 'player' as const,
+      level: 3,
+      hitPoints: { average: 24, formula: '' },
+    });
+    const brom = { member: { id: 'm1', creature: { area: 'data', id: 'brom' }, player: 'Anna' } as const };
+    const ivy = { member: { id: 'm2', creature: { area: 'data', id: 'ivy' }, player: '' } as const };
+    const party = [
+      { ...brom, creature: character('Brom') },
+      { ...ivy, creature: character('Ivy') },
+    ];
+    // A hand-entered Brom is no party member, so the party's Brom joins too.
+    const encounter = encounterWith(['Brom']);
+    expect(addParty(encounter, party.slice(0, 1))).toEqual([expect.stringMatching(/^Brom \d\d$/)]);
+    expect(addParty(encounter, party)).toEqual(['Ivy']);
+    expect(addParty(encounter, party)).toEqual([]);
+    expect(encounter.combatants.slice(1)).toMatchObject([
+      { id: 'm1', partyMemberId: 'm1', creature: brom.member.creature, side: 'player', visionSource: true, level: 3 },
+      { id: 'm2', partyMemberId: 'm2', creature: ivy.member.creature, hp: { current: 24, max: 24, temp: 0 } },
+    ]);
   });
 });
 

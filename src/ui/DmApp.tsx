@@ -58,7 +58,11 @@ function Page({ route }: { route: Route }) {
       break;
     case 'creature-editor':
       page = (
-        <CreatureEditorPage key={route.ref ? `${route.ref.area}:${route.ref.id}` : 'new'} creatureRef={route.ref} />
+        <CreatureEditorPage
+          key={route.ref ? `${route.ref.area}:${route.ref.id}` : `new-${route.kind ?? 'monster'}`}
+          creatureRef={route.ref}
+          kind={route.kind ?? 'monster'}
+        />
       );
       break;
   }

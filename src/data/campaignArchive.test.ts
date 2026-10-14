@@ -12,6 +12,7 @@ import {
 } from '@/core/model';
 import { writeZip } from '@/core/zip';
 import { spawnCombatant } from '@/state/encounterActions';
+import { AURORA_PACK } from './auroraImport';
 import { CampaignExistsError, exportCampaign, importCampaign, readCampaignZip } from './campaignArchive';
 import { CampaignFiles, JOURNAL } from './campaignFiles';
 import { MemoryStorage } from './memoryStorage';
@@ -33,9 +34,9 @@ function addSrd(storage: MemoryStorage) {
 }
 
 /**
- * Campaign "red-hand" with a journal entry and the encounter "ambush": on the My content map "cellar" with
- * a picture, a My content creature with a token, an SRD goblin with a My content portrait as token and an
- * area from a My content template.
+ * Campaign "red-hand" with a journal entry, the encounter "ambush" and a party: on the My content map
+ * "cellar" with a picture, a My content creature with a token, an SRD goblin with a My content portrait as
+ * token and an area from a My content template; in the party a My content character and an Aurora one.
  */
 async function sampleCampaign(): Promise<Uint8Array> {
   const { storage, repository } = setup();
@@ -53,7 +54,19 @@ async function sampleCampaign(): Promise<Uint8Array> {
   const boss = await repository.save('creature', { ...createCreature('Cult leader'), id: 'cult-leader' });
   await repository.importCreaturePicture(boss.id, 'token', 'leader.png', new Uint8Array([4, 5]));
   const template = await repository.save('marker', { ...createMarkerTemplate('Fireball'), id: 'fireball' });
-  const campaign = await repository.saveCampaign({ ...createCampaign('Red Hand'), id: 'red-hand', notes: 'Notes' });
+  const thorin = await repository.save('creature', { ...createCreature('Thorin'), id: 'thorin', kind: 'player' });
+  await repository.ensurePack(AURORA_PACK);
+  const elara = await repository.save('creature', { ...createCreature('Elara'), id: 'elara' }, AURORA_PACK.id);
+  const party = [
+    { id: 'p1', creature: { area: 'data', id: thorin.id }, player: 'Anna' },
+    { id: 'p2', creature: { area: 'data', id: elara.id }, player: 'Ben' },
+  ] as const;
+  const campaign = await repository.saveCampaign({
+    ...createCampaign('Red Hand'),
+    id: 'red-hand',
+    notes: 'Notes',
+    party: [...party],
+  });
   const leaderRef = { area: 'data', id: boss.id } as const;
   const leader = spawnCombatant(await repository.load('creature', leaderRef), leaderRef, SPAWN);
   const minion = { ...spawnCombatant(goblin, { area: 'content', id: goblin.id }, SPAWN), token: PORTRAIT };
@@ -90,18 +103,32 @@ describe('campaign archives', () => {
     expect(archive.manifest.campaign).toEqual({ id: 'red-hand', name: 'Red Hand' });
     expect(archive.manifest.library.map((d) => `${d.kind}:${d.id}`).sort()).toEqual([
       'creature:cult-leader',
+      'creature:thorin',
       'map:cellar',
       'marker:fireball',
     ]);
     expect(archive.manifest.assets).toEqual([PORTRAIT.path]);
-    expect(archive.manifest.packs).toEqual([{ id: 'srd', name: 'SRD 5.1' }]);
+    expect(archive.manifest.packs).toEqual([
+      { id: AURORA_PACK.id, name: AURORA_PACK.name },
+      { id: 'srd', name: 'SRD 5.1' },
+    ]);
 
     const { storage, repository } = setup();
     const result = await importCampaign(repository, archive, 'fail');
-    expect(result).toEqual({ id: 'red-hand', name: 'Red Hand', missingPacks: [{ id: 'srd', name: 'SRD 5.1' }] });
+    expect(result).toEqual({
+      id: 'red-hand',
+      name: 'Red Hand',
+      missingPacks: [
+        { id: AURORA_PACK.id, name: AURORA_PACK.name },
+        { id: 'srd', name: 'SRD 5.1' },
+      ],
+    });
 
     const { campaigns } = await repository.listCampaigns();
-    expect(campaigns.map((c) => [c.id, c.name, c.notes])).toEqual([['red-hand', 'Red Hand', 'Notes']]);
+    expect(campaigns.map((c) => [c.id, c.name, c.notes, c.party.map((m) => m.player)])).toEqual([
+      ['red-hand', 'Red Hand', 'Notes', ['Anna', 'Ben']],
+    ]);
+    expect((await repository.load('creature', campaigns[0]!.party[0]!.creature)).name).toBe('Thorin');
     const { encounters, problems } = await repository.listEncounters('red-hand');
     expect(problems).toEqual([]);
     expect(encounters.map((e) => e.name)).toEqual(['Ambush']);
@@ -126,6 +153,8 @@ describe('campaign archives', () => {
     );
     const cellar = await repository.load('map', { area: 'data', id: 'cellar' });
     await repository.save('map', { ...cellar, name: 'Cellar, flooded' });
+    const thorin = await repository.load('creature', { area: 'data', id: 'thorin' });
+    await repository.save('creature', { ...thorin, name: 'Thorin, retired' });
     storage.files.data.set(PORTRAIT.path, new Uint8Array([8]));
 
     const copy = await importCampaign(repository, await readCampaignZip(bytes), 'copy');
@@ -146,6 +175,11 @@ describe('campaign archives', () => {
     expect(encounter!.combatants[0]!.creature!.id).toBe('cult-leader');
     expect((await repository.load('map', { area: 'data', id: 'cellar' })).name).toBe('Cellar, flooded');
     expect((await repository.listCampaigns()).campaigns.map((c) => c.name)).toEqual(['Red Hand', 'Red Hand (2)']);
+    const placed = (await repository.listCampaigns()).campaigns.find((c) => c.id === copy.id)!;
+    const [character, aurora] = placed.party.map((m) => m.creature);
+    expect(character!.id).not.toBe('thorin');
+    expect((await repository.load('creature', character!)).name).toBe('Thorin');
+    expect(aurora).toEqual({ area: 'data', id: 'elara' });
 
     const replaced = await importCampaign(repository, await readCampaignZip(bytes), 'replace');
     expect(replaced.id).toBe('red-hand');
@@ -157,6 +191,7 @@ describe('campaign archives', () => {
     const archive = await readCampaignZip(await sampleCampaign());
     const { storage, repository } = setup();
     addSrd(storage);
+    await repository.ensurePack(AURORA_PACK);
     expect((await importCampaign(repository, archive, 'fail')).missingPacks).toEqual([]);
   });
 

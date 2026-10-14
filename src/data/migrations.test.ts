@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  campaignFileSchema,
+  createCampaign,
   createEncounter,
   defaultGraphicsSettings,
   defaultPlayerLinks,
@@ -198,5 +200,18 @@ describe('update settings migration', () => {
     const { updates: _unused, ...v8 } = defaultSettings();
     const migrated = settingsSchema.parse(migrate('settings', { ...v8, version: 8 }));
     expect(migrated.updates).toEqual({ autoCheck: true, lastCheck: null });
+  });
+});
+
+describe('campaign migration', () => {
+  it('gives v2 campaigns an empty party and keeps the rest', () => {
+    const { notes: _notes, party: _party, ...v2 } = { ...createCampaign('Saga'), id: 'saga', version: 2 };
+    const migrated = campaignFileSchema.parse(migrate('campaign', v2));
+    expect(migrated).toEqual({ ...v2, version: 3, party: [] });
+  });
+
+  it('refuses to read a campaign of the old file layout as a current one', () => {
+    const { party: _party, ...v1 } = { ...createCampaign('Saga'), version: 1 };
+    expect(() => migrate('campaign', v1)).toThrow(/version 1 uses the old file layout/);
   });
 });
