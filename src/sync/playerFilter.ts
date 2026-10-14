@@ -1,7 +1,8 @@
 import type { CreatureIconKey } from '@/core/creatureTypeIcon';
 import type { AssetRef, BattleMap, Combatant, Creature, Encounter } from '@/core/model';
+import { CREATURE_SPACE_FT } from '@/core/rules/space';
 import { creatureResources } from '@/core/rules/resources';
-import { FOG_VISIBLE, fogCellAt, type FogCells } from '@/core/vision/fog';
+import { cellRange, FOG_VISIBLE, type FogCells } from '@/core/vision/fog';
 import { currentCombatant } from '@/state/encounterActions';
 import type { PlayerCombatant, PlayerEncounter, PlayerSheet } from './protocol';
 
@@ -41,9 +42,27 @@ export function healthBand(hp: Combatant['hp']): PlayerCombatant['health'] {
   return hp.current <= 0 ? 'down' : hp.current < third ? 'critical' : hp.current < 2 * third ? 'wounded' : 'healthy';
 }
 
+// Keeps a footprint edge that lies on a cell border from reaching into the
+// neighbouring cell.
+const EDGE_FT = 0.01;
+
+/** Players see a creature when any fog cell of the space it occupies is visible, as 5e line of sight works. */
 function visibleTo(combatant: Combatant, fog: FogCells | null): boolean {
-  const cell = combatant.position && fog ? fogCellAt(combatant.position, fog.size) : -1;
-  return cell >= 0 && fog?.cells[cell] === FOG_VISIBLE;
+  const { position } = combatant;
+  const half = CREATURE_SPACE_FT[combatant.size] / 2 - EDGE_FT;
+  const cells = fog?.cells ?? new Uint8Array();
+  const cellsX = fog?.size.cellsX ?? 0;
+  const range =
+    position && fog
+      ? cellRange(fog.size, position.x - half, position.y - half, position.x + half, position.y + half)
+      : { col0: 0, col1: -1, row0: 0, row1: -1 };
+  let seen = false;
+  for (let row = range.row0; row <= range.row1; row++) {
+    for (let col = range.col0; col <= range.col1; col++) {
+      seen = seen || cells[row * cellsX + col] === FOG_VISIBLE;
+    }
+  }
+  return seen;
 }
 
 function toPlayer(combatant: Combatant, token: AssetRef | null, typeIcon: CreatureIconKey | null): PlayerCombatant {
@@ -82,8 +101,8 @@ const PLAIN_VIEW: PlayerViewOptions = {
 };
 
 /**
- * Encounter as players may see it: hidden combatants never, other non-player combatants only while they
- * stand in a currently visible fog cell; markers the DM shares; door states without closed secret doors.
+ * Encounter as players may see it: hidden combatants never, other non-player combatants only while players
+ * see a fog cell of the space they occupy; markers the DM shares; door states without closed secret doors.
  */
 export function filterEncounterForPlayers(
   encounter: Encounter,

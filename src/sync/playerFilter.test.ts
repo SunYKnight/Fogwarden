@@ -223,6 +223,40 @@ describe('healthBand', () => {
   });
 });
 
+describe('which creatures players see', () => {
+  // 4 x 4 squares at two fog cells per square: 8 x 8 cells of 2.5 ft.
+  const size = fogSize(createMap({ name: 'm', image: null, squaresX: 4, squaresY: 4, pxPerSquare: 50 }).grid, 2);
+  const fogWith = (visible: [number, number][]) => {
+    const cells = new Uint8Array(64);
+    visible.forEach(([col, row]) => (cells[row * 8 + col] = FOG_VISIBLE));
+    return { size, cells };
+  };
+  const shown = (c: Combatant, visible: [number, number][]) =>
+    filterEncounterForPlayers(encounterWith([c]), null, fogWith(visible)).combatants.length === 1;
+
+  it('shows a creature when any cell of its space is visible, whichever side it is seen from', () => {
+    // A medium goblin in square (1, 1) covers cells 2..3 in both directions.
+    const goblin = combatant('goblin', { position: { x: 7.5, y: 7.5, elevationFt: 0 } });
+    expect(shown(goblin, [[2, 2]])).toBe(true);
+    expect(shown(goblin, [[3, 3]])).toBe(true);
+    expect(
+      shown(goblin, [
+        [1, 2],
+        [4, 3],
+        [2, 4],
+      ]),
+    ).toBe(false);
+  });
+
+  it('counts the whole space of large creatures', () => {
+    // A large ogre on the corner between squares (0..1, 0..1) covers cells 0..3.
+    const ogre = combatant('ogre', { size: 'large', position: { x: 5, y: 5, elevationFt: 0 } });
+    expect(shown(ogre, [[0, 0]])).toBe(true);
+    expect(shown(ogre, [[3, 3]])).toBe(true);
+    expect(shown(ogre, [[4, 4]])).toBe(false);
+  });
+});
+
 describe('per-character views', () => {
   // Four squares in a row, one fog cell each; a wall at x = 10 splits them.
   const map: BattleMap = {

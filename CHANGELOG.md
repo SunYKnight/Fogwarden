@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Player view: a creature shows as soon as players see any part of the space it occupies (any visible fog cell of
+  its footprint, the whole 10 ft for Large and up), as 5e line of sight works. Before, only the fog cell under the
+  token's centre counted, which for a Medium creature was the south-east quarter of its square, so a creature
+  approached from the north or west stayed hidden while most of its square was already visible.
 - Play: the turn bar shows how far the current creature is from where its turn began (e.g. "Moved 15 / 30 ft",
   by the diagonal rule in Settings > Rules), and dragging it shows that total next to the drag distance
   (encounter schema v7 stores the turn's starting square). Monsters get a random free number from 00 to 99
