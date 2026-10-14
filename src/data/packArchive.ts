@@ -46,7 +46,7 @@ function remapFile(path: string, bytes: Uint8Array, map: (ref: AssetRef) => Asse
   return remapped === null ? null : encoder.encode(remapped);
 }
 
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((byte, i) => byte === b[i]);
 }
 

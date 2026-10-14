@@ -60,41 +60,52 @@ export interface ConfirmOptions {
   message: string;
   confirmLabel: string;
   danger?: boolean;
+  /** Second way to go ahead, e.g. "Import as copy" next to "Replace"; the primary button. */
+  alternativeLabel?: string;
 }
 
+export type Choice = 'confirm' | 'alternative' | 'cancel';
+
 interface ConfirmState {
-  request: { options: ConfirmOptions; resolve: (ok: boolean) => void } | null;
+  request: { options: ConfirmOptions; resolve: (choice: Choice) => void } | null;
 }
 
 const useConfirmStore = create<ConfirmState>(() => ({ request: null }));
 
-/** In-app replacement for window.confirm; resolves true when the user confirms. */
-export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
-  const { promise, resolve } = Promise.withResolvers<boolean>();
-  useConfirmStore.getState().request?.resolve(false);
+/** Asks with Cancel, the confirming button and, when labelled, an alternative; resolves the one picked. */
+export function choiceDialog(options: ConfirmOptions): Promise<Choice> {
+  const { promise, resolve } = Promise.withResolvers<Choice>();
+  useConfirmStore.getState().request?.resolve('cancel');
   useConfirmStore.setState({ request: { options, resolve } });
   return promise;
 }
 
+/** In-app replacement for window.confirm; resolves true when the user confirms. */
+export async function confirmDialog(options: ConfirmOptions): Promise<boolean> {
+  return (await choiceDialog(options)) === 'confirm';
+}
+
 export function ConfirmHost() {
   const request = useConfirmStore((s) => s.request);
-  const finish = (ok: boolean) => {
-    request?.resolve(ok);
+  const finish = (choice: Choice) => {
+    request?.resolve(choice);
     useConfirmStore.setState({ request: null });
   };
+  const alternative = request?.options.alternativeLabel;
   return request ? (
     <Dialog
       title={request.options.title}
-      onClose={() => finish(false)}
+      onClose={() => finish('cancel')}
       width={440}
       footer={
         <>
-          <Button label="Cancel" onClick={() => finish(false)} />
+          <Button label="Cancel" onClick={() => finish('cancel')} />
           <Button
             label={request.options.confirmLabel}
-            variant={request.options.danger ? 'danger' : 'primary'}
-            onClick={() => finish(true)}
+            variant={request.options.danger ? 'danger' : alternative ? 'default' : 'primary'}
+            onClick={() => finish('confirm')}
           />
+          {alternative && <Button label={alternative} variant="primary" onClick={() => finish('alternative')} />}
         </>
       }
     >

@@ -6,6 +6,7 @@ import type { LibraryEntry } from '@/data/repository';
 import { useAppStore, type Route, type SettingsSection } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLanStore } from '@/state/lanStore';
+import { exportCampaignToZip, pickCampaignZip } from '../campaign/campaignArchiveUi';
 import { rollInitiativeFor, stepTurn } from '../encounter/combatantCommands';
 import { chooseTool, useEncounterUi } from '../encounter/encounterUiStore';
 import { openNewCampaign } from '../library/CampaignLibrary';
@@ -74,6 +75,25 @@ export const ACTION_COMMANDS: Command[] = [
     run: () => useAppStore.getState().navigate({ page: 'settings', section: section.id }),
   })),
   { id: 'create:campaign', label: 'New campaign', group: 'Create', keywords: [], run: openNewCampaign },
+  {
+    id: 'campaign:import',
+    label: 'Import campaign…',
+    group: 'Create',
+    keywords: ['zip', 'archive', 'share', 'transfer'],
+    run: pickCampaignZip,
+  },
+  {
+    id: 'campaign:export',
+    label: 'Export campaign…',
+    group: 'Campaign',
+    keywords: ['zip', 'archive', 'share', 'transfer', 'backup'],
+    available: (c) => c.route.page === 'campaigns' && c.route.campaignId !== null,
+    run: async ({ route }) => {
+      if (route.page === 'campaigns' && route.campaignId) {
+        await exportCampaignToZip(route.campaignId);
+      }
+    },
+  },
   {
     id: 'create:map',
     label: 'New map',

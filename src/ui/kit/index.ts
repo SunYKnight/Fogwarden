@@ -1,5 +1,5 @@
 export { Button, ToolButton, Toolbar, type ButtonVariant } from './Button';
-export { ConfirmHost, Dialog, confirmDialog, type ConfirmOptions } from './Dialog';
+export { ConfirmHost, Dialog, choiceDialog, confirmDialog, type Choice, type ConfirmOptions } from './Dialog';
 export { Icon, ICON_PATHS, type IconName } from './icons';
 export { PageHeader, type Crumb } from './PageHeader';
 export { ContextMenuHost, Popover, openContextMenu, type MenuItem } from './Popover';

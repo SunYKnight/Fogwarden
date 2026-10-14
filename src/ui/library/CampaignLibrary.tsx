@@ -4,13 +4,14 @@ import { createCampaign, nowIso, type Campaign, type Encounter } from '@/core/mo
 import type { LoadProblem } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
+import { exportCampaignToZip, pickCampaignZip } from '../campaign/campaignArchiveUi';
 import { CalendarTab } from '../campaign/CalendarTab';
 import { NameDialog, NotesEditor, Problems, type CampaignTabProps } from '../campaign/campaignUi';
 import { CastTab } from '../campaign/CastTab';
 import { JournalTab } from '../campaign/JournalTab';
 import { QuestsTab } from '../campaign/QuestsTab';
 import { AssetImage } from '../components/AssetImage';
-import { Button, confirmDialog, EmptyState, PageHeader, Section, Tabs, type TabSpec } from '../kit';
+import { Button, confirmDialog, EmptyState, openContextMenu, PageHeader, Section, Tabs, type TabSpec } from '../kit';
 import { openNewEncounter } from './compendiumUi';
 import { encounterStatus, statusLabel } from './encounterStatus';
 
@@ -86,6 +87,7 @@ export function CampaignList() {
   return (
     <div className="page-frame">
       <PageHeader crumbs={[{ label: 'Campaigns' }]}>
+        <Button icon="upload" label="Import campaign…" title="A campaign exported as .zip" onClick={pickCampaignZip} />
         {summaries?.length !== 0 && (
           <Button icon="plus" label="New campaign" variant="primary" onClick={openNewCampaign} />
         )}
@@ -99,6 +101,16 @@ export function CampaignList() {
               type="button"
               className="card campaign-card"
               onClick={() => navigate({ page: 'campaigns', campaignId: campaign.id })}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                openContextMenu(e.clientX, e.clientY, [
+                  {
+                    label: 'Export…',
+                    icon: 'download',
+                    run: () => exportCampaignToZip(campaign.id).catch(reportError),
+                  },
+                ]);
+              }}
             >
               <span className="body">
                 <strong>{campaign.name}</strong>
@@ -257,6 +269,13 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
     <div className="page-frame">
       <PageHeader crumbs={[{ label: 'Campaigns', route: CAMPAIGNS }, { label: campaign?.name ?? '...' }]}>
         <Button icon="edit" label="Rename" disabled={!campaign} onClick={() => setRenaming(true)} />
+        <Button
+          icon="download"
+          label="Export…"
+          title="The campaign with the maps, creatures and pictures of My content it uses, as .zip"
+          disabled={!campaign}
+          onClick={() => exportCampaignToZip(campaignId).catch(reportError)}
+        />
         <Button
           icon="trash"
           label="Delete"

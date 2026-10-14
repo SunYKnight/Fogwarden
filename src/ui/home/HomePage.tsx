@@ -5,6 +5,7 @@ import { useAppStore } from '@/state/appStore';
 import { currentCombatant } from '@/state/encounterActions';
 import { appendToJournal } from '@/state/journalRecorder';
 import { useLibraryStore } from '@/state/libraryStore';
+import { importCampaignZip } from '../campaign/campaignArchiveUi';
 import { Problems, useCampaignDocs } from '../campaign/campaignUi';
 import { AssetImage } from '../components/AssetImage';
 import { Button, EmptyState, Icon, PageHeader } from '../kit';
@@ -17,10 +18,10 @@ import { FirstSteps } from './FirstSteps';
 import { homeCampaignId, recentMaps, type MapEntry } from './recent';
 
 const RECENT_LIMIT = 6;
-const DROP_TYPES = 'image/png,image/jpeg,image/webp,.dd2vtt,.df2vtt,.uvtt,.dam,.txt,.glb';
+const DROP_TYPES = 'image/png,image/jpeg,image/webp,.dd2vtt,.df2vtt,.uvtt,.dam,.txt,.glb,.zip';
 const IMPORT_HINT =
-  'A battlemap image or a .dd2vtt export becomes a new map; a .txt stat block opens the creature import. ' +
-  'Files can also be dropped anywhere on this page.';
+  'A battlemap image or a .dd2vtt export becomes a new map; a .txt stat block opens the creature import; ' +
+  'an exported campaign (.zip) becomes a campaign. Files can also be dropped anywhere on this page.';
 
 /** Battlemap image of a library map, for encounter thumbnails; a user copy shadows the shipped map. */
 function useMapImage(ref: DocRef | null): AssetRef | null {
@@ -224,7 +225,7 @@ function RecentMapCard({ entry }: { entry: MapEntry }) {
   );
 }
 
-/** Routes dropped files: images and map exports become maps, stat blocks go to the creature import. */
+/** Routes dropped files: images and map exports become maps, stat blocks and campaigns are imported. */
 async function handleDrop(files: File[]): Promise<void> {
   const { notify } = useAppStore.getState();
   const file = files[0];
@@ -237,10 +238,16 @@ async function handleDrop(files: File[]): Promise<void> {
     notify(`Drop "${file.name}" together with the .dd2vtt export it belongs to.`, 'info');
   } else if (/\.txt$/i.test(file.name)) {
     openCreatureImport(await file.text());
+  } else if (/\.zip$/i.test(file.name)) {
+    await importCampaignZip(new Uint8Array(await file.arrayBuffer()));
   } else if (/\.glb$/i.test(file.name)) {
     notify('3D models are added in the map editor: open a map and drop the .glb onto the canvas.', 'info');
   } else {
-    notify(`"${file.name}" is not supported here: drop a battlemap image, a map export or a .txt stat block.`, 'info');
+    notify(
+      `"${file.name}" is not supported here: drop a battlemap image, a map export, a .txt stat block or ` +
+        'an exported campaign.',
+      'info',
+    );
   }
 }
 

@@ -109,7 +109,8 @@ async function exportBytes(
   return bytes;
 }
 
-function download(fileName: string, bytes: Uint8Array): void {
+/** Saves `bytes` as a browser download named `fileName`. */
+export function download(fileName: string, bytes: Uint8Array): void {
   const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)]));
   const link = document.createElement('a');
   link.href = url;
