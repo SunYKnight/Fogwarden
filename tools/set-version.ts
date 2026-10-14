@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-// The app version lives in three files; a release changes them together.
+// The app version lives in four files; a release changes them together.
 const root = resolve(import.meta.dirname, '..');
 const version = process.argv[2] ?? '';
 if (!/^\d+\.\d+\.\d+$/.test(version)) {
@@ -21,4 +21,7 @@ function setIn(file: string, pattern: RegExp) {
 setIn('package.json', /^( {2}"version": ")[^"]*(")/m);
 setIn('src-tauri/tauri.conf.json', /^( {2}"version": ")[^"]*(")/m);
 setIn('src-tauri/Cargo.toml', /^(\[package\][^[]*?\nversion = ")[^"]*(")/m);
-console.log(`Version ${version} set in package.json, src-tauri/tauri.conf.json and src-tauri/Cargo.toml`);
+setIn('src-tauri/Cargo.lock', /^(name = "fogwarden"\r?\nversion = ")[^"]*(")/m);
+console.log(
+  `Version ${version} set in package.json, src-tauri/tauri.conf.json, src-tauri/Cargo.toml and src-tauri/Cargo.lock`,
+);

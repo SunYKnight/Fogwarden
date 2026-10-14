@@ -35,7 +35,9 @@ function signingEnv(): NodeJS.ProcessEnv {
 }
 
 const revision = gitRevision(root);
-// Running the CLI's script with node avoids a shell (pnpm is a .cmd on Windows).
+// Checked before the build, which takes minutes.
+const notes = newestChangelogSection(readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), version);
+// Running the CLI's script with node needs no shell (pnpm is a .cmd file).
 execFileSync(process.execPath, [tauriCli, 'build'], { cwd: root, stdio: 'inherit', env: signingEnv() });
 
 // The bundle folder keeps installers of earlier versions and product names.
@@ -49,7 +51,7 @@ copyFileSync(join(bundleDir, installer), join(artifacts, asset));
 copyFileSync(join(bundleDir, `${installer}.sig`), join(artifacts, `${asset}.sig`));
 const manifest = updateManifest({
   version,
-  notes: newestChangelogSection(readFileSync(join(root, 'CHANGELOG.md'), 'utf8')),
+  notes,
   pubDate: new Date(),
   signature: readFileSync(join(bundleDir, `${installer}.sig`), 'utf8'),
   installer: asset,

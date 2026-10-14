@@ -14,8 +14,10 @@
 //! DM how many players watch each view.
 
 use std::collections::{BTreeMap, HashMap};
+use std::ffi::OsStr;
+use std::io::SeekFrom;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -28,6 +30,7 @@ use axum::routing::get;
 use axum::Router;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{watch, Mutex};
@@ -57,6 +60,9 @@ const PLAYER_LABEL_MAX: usize = 40;
 const CHANNEL_CAPACITY: usize = 64;
 // `RELAY_LINK_REVOKED`: the player page stops reconnecting on this code.
 const LINK_REVOKED: u16 = 4001;
+// Graceful shutdown waits for every open response, and a phone that sleeps
+// halfway through a large asset never finishes its own.
+const STOP_GRACE: Duration = Duration::from_secs(2);
 
 /// Player link token → view ('party' or a player character's combatant id).
 type Links = HashMap<String, String>;
@@ -387,7 +393,10 @@ enum PlayerSender {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
 enum PlayerPayload {
-    Hello {},
+    Hello {
+        #[serde(rename = "mapRevision", default, skip_serializing_if = "Option::is_none")]
+        map_revision: Option<u64>,
+    },
     Roll {
         dice: String,
         mode: RollMode,
@@ -431,7 +440,7 @@ impl PlayerPayload {
     // Party screens have no sheet to roll for and no token of their own.
     fn allowed_for(&self, view: &str) -> bool {
         match self {
-            PlayerPayload::Hello {} => true,
+            PlayerPayload::Hello { .. } => true,
             PlayerPayload::Roll { dice, label, .. } => {
                 view != PARTY_VIEW
                     && (1..=PLAYER_DICE_MAX).contains(&dice.len())
@@ -480,29 +489,47 @@ fn asset_mime(extension: &str) -> Option<&'static str> {
 
 // Pictures inside document folders: campaign folders hold fog masks
 // (what each character explored), maps their terrain heightmap. A campaign's
-// handouts are there to be shown to players. The version history holds old
-// copies of all of these.
+// handouts and the assets a campaign import moved aside are there to be shown
+// to players. The version history holds old copies of all of these.
 fn document_data(file: &Path) -> bool {
-    let parts: Vec<_> = file.components().map(|c| c.as_os_str()).collect();
-    let in_campaigns = parts.first().is_some_and(|c| *c == "campaigns");
-    let handout = parts.len() > 3 && parts[2] == "handouts";
-    (in_campaigns && !handout)
-        || file.file_name().is_some_and(|name| name == "terrain.png")
+    let parts: Vec<&OsStr> = file
+        .components()
+        .filter(|c| !matches!(c, Component::CurDir))
+        .map(|c| c.as_os_str())
+        .collect();
+    let named = |index: usize, name: &str| parts.get(index).is_some_and(|part| part.eq_ignore_ascii_case(name));
+    let shown = parts.len() > 3 && (named(2, "handouts") || named(2, "imported-assets"));
+    (named(0, "campaigns") && !shown)
+        || file.file_name().is_some_and(|name| name.eq_ignore_ascii_case("terrain.png"))
         || history::in_history(file)
 }
 
-// Images and models only: documents hold DM secrets (hidden monsters,
-// secret doors, notes) and must never reach a player.
-fn asset_file(root: &Path, path: &str) -> Result<(PathBuf, &'static str), HttpError> {
-    let file = storage::resolve(root, path).map_err(|e| HttpError(StatusCode::BAD_REQUEST, e.to_string()))?;
-    let mime = file
+/// The MIME type of `relative` if it is a picture, model or sound outside the document data.
+fn asset_type(relative: &Path) -> Option<&'static str> {
+    relative
         .extension()
         .and_then(|e| e.to_str())
         .and_then(asset_mime)
-        .filter(|_| !document_data(Path::new(path)))
-        .ok_or_else(|| HttpError(StatusCode::FORBIDDEN, format!("not a map asset: {path}")))?;
+        .filter(|_| !document_data(relative))
+}
+
+// Images and models only: documents hold DM secrets (hidden monsters,
+// secret doors, notes) and must never reach a player. Windows opens other
+// spellings of a path too (any case, trailing dots, 8.3 short names) and
+// links may lead elsewhere, so the opened file's real path decides.
+fn asset_file(root: &Path, path: &str) -> Result<(PathBuf, &'static str), HttpError> {
+    let file = storage::resolve(root, path).map_err(|e| HttpError(StatusCode::BAD_REQUEST, e.to_string()))?;
+    let refused = || HttpError(StatusCode::FORBIDDEN, format!("not a map asset: {path}"));
+    asset_type(Path::new(path)).ok_or_else(refused)?;
     if file.is_file() {
-        Ok((file, mime))
+        let real = std::fs::canonicalize(&file).map_err(internal_error)?;
+        let real_root = std::fs::canonicalize(root).map_err(internal_error)?;
+        let mime = real
+            .strip_prefix(&real_root)
+            .ok()
+            .and_then(asset_type)
+            .ok_or_else(refused)?;
+        Ok((real, mime))
     } else {
         Err(HttpError(StatusCode::NOT_FOUND, format!("no such asset: {path}")))
     }
@@ -551,6 +578,41 @@ async fn bundle_file(Shared(hub): Shared<Arc<Hub>>, UrlPath(file): UrlPath<Strin
     frontend_response(&hub, &format!("{BUNDLE_DIR}/{file}"))
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum ByteRange {
+    Whole,
+    /// First and last byte.
+    Part(u64, u64),
+    Unsatisfiable,
+}
+
+// Safari plays audio and video only with byte ranges. One `bytes=` range is
+// served, several get the whole file; mirrors `byteRange` in
+// `server/relayServer.ts`.
+fn byte_range(header: Option<&str>, size: u64) -> ByteRange {
+    let digits = |text: &str| text.bytes().all(|b| b.is_ascii_digit());
+    // Only overflow fails here: such numbers lie beyond any file.
+    let number = |text: &str| text.parse::<u64>().unwrap_or(u64::MAX);
+    let spec = header
+        .and_then(|value| value.strip_prefix("bytes="))
+        .and_then(|value| value.split_once('-'))
+        .filter(|(from, to)| digits(from) && digits(to) && !(from.is_empty() && to.is_empty()));
+    match (spec, size.checked_sub(1)) {
+        (None, _) => ByteRange::Whole,
+        (Some(_), None) => ByteRange::Unsatisfiable,
+        (Some((from, to)), Some(last)) => {
+            let suffix = from.is_empty();
+            let start = if suffix { size.saturating_sub(number(to)) } else { number(from) };
+            let end = if suffix || to.is_empty() { last } else { number(to).min(last) };
+            if start <= end {
+                ByteRange::Part(start, end)
+            } else {
+                ByteRange::Unsatisfiable
+            }
+        }
+    }
+}
+
 async fn storage_asset(
     Shared(hub): Shared<Arc<Hub>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -566,15 +628,40 @@ async fn storage_asset(
     hub.authorize(&hub.links.borrow(), token, peer)?;
     let root = hub.host.area_root(area).map_err(internal_error)?;
     let (file, mime) = asset_file(&root, &path)?;
-    let stream = ReaderStream::new(tokio::fs::File::open(&file).await.map_err(internal_error)?);
+    let mut opened = tokio::fs::File::open(&file).await.map_err(internal_error)?;
+    let size = opened.metadata().await.map_err(internal_error)?.len();
+    let range = headers.get(header::RANGE).and_then(|value| value.to_str().ok());
+    let (status, body, length, content_range) = match byte_range(range, size) {
+        ByteRange::Whole => (StatusCode::OK, Body::from_stream(ReaderStream::new(opened)), size, None),
+        ByteRange::Part(start, end) => {
+            opened.seek(SeekFrom::Start(start)).await.map_err(internal_error)?;
+            let length = end - start + 1;
+            let stream = ReaderStream::new(opened.take(length));
+            let content_range = format!("bytes {start}-{end}/{size}");
+            (StatusCode::PARTIAL_CONTENT, Body::from_stream(stream), length, Some(content_range))
+        }
+        ByteRange::Unsatisfiable => (
+            StatusCode::RANGE_NOT_SATISFIABLE,
+            Body::empty(),
+            0,
+            Some(format!("bytes */{size}")),
+        ),
+    };
     // CORS: a player page from the Vite dev server (`?ws=`) loads assets
     // cross-origin, and three.js loaders request them in CORS mode.
-    let headers = [
+    let fixed = [
         (header::CONTENT_TYPE, mime),
         (header::CACHE_CONTROL, "no-cache"),
         (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
+        (header::ACCEPT_RANGES, "bytes"),
     ];
-    Ok((headers, Body::from_stream(stream)).into_response())
+    let mut response = (status, fixed, body).into_response();
+    response.headers_mut().insert(header::CONTENT_LENGTH, HeaderValue::from(length));
+    if let Some(content_range) = content_range {
+        let value = HeaderValue::from_str(&content_range).map_err(internal_error)?;
+        response.headers_mut().insert(header::CONTENT_RANGE, value);
+    }
+    Ok(response)
 }
 
 async fn socket(
@@ -764,9 +851,20 @@ impl Server {
         }
     }
 
-    async fn stop(self) -> Result<(), LanError> {
+    async fn stop(mut self) -> Result<(), LanError> {
         self.stop.send_replace(true);
-        Ok(self.task.await??)
+        let finished = match tokio::time::timeout(STOP_GRACE, &mut self.task).await {
+            Ok(finished) => finished,
+            Err(_) => {
+                self.task.abort();
+                self.task.await
+            }
+        };
+        match finished {
+            // Aborting drops the listener, which frees the port.
+            Err(error) if error.is_cancelled() => Ok(()),
+            finished => Ok(finished??),
+        }
     }
 }
 
@@ -990,6 +1088,58 @@ mod tests {
     }
 
     #[test]
+    fn other_spellings_of_document_data_are_refused() {
+        let root = test_root("spellings");
+        let hidden = "campaigns/c1/encounters/e1/fog/hidden.png";
+        std::fs::create_dir_all(root.join("campaigns/c1/encounters/e1/fog")).unwrap();
+        std::fs::write(root.join(hidden), b"SECRET").unwrap();
+        std::fs::write(root.join("library/maps/m1/terrain.png"), b"SECRET").unwrap();
+        assert_eq!(asset_status(&root, &format!("./{hidden}")), StatusCode::FORBIDDEN);
+        assert_eq!(asset_status(&root, &format!("library/./../{hidden}")), StatusCode::BAD_REQUEST);
+        if cfg!(windows) {
+            let spellings = [
+                hidden.replace("campaigns", "Campaigns"),
+                hidden.replace("campaigns", "campaigns."),
+                hidden.replace("campaigns", "campaigns "),
+                hidden.replace("campaigns", "./CAMPAIGNS."),
+                "library/maps/m1/TERRAIN.png".to_owned(),
+                "library/maps/m1/terrain.PNG".to_owned(),
+            ];
+            // Not found is fine too: what matters is that nothing is served.
+            for spelling in spellings {
+                assert_ne!(asset_status(&root, &spelling), StatusCode::OK, "{spelling}");
+            }
+            // Only where the volume creates 8.3 short names.
+            if root.join("CAMPAI~1").is_dir() {
+                let short = hidden.replace("campaigns", "CAMPAI~1");
+                assert_eq!(asset_status(&root, &short), StatusCode::FORBIDDEN);
+            }
+        }
+        let imported = "campaigns/c1/imported-assets/library/creatures/assets/goblin.png";
+        std::fs::create_dir_all(root.join("campaigns/c1/imported-assets/library/creatures/assets")).unwrap();
+        std::fs::write(root.join(imported), b"PNGDATA").unwrap();
+        assert_eq!(asset_status(&root, imported), StatusCode::OK);
+        assert_eq!(asset_status(&root, "campaigns/imported-assets/x.png"), StatusCode::FORBIDDEN);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn byte_ranges_follow_the_relay() {
+        assert_eq!(byte_range(None, 100), ByteRange::Whole);
+        assert_eq!(byte_range(Some("bytes=0-9"), 100), ByteRange::Part(0, 9));
+        assert_eq!(byte_range(Some("bytes=90-"), 100), ByteRange::Part(90, 99));
+        assert_eq!(byte_range(Some("bytes=-10"), 100), ByteRange::Part(90, 99));
+        assert_eq!(byte_range(Some("bytes=-500"), 100), ByteRange::Part(0, 99));
+        assert_eq!(byte_range(Some("bytes=50-5000"), 100), ByteRange::Part(50, 99));
+        assert_eq!(byte_range(Some("bytes=100-"), 100), ByteRange::Unsatisfiable);
+        assert_eq!(byte_range(Some("bytes=9-5"), 100), ByteRange::Unsatisfiable);
+        assert_eq!(byte_range(Some("bytes=0-0"), 0), ByteRange::Unsatisfiable);
+        assert_eq!(byte_range(Some("bytes=0-1,5-6"), 100), ByteRange::Whole);
+        assert_eq!(byte_range(Some("bytes=-"), 100), ByteRange::Whole);
+        assert_eq!(byte_range(Some("items=0-1"), 100), ByteRange::Whole);
+    }
+
+    #[test]
     fn pack_pictures_and_models_are_served_but_never_their_documents() {
         let root = test_root("packs");
         let pack = root.join("packs/mm");
@@ -1030,7 +1180,10 @@ mod tests {
             format!("A\n{HELLO}")
         );
         let roll = r#"{"type":"roll","dice":"1d20 + 5","mode":"advantage","label":"Hit"}"#;
-        let expected_roll = r#"{"protocol":1,"from":"player","payload":{"type":"roll","dice":"1d20 + 5","mode":"advantage","label":"Hit"}}"#;
+        let expected_roll = concat!(
+            r#"{"protocol":1,"from":"player","payload":"#,
+            r#"{"type":"roll","dice":"1d20 + 5","mode":"advantage","label":"Hit"}}"#
+        );
         assert_eq!(rebuilt("A", roll), Some(format!("A\n{expected_roll}")));
         let point = r#"{"type":"point","at":{"x":1.5,"y":2.0,"elevationFt":0.0}}"#;
         assert!(rebuilt("party", point).is_some());
@@ -1053,6 +1206,11 @@ mod tests {
         assert!(rebuilt("A", r#"{"type":"point","at":{"x":1e9,"y":2,"elevationFt":0}}"#).is_none());
         assert!(rebuilt("A", r#"{"type":"point","at":{"x":1,"y":2,"elevationFt":0},"by":"DM"}"#).is_none());
         assert!(rebuilt("A", r#"{"type":"hello","x":1}"#).is_none());
+        let revision = r#"{"type":"hello","mapRevision":1760000000123}"#;
+        let with_revision = HELLO.replace(r#"{"type":"hello"}"#, revision);
+        assert_eq!(rebuilt("party", revision), Some(format!("party\n{with_revision}")));
+        assert!(rebuilt("A", r#"{"type":"hello","mapRevision":-1}"#).is_none());
+        assert!(rebuilt("A", r#"{"type":"hello","mapRevision":"1"}"#).is_none());
         assert!(rebuilt("A", r#"{"type":"map","map":null}"#).is_none());
         let dm = r#"{"protocol":1,"from":"dm","payload":{"type":"hello"}}"#;
         assert!(rebuild_player_message("A", dm).is_none());
@@ -1153,6 +1311,14 @@ mod tests {
         let served = get(format!("{asset}?token={token}")).await;
         assert!(served.starts_with("HTTP/1.1 200"));
         assert!(served.contains("PNGDATA"));
+        assert!(served.contains("accept-ranges: bytes"));
+        let ranged = http_get(port, &format!("{asset}?token={token}"), "Range: bytes=1-3\r\n").await;
+        assert!(ranged.starts_with("HTTP/1.1 206"));
+        assert!(ranged.contains("content-range: bytes 1-3/7"));
+        assert!(ranged.ends_with("\r\n\r\nNGD"));
+        let beyond = http_get(port, &format!("{asset}?token={token}"), "Range: bytes=7-\r\n").await;
+        assert!(beyond.starts_with("HTTP/1.1 416"));
+        assert!(beyond.contains("content-range: bytes */7"));
         assert!(get(asset.to_owned()).await.starts_with("HTTP/1.1 401"));
         assert!(get(format!("{asset}?token=wrong")).await.starts_with("HTTP/1.1 401"));
         let json = format!("/asset/data/library/maps/m1/map.json?token={token}");
@@ -1197,6 +1363,30 @@ mod tests {
 
         server.stop().await.unwrap();
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn stops_while_a_player_stalls_a_download() {
+        use tokio::io::AsyncWriteExt;
+        let root = test_root("stall");
+        let token = "p".repeat(32);
+        // Far more than the socket buffers hold, so the response cannot end.
+        std::fs::write(root.join("library/maps/m1/assets/big.mp4"), vec![0u8; 64 << 20]).unwrap();
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+        let server = Server::spawn(Box::new(TestHost(root)), listener, links(&[(&token, "party")])).unwrap();
+        let port = server.info().port;
+        let mut stalled = tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port)).await.unwrap();
+        let path = format!("/asset/data/library/maps/m1/assets/big.mp4?token={token}");
+        let request = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+        stalled.write_all(request.as_bytes()).await.unwrap();
+        let mut status = [0u8; 12];
+        stalled.read_exact(&mut status).await.unwrap();
+        assert_eq!(&status, b"HTTP/1.1 200");
+        let stopped = tokio::time::timeout(STOP_GRACE * 3, server.stop()).await;
+        assert!(matches!(stopped, Ok(Ok(()))));
+        TcpListener::bind((Ipv4Addr::LOCALHOST, port)).await.unwrap();
+        // The stalled connection may still hold the file open on Windows, so
+        // the next run's test_root removes the folder.
     }
 
     #[tokio::test]

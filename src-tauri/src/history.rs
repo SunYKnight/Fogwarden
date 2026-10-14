@@ -124,6 +124,39 @@ pub(crate) fn files_under(dir: &Path) -> Result<Vec<PathBuf>, StorageError> {
     Ok(files)
 }
 
+/// Copies the history folder `from` to `to`. Dated files become hard links to the copied content store again;
+/// plain copies would cost the full size for every day a version was kept.
+pub(crate) fn copy_history(from: &Path, to: &Path) -> Result<(), StorageError> {
+    let objects = from.join(OBJECTS_DIR);
+    let mut copied: HashMap<FileKey, PathBuf> = HashMap::new();
+    if objects.is_dir() {
+        fs::create_dir_all(to.join(OBJECTS_DIR))?;
+        for name in files_under(&objects)?.into_iter().filter(|p| !is_temp(p)) {
+            let object = to.join(OBJECTS_DIR).join(&name);
+            fs::copy(objects.join(&name), &object)?;
+            copied.insert(file_key(&objects.join(&name))?, object);
+        }
+    }
+    let dated = files_under(from)?
+        .into_iter()
+        .filter(|p| !p.starts_with(OBJECTS_DIR) && !is_temp(p));
+    for file in dated {
+        let source = from.join(&file);
+        let target = to.join(&file);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        // Without hard link support on the target the copy is the fallback.
+        let linked = copied
+            .get(&file_key(&source)?)
+            .is_some_and(|object| fs::hard_link(object, &target).is_ok());
+        if !linked {
+            fs::copy(&source, &target)?;
+        }
+    }
+    Ok(())
+}
+
 /// Stores `bytes` once in the content store and links `copy` to it.
 fn store(root: &Path, bytes: &[u8], copy: &Path) -> Result<(), StorageError> {
     let object = root.join(HISTORY_DIR).join(OBJECTS_DIR).join(sha256_hex(bytes));
@@ -335,19 +368,19 @@ fn restore(root: &Path, files: &[RestoreFile], today: &str, marker: &str) -> Res
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn history_list(state: State<'_, StorageState>) -> Result<HistoryListing, StorageError> {
     listing(&state.root(Area::Data)?)
 }
 
 /// Applies the age and size budget; the app calls it on every start and data root switch.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn history_prune(state: State<'_, StorageState>) -> Result<(), StorageError> {
     prune(&state.root(Area::Data)?, Local::now().date_naive(), KEEP_DAYS, MAX_BYTES)
 }
 
 /// Removes the versions kept more than `older_than_days` days ago.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn history_clean(state: State<'_, StorageState>, older_than_days: u64) -> Result<(), StorageError> {
     clean(
         &state.root(Area::Data)?,
@@ -355,14 +388,14 @@ pub fn history_clean(state: State<'_, StorageState>, older_than_days: u64) -> Re
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn history_restore(state: State<'_, StorageState>, files: Vec<RestoreFile>) -> Result<(), StorageError> {
     let marker = format!("{}{RESTORE_SUFFIX}", Local::now().format("%Y-%m-%d %H-%M-%S"));
     restore(&state.root(Area::Data)?, &files, &today(), &marker)
 }
 
 /// Shows the history folder in the OS file manager.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn history_open_folder(state: State<'_, StorageState>) -> Result<(), StorageError> {
     let dir = state.root(Area::Data)?.join(HISTORY_DIR);
     fs::create_dir_all(&dir)?;
@@ -420,6 +453,26 @@ mod tests {
         keep_removed(&root, Path::new("packs/p.importing"), "2026-10-12").unwrap();
         assert_eq!(kept(&root, "2026-10-12", staged), None);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn copies_keep_identical_versions_linked() {
+        let root = test_root("copy");
+        let image = "library/maps/m1/assets/map.png";
+        let big = vec![7u8; 100_000];
+        write(&root, image, &big, "2026-10-10");
+        write(&root, image, b"new", "2026-10-10");
+        write(&root, image, &big, "2026-10-11");
+        write(&root, image, b"new", "2026-10-12");
+        let target = test_root("copy-target");
+        copy_history(&root.join(HISTORY_DIR), &target.join(HISTORY_DIR)).unwrap();
+        assert_eq!(kept(&target, "2026-10-12", image), Some(big.clone()));
+        assert_eq!(kept(&target, "2026-10-11", image), Some(b"new".to_vec()));
+        let key = |day: &str| file_key(&target.join(HISTORY_DIR).join(day).join(image)).unwrap();
+        assert_eq!(key("2026-10-10"), key("2026-10-12"));
+        assert_eq!(listing(&target).unwrap().bytes, listing(&root).unwrap().bytes);
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(target).unwrap();
     }
 
     #[test]

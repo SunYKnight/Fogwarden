@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-storage-list-folder"
+description = "Enables the storage_list_folder command without any pre-configured scope."
+commands.allow = ["storage_list_folder"]
+
+[[permission]]
+identifier = "deny-storage-list-folder"
+description = "Denies the storage_list_folder command without any pre-configured scope."
+commands.deny = ["storage_list_folder"]

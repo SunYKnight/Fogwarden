@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-history-clean"
+description = "Enables the history_clean command without any pre-configured scope."
+commands.allow = ["history_clean"]
+
+[[permission]]
+identifier = "deny-history-clean"
+description = "Denies the history_clean command without any pre-configured scope."
+commands.deny = ["history_clean"]

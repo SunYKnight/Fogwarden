@@ -1,17 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "DM and player windows",
+  "description": "DM and player windows: events, closing the own window, reading the storage areas",
   "windows": ["dm", "player"],
   "permissions": [
     "core:default",
-    "core:window:allow-available-monitors",
-    "core:window:allow-set-position",
-    "core:window:allow-set-size",
-    "core:window:allow-set-fullscreen",
-    "core:window:allow-set-focus",
     "core:window:allow-close",
-    "core:window:allow-show",
-    "core:webview:allow-create-webview-window"
+    "allow-storage-roots",
+    "allow-storage-read-text",
+    "allow-storage-read-bytes",
+    "allow-storage-list",
+    "allow-storage-exists",
+    "allow-storage-asset-path"
   ]
 }

@@ -24,14 +24,19 @@ export function releaseAssetUrl(version: string, fileName: string): string {
   return `${RELEASE_REPOSITORY}/releases/download/v${version}/${encodeURIComponent(fileName)}`;
 }
 
-/** Body of the first `## ` section of a changelog, without its heading. */
-export function newestChangelogSection(changelog: string): string {
-  const sections = changelog.replace(/\r\n/g, '\n').split(/^## .*$/m);
-  const newest = sections[1];
-  if (newest === undefined) {
+/**
+ * Body of the first `## ` section of a changelog, without its heading. The heading must name `version`, so an
+ * `Unreleased` section never ships as release notes.
+ */
+export function newestChangelogSection(changelog: string, version: string): string {
+  const [, heading, body] = changelog.replace(/\r\n/g, '\n').split(/^## (.*)$/m);
+  if (heading === undefined || body === undefined) {
     throw new Error('The changelog has no "## " section for the release notes');
   }
-  return newest.trim();
+  if (heading.trim() !== version) {
+    throw new Error(`The newest changelog section is "## ${heading}"; rename it to "## ${version}" first`);
+  }
+  return body.trim();
 }
 
 export function updateManifest(input: ManifestInput): UpdateManifest {

@@ -45,16 +45,17 @@ for (const cellsPerSquare of [2, 4, 8]) {
   const size = fogSize(map.grid, cellsPerSquare);
   const count = size.cellsX * size.cellsY;
   const visible = computeVisibility(map, terrain, state);
+  const explored = new Map<string, BitSet>();
   const sources: FogSources = {
     size,
     visible,
-    explored: new Map(),
+    explored,
     revealed: new BitSet(count),
     hidden: new BitSet(count),
   };
   const worker = median(() => computeVisibility(map, terrain, state));
   const party = median(() => {
-    exploreBySource(sources.explored as Map<string, BitSet>, visible, sources.hidden);
+    exploreBySource(explored, visible, sources.hidden);
     viewFog(sources, pcs);
   });
   const character = median(() => {

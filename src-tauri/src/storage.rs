@@ -1,15 +1,20 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 use crate::history;
 
 const BOOTSTRAP_FILE: &str = "bootstrap.json";
 const PATH_HEADER: &str = "x-storage-path";
+
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
 pub struct StorageError(pub(crate) String);
@@ -110,12 +115,39 @@ fn content_root(app: &AppHandle) -> Result<PathBuf, StorageError> {
     Ok(root)
 }
 
-fn load_data_root(app: &AppHandle, bootstrap_path: &Path) -> Result<PathBuf, StorageError> {
-    let root = if bootstrap_path.is_file() {
-        let bootstrap: Bootstrap = serde_json::from_str(&fs::read_to_string(bootstrap_path)?)?;
-        bootstrap.data_root
+/// The data root `bootstrap.json` names; it must exist, as switching to it created it.
+fn configured_root(bootstrap_path: &Path) -> Result<PathBuf, StorageError> {
+    let bootstrap: Bootstrap = serde_json::from_str(&fs::read_to_string(bootstrap_path)?)?;
+    if bootstrap.data_root.is_dir() {
+        Ok(bootstrap.data_root)
     } else {
-        app.path().app_data_dir()?
+        Err(StorageError(format!("the folder {} does not exist", bootstrap.data_root.display())))
+    }
+}
+
+// An unplugged drive or a broken bootstrap file must not keep the app from
+// starting. The file stays, so the next start tries the chosen folder again.
+fn load_data_root(app: &AppHandle, bootstrap_path: &Path) -> Result<PathBuf, StorageError> {
+    let fallback = app.path().app_data_dir()?;
+    let root = if bootstrap_path.is_file() {
+        configured_root(bootstrap_path).unwrap_or_else(|error| {
+            let text = format!(
+                "Fogwarden cannot open the data folder chosen in {}: {error}.\n\n\
+                 This session uses the default data folder {}. Connect the drive and restart, \
+                 or choose a data folder under Settings.",
+                bootstrap_path.display(),
+                fallback.display()
+            );
+            eprintln!("{text}");
+            app.dialog()
+                .message(text)
+                .title("Data folder unavailable")
+                .kind(MessageDialogKind::Warning)
+                .show(|_| {});
+            fallback.clone()
+        })
+    } else {
+        fallback
     };
     Ok(root)
 }
@@ -147,7 +179,9 @@ pub(crate) fn resolve(root: &Path, relative: &str) -> Result<PathBuf, StorageErr
     }
 }
 
-// Temp file + rename keeps the old file intact if the app dies mid-write.
+// Temp file + rename keeps the old file intact if the app dies mid-write;
+// the flush before the rename keeps a power loss from leaving an empty file.
+// Commands run concurrently, so every write gets its own temp file.
 pub(crate) fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), StorageError> {
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
@@ -156,11 +190,18 @@ pub(crate) fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), StorageErr
         .file_name()
         .ok_or_else(|| StorageError(format!("not a file path: {}", target.display())))?
         .to_os_string();
-    tmp_name.push(".tmp");
+    let unique = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    tmp_name.push(format!(".{}-{unique}.tmp", std::process::id()));
     let tmp = target.with_file_name(tmp_name);
-    fs::write(&tmp, bytes)?;
-    fs::rename(&tmp, target)?;
-    Ok(())
+    let written = fs::File::create(&tmp).and_then(|mut file| {
+        file.write_all(bytes)?;
+        file.sync_all()
+    });
+    let renamed = written.and_then(|()| fs::rename(&tmp, target));
+    if renamed.is_err() && tmp.exists() {
+        fs::remove_file(&tmp)?;
+    }
+    Ok(renamed?)
 }
 
 /// A data area path the app may write or remove: anything but the version history.
@@ -196,23 +237,28 @@ fn percent_decode(value: &str) -> Result<String, StorageError> {
     String::from_utf8(out).map_err(|e| StorageError(e.to_string()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_roots(state: State<'_, StorageState>) -> Result<Roots, StorageError> {
     state.roots()
 }
 
 // Assets of the new root must load at once; the bootstrap file keeps the
-// choice across restarts.
+// choice across restarts. A relative path would depend on the working
+// directory the app was started from.
 fn switch_data_root(app: &AppHandle, state: &StorageState, root: PathBuf) -> Result<Roots, StorageError> {
-    fs::create_dir_all(&root)?;
-    app.asset_protocol_scope().allow_directory(&root, true)?;
-    let bootstrap = serde_json::to_string_pretty(&Bootstrap { data_root: root.clone() })?;
-    write_atomic(&state.bootstrap_path, bootstrap.as_bytes())?;
-    *state.data_root.lock().map_err(|e| StorageError(e.to_string()))? = root;
-    state.roots()
+    if root.is_absolute() {
+        fs::create_dir_all(&root)?;
+        app.asset_protocol_scope().allow_directory(&root, true)?;
+        let bootstrap = serde_json::to_string_pretty(&Bootstrap { data_root: root.clone() })?;
+        write_atomic(&state.bootstrap_path, bootstrap.as_bytes())?;
+        *state.data_root.lock().map_err(|e| StorageError(e.to_string()))? = root;
+        state.roots()
+    } else {
+        Err(StorageError(format!("choose an absolute folder path: {}", root.display())))
+    }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_set_data_root(
     app: AppHandle,
     state: State<'_, StorageState>,
@@ -235,23 +281,23 @@ pub(crate) fn open_in_file_manager(dir: &Path) -> Result<(), StorageError> {
 }
 
 /// Shows the data root in the OS file manager.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_open_data_root(state: State<'_, StorageState>) -> Result<(), StorageError> {
     open_in_file_manager(&state.root(Area::Data)?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_read_text(state: State<'_, StorageState>, area: Area, path: String) -> Result<String, StorageError> {
     Ok(fs::read_to_string(resolve(&state.root(area)?, &path)?)?)
 }
 
 // A raw response keeps PNG bytes out of JSON number arrays.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_read_bytes(state: State<'_, StorageState>, area: Area, path: String) -> Result<Response, StorageError> {
     Ok(Response::new(fs::read(resolve(&state.root(area)?, &path)?)?))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_write_text(state: State<'_, StorageState>, path: String, text: String) -> Result<(), StorageError> {
     write_data(&state.root(Area::Data)?, &path, text.as_bytes())
 }
@@ -273,7 +319,7 @@ fn raw_body<'a>(request: &'a Request<'_>) -> Result<&'a [u8], StorageError> {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_write_bytes(state: State<'_, StorageState>, request: Request<'_>) -> Result<(), StorageError> {
     write_data(&state.root(Area::Data)?, &header_path(&request)?, raw_body(&request)?)
 }
@@ -338,7 +384,7 @@ fn export_target(path: &str, protected: &[PathBuf]) -> Result<PathBuf, StorageEr
 }
 
 /// Writes a raw body to a file the user picked in a save dialog (absolute path in the header).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_write_file_bytes(state: State<'_, StorageState>, request: Request<'_>) -> Result<(), StorageError> {
     let mut protected = system_dirs();
     protected.push(state.root(Area::Data)?);
@@ -374,13 +420,13 @@ fn list_area(root: &Path, path: &str) -> Result<Vec<Entry>, StorageError> {
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_list(state: State<'_, StorageState>, area: Area, path: String) -> Result<Vec<Entry>, StorageError> {
     list_area(&state.root(area)?, &path)
 }
 
-/// Entries of a folder the user picked in a native dialog, outside the storage roots.
-#[tauri::command]
+/// Entries of a folder the user picked in a native dialog (absolute path).
+#[tauri::command(async)]
 pub fn storage_list_folder(path: String) -> Result<Vec<Entry>, StorageError> {
     let dir = PathBuf::from(&path);
     if dir.is_absolute() && dir.is_dir() {
@@ -390,7 +436,7 @@ pub fn storage_list_folder(path: String) -> Result<Vec<Entry>, StorageError> {
     }
 }
 
-/// Copies the file `from`, an absolute path outside the storage roots, to `to` inside `root`.
+/// Copies the file `from`, an absolute path, to `to` inside `root`.
 fn import_file(root: &Path, from: &Path, to: &str) -> Result<(), StorageError> {
     if from.is_absolute() && from.is_file() {
         write_data(root, to, &fs::read(from)?)
@@ -400,12 +446,12 @@ fn import_file(root: &Path, from: &Path, to: &str) -> Result<(), StorageError> {
 }
 
 /// Copies a file the user picked (absolute path) into the data area.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_import_file(state: State<'_, StorageState>, from: String, to: String) -> Result<(), StorageError> {
     import_file(&state.root(Area::Data)?, Path::new(&from), &to)
 }
 
-/// A file the user picked (absolute path) outside the storage roots.
+/// A file the user picked (absolute path).
 fn picked_file(path: &str) -> Result<PathBuf, StorageError> {
     let file = PathBuf::from(path);
     if file.is_absolute() && file.is_file() {
@@ -415,31 +461,31 @@ fn picked_file(path: &str) -> Result<PathBuf, StorageError> {
     }
 }
 
-/// Text of a file the user picked (absolute path) outside the storage roots.
-#[tauri::command]
+/// Text of a file the user picked (absolute path).
+#[tauri::command(async)]
 pub fn storage_read_file_text(path: String) -> Result<String, StorageError> {
     Ok(fs::read_to_string(picked_file(&path)?)?)
 }
 
 /// Whether the absolute path `path` names an existing file, for finding other programs' data.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_is_file(path: String) -> bool {
     let file = PathBuf::from(&path);
     file.is_absolute() && file.is_file()
 }
 
-/// Bytes of a file the user picked (absolute path) outside the storage roots, as a raw response.
-#[tauri::command]
+/// Bytes of a file the user picked (absolute path), as a raw response.
+#[tauri::command(async)]
 pub fn storage_read_file_bytes(path: String) -> Result<Response, StorageError> {
     Ok(Response::new(fs::read(picked_file(&path)?)?))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_exists(state: State<'_, StorageState>, area: Area, path: String) -> Result<bool, StorageError> {
     Ok(resolve(&state.root(area)?, &path)?.exists())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_remove(state: State<'_, StorageState>, path: String) -> Result<(), StorageError> {
     let root = state.root(Area::Data)?;
     let target = resolve_writable(&root, &path)?;
@@ -458,7 +504,7 @@ pub fn storage_remove(state: State<'_, StorageState>, path: String) -> Result<()
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_asset_path(state: State<'_, StorageState>, area: Area, path: String) -> Result<String, StorageError> {
     Ok(resolve(&state.root(area)?, &path)?.to_string_lossy().into_owned())
 }
@@ -480,7 +526,7 @@ fn copy_recursive(from: &Path, to: &Path) -> Result<(), StorageError> {
 }
 
 /// Copies a file or folder from either area into the data area, file by file like any write.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_copy(state: State<'_, StorageState>, area: Area, from: String, to: String) -> Result<(), StorageError> {
     let source = resolve(&state.root(area)?, &from)?;
     let root = state.root(Area::Data)?;
@@ -512,13 +558,22 @@ fn copy_data_root(from: &Path, to: &Path) -> Result<(), StorageError> {
         } else if fs::read_dir(&target)?.next().is_some() {
             Err(StorageError(format!("the new folder is not empty: {}", to.display())))
         } else {
-            copy_recursive(&source, &target)
+            for item in fs::read_dir(&source)? {
+                let item = item?;
+                let to = target.join(item.file_name());
+                if item.file_type()?.is_dir() && history::in_history(Path::new(&item.file_name())) {
+                    history::copy_history(&item.path(), &to)?;
+                } else {
+                    copy_recursive(&item.path(), &to)?;
+                }
+            }
+            Ok(())
         }
     }
 }
 
 /// Copies the data root into the empty folder `path` and makes that folder the data root.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_copy_data_root(
     app: AppHandle,
     state: State<'_, StorageState>,
@@ -533,7 +588,7 @@ pub fn storage_copy_data_root(
 mod tests {
     use super::*;
 
-    // Inside the project's ignored data-local/ so test files never leave the repo.
+    // In the project's ignored data-local/, so test files never leave the repo.
     fn test_dir(name: &str) -> PathBuf {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")
@@ -567,10 +622,39 @@ mod tests {
         let dir = test_dir("copy");
         let target = dir.join("copy");
         fs::create_dir_all(&target).unwrap();
+        write_data(&dir.join("root"), "settings.json", b"{\"a\": 1}").unwrap();
         copy_data_root(&dir.join("root"), &target).unwrap();
-        assert_eq!(fs::read(target.join("settings.json")).unwrap(), b"{}");
+        assert_eq!(fs::read(target.join("settings.json")).unwrap(), b"{\"a\": 1}");
         assert_eq!(fs::read(target.join("library/maps/m1/assets/map.png")).unwrap(), b"PNGDATA");
+        let kept = Path::new(history::HISTORY_DIR).join(history::today()).join("settings.json");
+        assert_eq!(fs::read(target.join(kept)).unwrap(), b"{}");
         assert!(dir.join("root/settings.json").is_file());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn writes_leave_no_temp_files() {
+        let dir = test_dir("atomic");
+        let target = dir.join("root/library/maps/m1/map.json");
+        write_atomic(&target, b"one").unwrap();
+        write_atomic(&target, b"two").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"two");
+        let names: Vec<_> = list_dir(&dir.join("root/library/maps/m1")).unwrap().into_iter().map(|e| e.name).collect();
+        assert_eq!(names, ["assets", "map.json"]);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn falls_back_unless_the_bootstrap_names_an_existing_folder() {
+        let dir = test_dir("bootstrap");
+        let bootstrap = dir.join("bootstrap.json");
+        let named = |root: &Path| serde_json::json!({ "dataRoot": root }).to_string();
+        fs::write(&bootstrap, named(&dir.join("root"))).unwrap();
+        assert_eq!(configured_root(&bootstrap).unwrap(), dir.join("root"));
+        fs::write(&bootstrap, named(&dir.join("unplugged"))).unwrap();
+        assert!(configured_root(&bootstrap).is_err());
+        fs::write(&bootstrap, "{ broken").unwrap();
+        assert!(configured_root(&bootstrap).is_err());
         fs::remove_dir_all(dir).unwrap();
     }
 

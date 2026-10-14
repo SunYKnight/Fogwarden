@@ -22,7 +22,7 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: '@', replacement: resolve(root, 'src') },
-      // See src/core/ndarrayStub.ts: they evaluate code at import, which the CSP blocks.
+      // See src/core/ndarrayStub.ts: their import runs code the CSP blocks.
       { find: /^ndarray(-pixels|-lanczos)?$/, replacement: resolve(root, 'src/core/ndarrayStub.ts') },
     ],
   },
@@ -37,7 +37,9 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: true,
+    // The release exe embeds dist/ and the LAN server hands its bundle out
+    // without a token, so no source maps.
+    sourcemap: false,
     rollupOptions: {
       input: {
         dm: resolve(root, 'index.html'),

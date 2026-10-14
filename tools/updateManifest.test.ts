@@ -5,11 +5,17 @@ const CHANGELOG = '# Changelog\r\n\r\n## 0.2.0\r\n\r\n- Auto-update.\r\n- Fixes.
 
 describe('latest.json for the updater', () => {
   it('takes the release notes from the newest changelog section', () => {
-    expect(newestChangelogSection(CHANGELOG)).toBe('- Auto-update.\n- Fixes.');
+    expect(newestChangelogSection(CHANGELOG, '0.2.0')).toBe('- Auto-update.\n- Fixes.');
   });
 
   it('fails without a changelog section', () => {
-    expect(() => newestChangelogSection('# Changelog\n')).toThrow(/no "## " section/);
+    expect(() => newestChangelogSection('# Changelog\n', '0.2.0')).toThrow(/no "## " section/);
+  });
+
+  it('fails unless the newest section is the released version', () => {
+    const unreleased = CHANGELOG.replace('## 0.2.0', '## Unreleased');
+    expect(() => newestChangelogSection(unreleased, '0.2.0')).toThrow(/"## Unreleased"; rename it to "## 0.2.0"/);
+    expect(() => newestChangelogSection(CHANGELOG, '0.3.0')).toThrow(/rename it to "## 0.3.0"/);
   });
 
   it('points the Windows platform at the release asset and embeds the signature', () => {

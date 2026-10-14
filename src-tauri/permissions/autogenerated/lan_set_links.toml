@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-lan-set-links"
+description = "Enables the lan_set_links command without any pre-configured scope."
+commands.allow = ["lan_set_links"]
+
+[[permission]]
+identifier = "deny-lan-set-links"
+description = "Denies the lan_set_links command without any pre-configured scope."
+commands.deny = ["lan_set_links"]

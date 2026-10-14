@@ -213,4 +213,22 @@ describe('NodeStorage', () => {
     await expect(storage.writeText('C:/x', '')).rejects.toThrow(StorageError);
     await expect(storage.remove('')).rejects.toThrow(StorageError);
   });
+
+  it('keeps replaced and removed versions in the history like the app, which only restores may change', async () => {
+    const root = mkdtempSync(join(scratch, 'history-'));
+    const fresh = new NodeStorage(root, CONTENT_ROOT);
+    await fresh.writeText('h/doc.json', 'v1');
+    await fresh.writeText('h/doc.json', 'v2');
+    await fresh.writeText('h/doc.json', 'v3');
+    await fresh.writeText('h/other.json', 'v1');
+    await fresh.remove('h/other.json');
+    const [day] = readdirSync(join(root, 'history')).filter((name) => name !== '.objects');
+    const kept = join(root, 'history', day ?? 'missing', 'h');
+    expect(readFileSync(join(kept, 'doc.json'), 'utf8')).toBe('v1');
+    expect(readFileSync(join(kept, 'other.json'), 'utf8')).toBe('v1');
+    expect(readdirSync(join(root, 'history', '.objects'))).toHaveLength(1);
+    expect((await fresh.list('data', '')).map((e) => e.name)).not.toContain('history');
+    await expect(fresh.writeText('History/x.json', '{}')).rejects.toThrow(StorageError);
+    await expect(fresh.remove('./history')).rejects.toThrow(StorageError);
+  });
 });
