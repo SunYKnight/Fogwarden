@@ -1485,6 +1485,23 @@ kbd {
   width: 110px;
 }
 
+/* Item and spell rows stay one line; the preview has the full text. */
+.row-detail,
+.row-source {
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-detail {
+  width: 34%;
+}
+
+.row-source {
+  width: 24%;
+}
+
 .badge svg {
   vertical-align: -2px;
 }

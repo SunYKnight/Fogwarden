@@ -85,8 +85,12 @@ function ReferenceSplit<K extends 'item' | 'spell'>(props: SplitProps<K>) {
               onClick={() => setSelectedId(entry.ref.id)}
             >
               <span className="row-name">{entry.doc.name}</span>
-              <span className="muted row-type">{describe(entry.doc)}</span>
-              <OriginBadge entry={entry} />
+              <span className="muted row-detail" title={describe(entry.doc)}>
+                {describe(entry.doc)}
+              </span>
+              <span className="muted row-source" title={entry.doc.source}>
+                {entry.doc.source || 'No source'}
+              </span>
             </div>
           ))}
         </div>
@@ -139,7 +143,7 @@ function ReferenceSplit<K extends 'item' | 'spell'>(props: SplitProps<K>) {
   );
 }
 
-const NO_ITEM_FILTER = { text: '', type: '', rarity: '' };
+const NO_ITEM_FILTER = { text: '', type: '', rarity: '', source: '' };
 const formatRarity = (r: string) => (r === MUNDANE ? 'Mundane' : r);
 
 /** "Weapon (martial melee)" → "Weapon": the filter groups by the part before details. */
@@ -156,7 +160,8 @@ export function ItemLibrary() {
     ({ doc }) =>
       doc.name.toLowerCase().includes(needle) &&
       (filter.type === '' || itemKind(doc) === filter.type) &&
-      (filter.rarity === '' || (doc.rarity || MUNDANE) === filter.rarity),
+      (filter.rarity === '' || (doc.rarity || MUNDANE) === filter.rarity) &&
+      (filter.source === '' || doc.source === filter.source),
   );
   const docs = listing.entries.map((e) => e.doc);
   return (
@@ -171,6 +176,7 @@ export function ItemLibrary() {
         ...selectChip(filter.rarity, `Rarity: ${formatRarity(filter.rarity)}`, () =>
           setFilter({ ...filter, rarity: '' }),
         ),
+        ...selectChip(filter.source, `Source: ${filter.source}`, () => setFilter({ ...filter, source: '' })),
       ]}
       reset={() => setFilter(NO_ITEM_FILTER)}
       describe={itemSubtitle}
@@ -196,13 +202,20 @@ export function ItemLibrary() {
             format={formatRarity}
             onChange={(rarity) => setFilter({ ...filter, rarity })}
           />
+          <FilterSelect
+            label="Source"
+            all="All sources"
+            value={filter.source}
+            options={distinct(docs.map((d) => d.source))}
+            onChange={(source) => setFilter({ ...filter, source })}
+          />
         </>
       }
     />
   );
 }
 
-const NO_SPELL_FILTER = { text: '', level: '', school: '', className: '' };
+const NO_SPELL_FILTER = { text: '', level: '', school: '', className: '', source: '' };
 const formatLevel = (l: string) => (l === '0' ? 'Cantrip' : `Level ${l}`);
 
 /** Compendium tab Spells: search with level, school and class filters. */
@@ -215,7 +228,8 @@ export function SpellLibrary() {
       doc.name.toLowerCase().includes(needle) &&
       (filter.level === '' || String(doc.level) === filter.level) &&
       (filter.school === '' || doc.school === filter.school) &&
-      (filter.className === '' || doc.classes.includes(filter.className)),
+      (filter.className === '' || doc.classes.includes(filter.className)) &&
+      (filter.source === '' || doc.source === filter.source),
   );
   const docs = listing.entries.map((e) => e.doc);
   return (
@@ -229,6 +243,7 @@ export function SpellLibrary() {
         ...selectChip(filter.level, formatLevel(filter.level), () => setFilter({ ...filter, level: '' })),
         ...selectChip(filter.school, `School: ${filter.school}`, () => setFilter({ ...filter, school: '' })),
         ...selectChip(filter.className, `Class: ${filter.className}`, () => setFilter({ ...filter, className: '' })),
+        ...selectChip(filter.source, `Source: ${filter.source}`, () => setFilter({ ...filter, source: '' })),
       ]}
       reset={() => setFilter(NO_SPELL_FILTER)}
       describe={spellSubtitle}
@@ -263,6 +278,13 @@ export function SpellLibrary() {
             value={filter.className}
             options={distinct(docs.flatMap((d) => d.classes))}
             onChange={(className) => setFilter({ ...filter, className })}
+          />
+          <FilterSelect
+            label="Source"
+            all="All sources"
+            value={filter.source}
+            options={distinct(docs.map((d) => d.source))}
+            onChange={(source) => setFilter({ ...filter, source })}
           />
         </>
       }
