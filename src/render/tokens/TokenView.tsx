@@ -9,6 +9,7 @@ import { CREATURE_ICON_PATHS, CREATURE_ICON_VIEW } from '@/ui/creatureTypes/crea
 import { usePlayerStore } from '@/ui/player/playerStore';
 import { TextLabel, type LabelLine } from '../TextLabel';
 import { useMapRender, type HitTag } from '../mapRenderContext';
+import { noRaycast } from '../structures/hooks';
 import { cardHeightRatio, tokenInitials, tokenNumber } from './standee';
 import {
   FRAME_MATERIALS,
@@ -32,7 +33,8 @@ const CARD_WIDTH = 0.85;
 /** Card frame around the picture per card width. */
 const CARD_BORDER = 0.05;
 const LABEL_GAP_FT = 0.8;
-const NO_RAYCAST = () => undefined;
+// Long names are cut; the full name stays in the initiative strip.
+const NAME_MAX_PX = 110;
 const view = new Vector3();
 
 function healthColor(fraction: number): string {
@@ -59,7 +61,7 @@ function useStandees(): boolean {
   return perspective && (mode === 'player' ? playerChoice : dmChoice);
 }
 
-export interface TokenViewProps {
+interface TokenViewProps {
   id: string;
   name: string;
   side: Side;
@@ -143,7 +145,7 @@ function Standee({ side, radius, texture, ghost, raycast, name, frame, cardWidth
 
   const border = cardWidth * CARD_BORDER;
   const picture = texture ? portraitLook(texture).card[look] : plain?.materials[look];
-  const cardRaycast = raycast === NO_RAYCAST ? NO_RAYCAST : raycastToBase;
+  const cardRaycast = raycast === noRaycast ? noRaycast : raycastToBase;
   return (
     <>
       <mesh
@@ -193,13 +195,14 @@ export function TokenView(props: TokenViewProps) {
   const texture = picture ?? iconCard;
   const standee = useStandees();
   const diameter = CREATURE_SPACE_FT[size];
+  const feetPerSquare = useMapRender().map.grid.feetPerSquare;
   const radius = (diameter / 2) * 0.92;
   const cardWidth = diameter * CARD_WIDTH;
   const cardHeight = cardWidth * (texture ? portraitLook(texture).cardRatio : cardHeightRatio(null));
   const hit: HitTag = { kind: 'token', id };
   // An explicit method, never undefined: R3F keeps the previous stub when a
   // prop turns undefined, which would leave tokens unclickable after a drag.
-  const raycast = interactive ? Mesh.prototype.raycast : NO_RAYCAST;
+  const raycast = interactive ? Mesh.prototype.raycast : noRaycast;
   const part = { side, radius, texture, ghost, raycast };
   const frame = props.current ? 'current' : props.selected ? 'selected' : null;
   const labelLines: LabelLine[] = [
@@ -220,7 +223,7 @@ export function TokenView(props: TokenViewProps) {
           geometry={ringGeometry(ringInner, ringInner + 0.6)}
           material={RING_MATERIALS[frame]}
           position-y={0.08}
-          raycast={NO_RAYCAST}
+          raycast={noRaycast}
         />
       )}
       {props.selected && props.current && (
@@ -228,7 +231,7 @@ export function TokenView(props: TokenViewProps) {
           geometry={ringGeometry(ringInner + 0.7, ringInner + 1.1)}
           material={RING_MATERIALS.selected}
           position-y={0.08}
-          raycast={NO_RAYCAST}
+          raycast={noRaycast}
         />
       )}
       <TextLabel
@@ -236,6 +239,9 @@ export function TokenView(props: TokenViewProps) {
         lines={labelLines}
         bar={health === null ? null : { fraction: health, color: healthColor(health) }}
         opacity={ghost ? 0.6 : 1}
+        maxTextPx={NAME_MAX_PX}
+        // Adjacent tokens stand one footprint apart.
+        maxWidthFt={Math.max(diameter, feetPerSquare)}
         background={props.nameTag ?? undefined}
         // In the top view the name under the disc is the larger target.
         pickable={interactive}

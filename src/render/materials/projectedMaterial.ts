@@ -14,7 +14,7 @@ import { FOG_VISIBLE } from '@/core/vision/fog';
 import { sideTexture } from './sideTextures';
 
 export type FogMode = 'off' | 'dm' | 'player';
-const FOG_MODE_VALUE: Record<FogMode, number> = { off: 0, dm: 1, player: 2 };
+export const FOG_MODE_VALUE: Record<FogMode, number> = { off: 0, dm: 1, player: 2 };
 
 /**
  * Uniforms shared by every surface of one map (terrain, walls, roofs, props), so changing the image,
@@ -53,10 +53,6 @@ export function createProjectionUniforms(): ProjectionUniforms {
     uFogMode: { value: 0 },
     uMapSizeFt: { value: new Vector2(5, 5) },
   };
-}
-
-export function setFogMode(uniforms: ProjectionUniforms, mode: FogMode): void {
-  uniforms.uFogMode.value = FOG_MODE_VALUE[mode];
 }
 
 const VERTEX_DECL = /* glsl */ `

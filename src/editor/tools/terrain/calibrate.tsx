@@ -4,10 +4,12 @@ import type { HeightField } from '@/core/terrain/heightfield';
 import { resampleHeightField } from '@/core/terrain/resample';
 import { useMapRender, type MapPointerEvent } from '@/render/mapRenderContext';
 import { imagePxToWorld, worldToImagePx } from '@/render/projection';
+import { useAppStore } from '@/state/appStore';
 import { useEditorStore } from '@/state/editorStore';
 import { CheckboxField, ColorField, Field, NumberField, SliderField } from '@/ui/components/fields';
 import { Button, Section, useShortcuts } from '@/ui/kit';
 import type { EditorTool } from '../../tool';
+import { editorMap } from '../structure/documentEdits';
 import { OverlayLines, overlayPositions } from './overlays';
 import { editorTerrain } from './sculpt';
 import { useTerrainToolStore } from './terrainToolStore';
@@ -16,6 +18,8 @@ import { useTerrainToolStore } from './terrainToolStore';
 const MIN_SQUARE_PX = 6;
 /** Squares of the candidate grid drawn to each side of the picked square. */
 const PREVIEW_SQUARES = 8;
+/** Terrain samples per axis; beyond this the mesh and undo copies run out of memory. */
+const MAX_TERRAIN_SAMPLES = 2048;
 
 // Corner one comes from the press; a release elsewhere drags a square.
 let dragging = false;
@@ -41,20 +45,12 @@ function endGridPick(): void {
   editor.setSettingsOpen(true);
 }
 
-function openGrid(): Grid {
-  const map = useEditorStore.getState().map;
-  if (!map) {
-    throw new Error('No map is open in the editor');
-  }
-  return map.grid;
-}
-
 function candidateGrid(grid: Grid, a: Vec2, b: Vec2, detectRotation: boolean): Grid {
   return { ...grid, ...calibrateFromSquare(a, b, detectRotation ? null : grid.rotationDeg) };
 }
 
 function calibrate(a: Vec2, b: Vec2): void {
-  const next = candidateGrid(openGrid(), a, b, useTerrainToolStore.getState().detectRotation);
+  const next = candidateGrid(editorMap().grid, a, b, useTerrainToolStore.getState().detectRotation);
   if (next.pxPerSquare < MIN_SQUARE_PX) {
     throw new Error('Click two opposite corners of one grid square in the image');
   }
@@ -66,13 +62,26 @@ function calibrate(a: Vec2, b: Vec2): void {
   endGridPick();
 }
 
-/** Changes grid size or terrain resolution; heights are resampled so they stay where they were in feet. */
-function regrid(label: string, patch: Partial<Pick<Grid, 'squaresX' | 'squaresY' | 'feetPerSquare'>>, sps: number) {
-  const next = resampleHeightField(editorTerrain(), { ...openGrid(), ...patch }, sps);
-  useEditorStore.getState().replaceTerrain(label, next, (d) => {
-    Object.assign(d.grid, patch);
-    d.terrain.samplesPerSquare = sps;
-  });
+/**
+ * Changes grid size or terrain resolution; heights are resampled so they stay where they were in feet.
+ * Sizes past the sample limit are reported instead of applied.
+ */
+function regrid(
+  label: string,
+  patch: Partial<Pick<Grid, 'squaresX' | 'squaresY' | 'feetPerSquare'>>,
+  sps: number,
+): void {
+  const grid = { ...editorMap().grid, ...patch };
+  if (Math.max(grid.squaresX, grid.squaresY) * sps > MAX_TERRAIN_SAMPLES) {
+    const message = `${grid.squaresX} x ${grid.squaresY} squares at ${sps} samples each is too large`;
+    useAppStore.getState().reportError(new Error(`${message}; at most ${MAX_TERRAIN_SAMPLES} samples per side`));
+  } else {
+    const next = resampleHeightField(editorTerrain(), grid, sps);
+    useEditorStore.getState().replaceTerrain(label, next, (d) => {
+      Object.assign(d.grid, patch);
+      d.terrain.samplesPerSquare = sps;
+    });
+  }
 }
 
 function calibratePointer(event: MapPointerEvent): void {
@@ -80,7 +89,7 @@ function calibratePointer(event: MapPointerEvent): void {
   if (event.point) {
     tools.setCursor(event.point);
   }
-  const px = event.point && worldToImagePx(openGrid(), event.point);
+  const px = event.point && worldToImagePx(editorMap().grid, event.point);
   const first = tools.cornerPx;
   if (event.type === 'down' && px && first) {
     tools.setCornerPx(null);
@@ -90,11 +99,13 @@ function calibratePointer(event: MapPointerEvent): void {
     tools.setCornerPx(px);
     dragging = true;
   } else if (event.type === 'up') {
-    const dragged = dragging && px && first && Math.hypot(px.x - first.x, px.y - first.y) >= MIN_SQUARE_PX;
+    // MapView sends releases without a point; the last cursor marks the end.
+    const end = px ?? (tools.cursor && worldToImagePx(editorMap().grid, tools.cursor));
+    const dragged = dragging && end && first && Math.hypot(end.x - first.x, end.y - first.y) >= MIN_SQUARE_PX;
     dragging = false;
     if (dragged) {
       tools.setCornerPx(null);
-      calibrate(first, px);
+      calibrate(first, end);
     }
   }
 }

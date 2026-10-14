@@ -100,4 +100,11 @@ describe('terrain tools', () => {
     expect(grid.pxPerSquare).toBeCloseTo(42, 3);
     expect(grid.offsetPx).toEqual({ x: 14, y: 14 });
   });
+
+  it('calibrates the grid from a drag across one square', () => {
+    drag(calibrateTool, [10, 10], [13, 13], 3);
+    const grid = useEditorStore.getState().map!.grid;
+    expect(grid.pxPerSquare).toBeCloseTo(42, 3);
+    expect(useTerrainToolStore.getState().cornerPx).toBeNull();
+  });
 });

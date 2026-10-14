@@ -27,6 +27,11 @@ export interface MapRenderState {
   map: BattleMap;
   terrain: HeightField;
   terrainVersion: number;
+  /**
+   * Follows terrainVersion once it stops changing, so draped structures rebuild
+   * after a sculpt stroke instead of on every dab.
+   */
+  settledTerrainVersion: number;
   uniforms: ProjectionUniforms;
   mode: RenderMode;
 }

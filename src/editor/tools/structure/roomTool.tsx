@@ -98,7 +98,7 @@ export const roomTool: EditorTool = {
   shortcut: 'r',
   hint:
     'Click inside or on a closed wall to make it a room, or click polygon points; ' +
-    'double-click, Enter or the first point finishes',
+    'double-click, Enter or the first point finishes; Esc cancels',
   cursor: 'crosshair',
   onPointer: roomPointer,
   Panel: RoomToolPanel,

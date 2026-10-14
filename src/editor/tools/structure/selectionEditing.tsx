@@ -32,7 +32,7 @@ function isVertexKind(kind: string): kind is VertexKind {
   return kind in VERTEX_LISTS;
 }
 
-export function selectedVertices(map: Owners, selection: Selection): Vec2[] | undefined {
+function selectedVertices(map: Owners, selection: Selection): Vec2[] | undefined {
   return selection && isVertexKind(selection.kind) ? VERTEX_LISTS[selection.kind](map, selection.id) : undefined;
 }
 

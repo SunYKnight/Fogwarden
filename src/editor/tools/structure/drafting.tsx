@@ -13,8 +13,8 @@ import { editorMap } from './documentEdits';
 const DOUBLE_CLICK_MS = 400;
 const DOUBLE_CLICK_FT = 1;
 /** Overlays float above the terrain and ignore depth so walls never hide them. */
-export const OVERLAY_LIFT_FT = 0.4;
-export const OVERLAY_ORDER = 10;
+const OVERLAY_LIFT_FT = 0.4;
+const OVERLAY_ORDER = 10;
 
 const SNAP_COLORS: Record<SnapKind, string> = {
   vertex: '#ff5ad1',
@@ -63,7 +63,7 @@ export interface DraftActions {
   finish(points: Vec2[], closedByClick: boolean): void;
 }
 
-export function finishDraft(actions: DraftActions, closedByClick = false): void {
+function finishDraft(actions: DraftActions, closedByClick = false): void {
   const { points } = useDraft.getState();
   if (points.length < actions.minPoints) {
     throw new Error(`Place at least ${actions.minPoints} points first`);
@@ -72,7 +72,7 @@ export function finishDraft(actions: DraftActions, closedByClick = false): void 
   actions.finish(points, closedByClick);
 }
 
-export function removeLastDraftPoint(): void {
+function removeLastDraftPoint(): void {
   useDraft.setState((s) => ({ points: s.points.slice(0, -1), lastDown: null }));
 }
 

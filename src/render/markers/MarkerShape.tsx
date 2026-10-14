@@ -5,10 +5,12 @@ import type { AreaDimensions, Grid, MapPoint } from '@/core/model';
 import { areaCells, areaOutline } from '@/core/rules/templates';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { useMapRender } from '../mapRenderContext';
+import { drapedPath } from '../structures/drape';
+import { noRaycast } from '../structures/hooks';
 import { TextLabel } from '../TextLabel';
 
 /** Everything needed to draw an area; placed markers and placement previews both fit. */
-export type MarkerShapeData = AreaDimensions & {
+type MarkerShapeData = AreaDimensions & {
   origin: MapPoint;
   directionDeg: number;
   color: string;
@@ -20,7 +22,6 @@ export type MarkerShapeData = AreaDimensions & {
 const CELL_LIFT_FT = 0.12;
 const OUTLINE_LIFT_FT = 0.3;
 const OUTLINE_STEP_FT = 1;
-const NO_RAYCAST = () => undefined;
 
 /** Affected squares subdivided like the terrain so they follow its slopes. */
 function cellGeometry(cells: { col: number; row: number }[], grid: Grid, terrain: HeightField): BufferGeometry {
@@ -46,22 +47,6 @@ function cellGeometry(cells: { col: number; row: number }[], grid: Grid, terrain
   return geometry;
 }
 
-/** Closed outline sampled about every foot so it hugs the terrain. */
-function drapedOutline(polygon: { x: number; y: number }[], terrain: HeightField): [number, number, number][] {
-  const points: [number, number, number][] = [];
-  polygon.forEach((a, i) => {
-    const b = polygon[(i + 1) % polygon.length]!;
-    const count = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / OUTLINE_STEP_FT));
-    for (let s = 0; s < count; s++) {
-      const x = a.x + ((b.x - a.x) * s) / count;
-      const y = a.y + ((b.y - a.y) * s) / count;
-      points.push([x, terrain.sample(x, y) + OUTLINE_LIFT_FT, y]);
-    }
-  });
-  points.push(points[0]!);
-  return points;
-}
-
 /** Area of effect draped on the terrain: affected squares filled, template outline drawn. */
 export function MarkerShape({ marker }: { marker: MarkerShapeData }) {
   const { map, terrain, terrainVersion } = useMapRender();
@@ -74,7 +59,7 @@ export function MarkerShape({ marker }: { marker: MarkerShapeData }) {
     void terrainVersion;
     return {
       geometry: cellGeometry(areaCells(area, grid), grid, terrain),
-      outline: drapedOutline(areaOutline(area, grid), terrain),
+      outline: drapedPath(areaOutline(area, grid), true, terrain, OUTLINE_LIFT_FT, OUTLINE_STEP_FT),
     };
   }, [shape, sizeFt, widthFt, heightFt, origin, directionDeg, grid, terrain, terrainVersion]);
 
@@ -82,7 +67,7 @@ export function MarkerShape({ marker }: { marker: MarkerShapeData }) {
 
   return (
     <group>
-      <mesh geometry={geometry} raycast={NO_RAYCAST} renderOrder={1}>
+      <mesh geometry={geometry} raycast={noRaycast} renderOrder={1}>
         <meshBasicMaterial
           color={marker.color}
           transparent
@@ -93,7 +78,7 @@ export function MarkerShape({ marker }: { marker: MarkerShapeData }) {
           polygonOffsetFactor={-4}
         />
       </mesh>
-      {outline.length > 2 && <Line points={outline} color={marker.color} lineWidth={2} raycast={NO_RAYCAST} />}
+      {outline.length > 2 && <Line points={outline} color={marker.color} lineWidth={2} raycast={noRaycast} />}
       {marker.label && (
         <TextLabel
           position={[origin.x, terrain.sample(origin.x, origin.y) + 1, origin.y]}

@@ -4,10 +4,10 @@ import type { Mesh, MeshBasicMaterial } from 'three';
 import { usePingStore, type Ping } from '@/state/pingStore';
 import { useMapRender } from '../mapRenderContext';
 import { TextLabel } from '../TextLabel';
+import { noRaycast } from '../structures/hooks';
 
 const PULSE_MS = 1000;
 const LIFT_FT = 0.5;
-const NO_RAYCAST = () => undefined;
 
 /** Ring that grows from the spot to one and a half squares and fades, once per second. */
 function PingRing({ ping, reachFt }: { ping: Ping; reachFt: number }) {
@@ -21,7 +21,7 @@ function PingRing({ ping, reachFt }: { ping: Ping; reachFt: number }) {
   const { x, y, elevationFt } = ping.at;
   return (
     <group position={[x, elevationFt + LIFT_FT, y]}>
-      <mesh ref={ring} rotation-x={-Math.PI / 2} raycast={NO_RAYCAST} renderOrder={11}>
+      <mesh ref={ring} rotation-x={-Math.PI / 2} raycast={noRaycast} renderOrder={11}>
         <ringGeometry args={[0.8, 1, 48]} />
         <meshBasicMaterial ref={material} color="#f2c14e" transparent depthTest={false} depthWrite={false} />
       </mesh>

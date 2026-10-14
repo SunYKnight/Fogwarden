@@ -1,5 +1,5 @@
 import { Canvas, type ThreeEvent } from '@react-three/fiber';
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Object3D } from 'three';
 import { daylight, skyTint } from '@/core/atmosphere/timeOfDay';
 import { defaultGraphicsSettings, type BattleMap, type LightLevel } from '@/core/model';
@@ -24,6 +24,18 @@ const AMBIENT_INTENSITY: Record<LightLevel, number> = {
   darkness: 0.12,
   'magical-darkness': 0.05,
 };
+
+/** Quiet time after the last terrain change before draped structures rebuild. */
+const TERRAIN_SETTLE_MS = 200;
+
+function useSettledVersion(version: number): number {
+  const [settled, setSettled] = useState(version);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(version), TERRAIN_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [version]);
+  return settled;
+}
 
 /** Hit tag of the object or its nearest tagged ancestor. */
 export function findHit(object: Object3D | null): HitTag | null {
@@ -69,10 +81,11 @@ interface MapViewProps {
 export function MapView(props: MapViewProps) {
   const { map, terrain, terrainVersion, mode, fogMode, camera, ambient, onPointer } = props;
   const uniforms = useProjectionUniforms(map, fogMode);
+  const settledTerrainVersion = useSettledVersion(terrainVersion);
   const { width, depth } = mapSizeFt(map);
   const state = useMemo<MapRenderState>(
-    () => ({ map, terrain, terrainVersion, uniforms, mode }),
-    [map, terrain, terrainVersion, uniforms, mode],
+    () => ({ map, terrain, terrainVersion, settledTerrainVersion, uniforms, mode }),
+    [map, terrain, terrainVersion, settledTerrainVersion, uniforms, mode],
   );
 
   // Strokes must end even when the button is released outside every mesh.

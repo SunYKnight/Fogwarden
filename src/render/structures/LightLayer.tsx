@@ -1,4 +1,5 @@
 import { Line } from '@react-three/drei';
+import { useMemo } from 'react';
 import { defaultGraphicsSettings, type MapLight } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { useAppStore } from '@/state/appStore';
@@ -15,42 +16,43 @@ const RING_LIFT_FT = 0.3;
 
 type WorldPoint = [number, number, number];
 
-function LightGizmo({ light, position, terrain }: { light: MapLight; position: WorldPoint; terrain: HeightField }) {
-  const ground = { x: position[0], y: position[2] };
+interface LightGizmoProps {
+  light: MapLight;
+  position: WorldPoint;
+  terrain: HeightField;
+  terrainVersion: number;
+}
+
+function LightGizmo({ light, position, terrain, terrainVersion }: LightGizmoProps) {
+  const [x, , y] = position;
   const hit: HitTag = { kind: 'light', id: light.id };
   const color = light.enabled ? light.color : '#555555';
   // Rings of every light would hide the map while the DM works on walls or areas.
   const rings = useEditorStore(
     (s) => s.step === 'objects' || (s.selection?.kind === 'light' && s.selection.id === light.id),
   );
+  const { brightFt, dimFt } = light;
+  const ringPoints = useMemo(() => {
+    // Read so rings re-drape when the field is mutated in place.
+    void terrainVersion;
+    const ground = { x, y };
+    return {
+      bright: drapedPath(circlePoints(ground, brightFt), true, terrain, RING_LIFT_FT),
+      dim: drapedPath(circlePoints(ground, brightFt + dimFt), true, terrain, RING_LIFT_FT),
+    };
+  }, [x, y, brightFt, dimFt, terrain, terrainVersion]);
   return (
     <group>
       <mesh position={position} userData={{ hit }}>
         <sphereGeometry args={[0.6, 16, 12]} />
         <meshBasicMaterial color={color} />
       </mesh>
-      <Line
-        points={[[ground.x, terrain.sample(ground.x, ground.y), ground.y], position]}
-        color={color}
-        raycast={noRaycast}
-      />
+      <Line points={[[x, terrain.sample(x, y), y], position]} color={color} raycast={noRaycast} />
       {rings && light.brightFt > 0 && (
-        <Line
-          points={drapedPath(circlePoints(ground, light.brightFt), true, terrain, RING_LIFT_FT)}
-          color={color}
-          lineWidth={2}
-          raycast={noRaycast}
-        />
+        <Line points={ringPoints.bright} color={color} lineWidth={2} raycast={noRaycast} />
       )}
       {rings && light.dimFt > 0 && (
-        <Line
-          points={drapedPath(circlePoints(ground, light.brightFt + light.dimFt), true, terrain, RING_LIFT_FT)}
-          color={color}
-          dashed
-          dashSize={1}
-          gapSize={1}
-          raycast={noRaycast}
-        />
+        <Line points={ringPoints.dim} color={color} dashed dashSize={1} gapSize={1} raycast={noRaycast} />
       )}
     </group>
   );
@@ -62,7 +64,7 @@ function LightGizmo({ light, position, terrain }: { light: MapLight; position: W
  * bulb and radius gizmos.
  */
 export function LightLayer() {
-  const { map, terrain, mode } = useMapRender();
+  const { map, terrain, settledTerrainVersion, mode } = useMapRender();
   const visible = useLayerVisible('lights');
   const combatants = useCombatantPositions();
   const carried = useCarriedLights();
@@ -100,7 +102,13 @@ export function LightLayer() {
       })}
       {mode === 'editor' &&
         placed.map(({ light, position }) => (
-          <LightGizmo key={light.id} light={light} position={position} terrain={terrain} />
+          <LightGizmo
+            key={light.id}
+            light={light}
+            position={position}
+            terrain={terrain}
+            terrainVersion={settledTerrainVersion}
+          />
         ))}
     </group>
   ) : null;

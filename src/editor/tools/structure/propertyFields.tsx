@@ -47,7 +47,7 @@ export const REGION_COLORS: Record<Region['kind'], string> = {
 const DEFAULT_REGION_SOUND: RegionSound = { asset: null, radiusFt: 20, volume: 0.8 };
 
 /** Region kind change with the matching default color, light level and ambient sound. */
-export function regionKindPatch(kind: Region['kind'], current: RegionTemplate): Partial<RegionTemplate> {
+function regionKindPatch(kind: Region['kind'], current: RegionTemplate): Partial<RegionTemplate> {
   return {
     kind,
     color: REGION_COLORS[kind],

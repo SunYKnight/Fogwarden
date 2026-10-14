@@ -27,8 +27,8 @@ export const SIDE_COLORS: Record<Side, string> = {
   neutral: '#e0c040',
 };
 
-export const CURRENT_COLOR = '#ffc940';
-export const SELECTED_COLOR = '#ffffff';
+const CURRENT_COLOR = '#ffc940';
+const SELECTED_COLOR = '#ffffff';
 const PLAIN_TOP_COLOR = '#2a2d35';
 const GHOST_OPACITY = 0.4;
 // Unlit enough to stay recognisable in dark maps, lit enough to sit in them.

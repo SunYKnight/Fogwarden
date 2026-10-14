@@ -5,7 +5,7 @@ import type { BattleMap } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import {
   createProjectionUniforms,
-  setFogMode,
+  FOG_MODE_VALUE,
   type FogMode,
   type ProjectionUniforms,
 } from './materials/projectedMaterial';
@@ -50,9 +50,16 @@ export function useProjectionUniforms(map: BattleMap, fogMode: FogMode): Project
     }
     return () => {
       cancelled = true;
+      // A disposed texture still bound would re-upload its closed bitmap.
+      if (loaded && uniforms.uMap.value === loaded) {
+        uniforms.uMap.value = null;
+        uniforms.uHasMap.value = 0;
+      }
       loaded?.dispose();
     };
-  }, [image, repository, reportError, uniforms]);
+    // The player store parses a fresh map per revision; reload only on asset change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [image?.asset.area, image?.asset.path, image?.widthPx, image?.heightPx, repository, reportError, uniforms]);
 
   useEffect(() => {
     if (image) {
@@ -67,7 +74,9 @@ export function useProjectionUniforms(map: BattleMap, fogMode: FogMode): Project
     uniforms.uBaseColor.value.set(terrain.baseColor);
   }, [grid, image, terrain.baseColor, uniforms]);
 
-  useEffect(() => setFogMode(uniforms, fogMode), [fogMode, uniforms]);
+  useEffect(() => {
+    uniforms.uFogMode.value = FOG_MODE_VALUE[fogMode];
+  }, [fogMode, uniforms]);
 
   return uniforms;
 }

@@ -21,7 +21,13 @@ export function loadVideoTexture(url: string): Promise<VideoTexture> {
         video.removeAttribute('src');
         video.load();
       });
-      video.play().then(() => resolve(texture), reject);
+      video.play().then(
+        () => resolve(texture),
+        (error: unknown) => {
+          texture.dispose();
+          reject(error);
+        },
+      );
     },
     { once: true },
   );

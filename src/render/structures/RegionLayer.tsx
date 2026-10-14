@@ -1,4 +1,5 @@
 import { Line } from '@react-three/drei';
+import { useMemo } from 'react';
 import { DoubleSide, MeshBasicMaterial, type WebGLProgramParametersWithUniforms } from 'three';
 import type { Region, RegionKind } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
@@ -26,6 +27,13 @@ if (uFogMode > 1.5 && texture2D(uFog, vRegionWorld.xz / uMapSizeFt).r < 0.25) di
 #include <opaque_fragment>
 `;
 
+const FRAGMENT_DECL = /* glsl */ `
+varying vec3 vRegionWorld;
+uniform sampler2D uFog;
+uniform float uFogMode;
+uniform vec2 uMapSizeFt;
+`;
+
 function createRegionMaterial(uniforms: ProjectionUniforms, color: string): MeshBasicMaterial {
   const material = new MeshBasicMaterial({
     color,
@@ -47,10 +55,7 @@ function createRegionMaterial(uniforms: ProjectionUniforms, color: string): Mesh
         '#include <project_vertex>\nvRegionWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;',
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <common>',
-        '#include <common>\nvarying vec3 vRegionWorld;\nuniform sampler2D uFog;\nuniform float uFogMode;\nuniform vec2 uMapSizeFt;',
-      )
+      .replace('#include <common>', `#include <common>${FRAGMENT_DECL}`)
       .replace('#include <opaque_fragment>', FOG_DISCARD);
   };
   material.customProgramCacheKey = () => 'region-fog-v1';
@@ -72,18 +77,17 @@ function RegionView({ region, terrain, terrainVersion, uniforms, outline }: Regi
     [region.polygon, terrain, terrainVersion],
   );
   const material = useDisposable(() => createRegionMaterial(uniforms, region.color), [uniforms, region.color]);
+  const outlinePoints = useMemo(
+    () => drapedPath(region.polygon, true, terrain, REGION_LIFT_FT + 0.05),
+    // terrainVersion: the field is mutated in place.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [region.polygon, terrain, terrainVersion],
+  );
   const hit: HitTag = { kind: 'region', id: region.id };
   return (
     <group>
       <mesh geometry={geometry} material={material} userData={{ hit }} renderOrder={1} />
-      {outline && (
-        <Line
-          points={drapedPath(region.polygon, true, terrain, REGION_LIFT_FT + 0.05)}
-          color={region.color}
-          lineWidth={2}
-          raycast={noRaycast}
-        />
-      )}
+      {outline && <Line points={outlinePoints} color={region.color} lineWidth={2} raycast={noRaycast} />}
     </group>
   );
 }
@@ -93,7 +97,7 @@ function RegionView({ region, terrain, terrainVersion, uniforms, outline }: Regi
  * see visual kinds that are not hidden.
  */
 export function RegionLayer() {
-  const { map, terrain, terrainVersion, uniforms, mode } = useMapRender();
+  const { map, terrain, settledTerrainVersion, uniforms, mode } = useMapRender();
   const visible = useLayerVisible('regions');
   const shown = map.regions.filter((r) => mode !== 'player' || (!r.hiddenFromPlayers && PLAYER_VISIBLE[r.kind]));
   return visible ? (
@@ -103,7 +107,7 @@ export function RegionLayer() {
           key={region.id}
           region={region}
           terrain={terrain}
-          terrainVersion={terrainVersion}
+          terrainVersion={settledTerrainVersion}
           uniforms={uniforms}
           outline={mode !== 'player'}
         />

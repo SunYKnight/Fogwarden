@@ -23,7 +23,7 @@ import { BrushCursor } from './overlays';
 import { useTerrainToolStore, type TerrainToolOptions } from './terrainToolStore';
 
 /** Height change at the brush center per dab at strength 1 (raise, lower, noise). */
-export const RAISE_FT_PER_DAB = 1;
+const RAISE_FT_PER_DAB = 1;
 /** Dab distance as a fraction of the brush radius. */
 const DAB_SPACING = 0.25;
 

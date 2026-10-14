@@ -175,7 +175,7 @@ function WallView({ wall, corners, openings, states, mode, terrain, terrainVersi
 
 /** Extruded walls with mitered corners, openings cut out and filled by doors, panes or bars. */
 export function StructureLayer() {
-  const { map, terrain, terrainVersion, uniforms, mode } = useMapRender();
+  const { map, terrain, settledTerrainVersion, uniforms, mode } = useMapRender();
   const visible = useLayerVisible('walls');
   const states = useOpeningStates();
   const corners = useMemo(() => new Map(map.walls.map((w) => [w.id, wallCorners(w, map.walls)])), [map.walls]);
@@ -191,7 +191,7 @@ export function StructureLayer() {
           states={states}
           mode={mode}
           terrain={terrain}
-          terrainVersion={terrainVersion}
+          terrainVersion={settledTerrainVersion}
           uniforms={uniforms}
         />
       ))}

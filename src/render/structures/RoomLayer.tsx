@@ -11,6 +11,8 @@ import { roomFloorGeometry, roomRoofGeometry } from './roomGeometry';
 
 // No camera renders this layer and raycasters skip it.
 const HIDDEN_LAYER = 31;
+// Reused per frame so the inside test does not allocate.
+const cameraXz = { x: 0, y: 0 };
 
 function createRoofMaterial(uniforms: ProjectionUniforms, side: SideMaterial): MeshStandardMaterial {
   // Untinted: the battlemap below a roof is the room's floor.
@@ -38,14 +40,22 @@ interface RoomViewProps {
 function RoomView(props: RoomViewProps) {
   const { room, terrain, terrainVersion, uniforms, peel, occupied } = props;
   const roofRef = useRef<Mesh>(null);
+  const hasFloor = props.showFloor && room.floorFt !== null;
+  const hasRoof = props.showRoof && room.roof;
   const floorGeometry = useDisposable(
-    () => roomFloorGeometry(room, terrain),
-    [room.polygon, room.floorFt, terrain, terrainVersion],
+    () => (hasFloor ? roomFloorGeometry(room, terrain) : null),
+    [hasFloor, room.polygon, room.floorFt, terrain, terrainVersion],
   );
+  // A roof above a floor ignores the ground below it.
+  const roofTerrainKey = room.floorFt === null ? terrainVersion : -1;
   const roofGeometry = useDisposable(
-    () => roomRoofGeometry(room, terrain),
-    [room.polygon, room.floorFt, room.ceilingFt, terrain, terrainVersion],
+    () => (hasRoof ? roomRoofGeometry(room, terrain) : null),
+    [hasRoof, room.polygon, room.floorFt, room.ceilingFt, terrain, roofTerrainKey],
   );
+  const roofTopFt = useMemo(() => {
+    roofGeometry?.computeBoundingBox();
+    return roofGeometry?.boundingBox?.max.y ?? 0;
+  }, [roofGeometry]);
   const floorMaterial = useDisposable(
     () => createProjectedMaterial(uniforms, { side: props.cliffMaterial, sideFromSlopeDeg: props.cliffSlopeDeg }),
     [uniforms, props.cliffMaterial, props.cliffSlopeDeg],
@@ -56,7 +66,10 @@ function RoomView(props: RoomViewProps) {
   );
 
   useFrame(({ camera }) => {
-    const cameraInside = pointInPolygon({ x: camera.position.x, y: camera.position.z }, room.polygon);
+    cameraXz.x = camera.position.x;
+    cameraXz.y = camera.position.z;
+    // A camera above the roof looks at it from outside, wherever it hovers.
+    const cameraInside = camera.position.y < roofTopFt && pointInPolygon(cameraXz, room.polygon);
     roofRef.current?.layers.set(peel && (occupied || cameraInside) ? HIDDEN_LAYER : 0);
   });
 
@@ -64,10 +77,10 @@ function RoomView(props: RoomViewProps) {
   const roofHit: HitTag = { kind: 'roof', id: room.id };
   return (
     <group>
-      {props.showFloor && room.floorFt !== null && (
+      {floorGeometry && (
         <mesh geometry={floorGeometry} material={floorMaterial} userData={{ hit: floorHit }} receiveShadow castShadow />
       )}
-      {props.showRoof && room.roof && (
+      {roofGeometry && (
         <mesh
           ref={roofRef}
           geometry={roofGeometry}
@@ -83,7 +96,7 @@ function RoomView(props: RoomViewProps) {
 
 /** Room floors and roofs; roofs peel per room in play views when the camera or a token is inside. */
 export function RoomLayer() {
-  const { map, terrain, terrainVersion, uniforms, mode } = useMapRender();
+  const { map, terrain, settledTerrainVersion, uniforms, mode } = useMapRender();
   const showFloor = useLayerVisible('rooms');
   const showRoof = useLayerVisible('roofs');
   const positions = useCombatantPositions();
@@ -95,7 +108,7 @@ export function RoomLayer() {
           key={room.id}
           room={room}
           terrain={terrain}
-          terrainVersion={terrainVersion}
+          terrainVersion={settledTerrainVersion}
           uniforms={uniforms}
           cliffMaterial={map.terrain.cliffMaterial}
           cliffSlopeDeg={map.terrain.cliffSlopeDeg}

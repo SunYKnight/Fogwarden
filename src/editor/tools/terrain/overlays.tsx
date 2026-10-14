@@ -2,14 +2,12 @@ import { useEffect, useMemo } from 'react';
 import { BufferAttribute, BufferGeometry } from 'three';
 import type { Vec2 } from '@/core/model';
 import { useMapRender } from '@/render/mapRenderContext';
+import { circlePoints } from '@/render/structures/drape';
+import { noRaycast } from '@/render/structures/hooks';
 import { useTerrainToolStore } from './terrainToolStore';
 
 /** Keeps overlay lines visibly above the surface they follow. */
 const LIFT_FT = 0.15;
-const RING_POINTS = 48;
-
-// Overlays must never become the pointer target in place of the terrain below.
-const noRaycast = () => undefined;
 
 /**
  * Line segment pairs (x, y, z) along a polyline, split every `stepFt` so the line follows `heightAt`
@@ -37,13 +35,6 @@ export function overlayPositions(
     }
   }
   return new Float32Array(values);
-}
-
-export function circlePoints(center: Vec2, radiusFt: number): Vec2[] {
-  return Array.from({ length: RING_POINTS }, (_, i) => {
-    const angle = (i / RING_POINTS) * Math.PI * 2;
-    return { x: center.x + Math.cos(angle) * radiusFt, y: center.y + Math.sin(angle) * radiusFt };
-  });
 }
 
 export function OverlayLines({ positions, color }: { positions: Float32Array; color: string }) {

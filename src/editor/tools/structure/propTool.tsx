@@ -1,13 +1,15 @@
 import { TransformControls } from '@react-three/drei';
 import { createPortal, useThree } from '@react-three/fiber';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useId } from 'react';
 import { Raycaster, Vector2, type Camera, type Object3D } from 'three';
+import { z } from 'zod';
 import { create } from 'zustand';
 import { newId, type AssetRef, type MapPoint, type Prop, type WorldVec3 } from '@/core/model';
 import { findHit } from '@/render/MapView';
 import { usePropObjects } from '@/render/props/propObjects';
 import { useAppStore } from '@/state/appStore';
 import { useEditorStore } from '@/state/editorStore';
+import { readGltfJson } from '@/sync/relayClient';
 import { CheckboxField } from '@/ui/components/fields';
 import { Button, useShortcuts } from '@/ui/kit';
 import type { EditorTool } from '../../tool';
@@ -16,12 +18,20 @@ import { OverlayMarker } from './drafting';
 
 // glTF stores meters (Blender's unit) and the map uses feet.
 const METERS_TO_FEET = 3.28084;
-const DEG = 180 / Math.PI;
+const RAD_TO_DEG = 180 / Math.PI;
 const ROTATION_SNAP_DEG = 15;
 const SCALE_SNAP = 0.1;
 const MODEL_FILE = /\.(glb|gltf)$/i;
+// GLTFLoader runs without KTX2, Draco or meshopt decoders.
+const UNSUPPORTED_EXTENSIONS: Record<string, true> = {
+  KHR_texture_basisu: true,
+  KHR_draco_mesh_compression: true,
+  EXT_meshopt_compression: true,
+  KHR_meshopt_compression: true,
+};
+const requiredExtensionsSchema = z.object({ extensionsRequired: z.array(z.string()).optional() });
 
-export type GizmoMode = 'translate' | 'rotate' | 'scale';
+type GizmoMode = 'translate' | 'rotate' | 'scale';
 const GIZMO_LABELS: Record<GizmoMode, string> = { translate: 'Move', rotate: 'Rotate', scale: 'Scale' };
 
 interface PropToolState {
@@ -44,12 +54,23 @@ export const usePropTool = create<PropToolState>(() => ({
   cursor: null,
 }));
 
+/** Throws when the model needs a decoder the prop loader lacks. */
+export function assertLoadableModel(name: string, bytes: Uint8Array): void {
+  const document = readGltfJson({ area: 'content', path: name }, bytes);
+  const { extensionsRequired = [] } = requiredExtensionsSchema.parse(document);
+  const missing = extensionsRequired.filter((e) => UNSUPPORTED_EXTENSIONS[e]);
+  if (missing.length > 0) {
+    throw new Error(`${name} needs ${missing.join(', ')}; export it without texture or mesh compression`);
+  }
+}
+
 /** Copies the chosen model file (plus .bin/texture files of a .gltf) into the map's asset folder. */
 async function importModel(files: File[]): Promise<void> {
   const model = files.find((f) => MODEL_FILE.test(f.name));
   if (!model) {
     throw new Error('Choose a .glb or .gltf file');
   }
+  assertLoadableModel(model.name, new Uint8Array(await model.arrayBuffer()));
   const map = editorMap();
   const { repository } = useAppStore.getState();
   usePropTool.setState({ importing: true });
@@ -106,7 +127,11 @@ export function GizmoModeButtons() {
 }
 
 function PropToolPanel() {
-  const { pending, last, importing, snap } = usePropTool();
+  const pending = usePropTool((s) => s.pending);
+  const last = usePropTool((s) => s.last);
+  const importing = usePropTool((s) => s.importing);
+  const snap = usePropTool((s) => s.snap);
+  const inputId = useId();
   const reportError = useAppStore((s) => s.reportError);
   useShortcuts(
     'Map editor: prop',
@@ -116,10 +141,11 @@ function PropToolPanel() {
   return (
     <>
       <div className="field">
-        <label>Import model</label>
+        <label htmlFor={inputId}>Import model</label>
         <input
+          id={inputId}
           type="file"
-          accept=".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp,.ktx2"
+          accept=".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp"
           multiple
           disabled={importing}
           onChange={(e) => {
@@ -212,12 +238,14 @@ function PropGizmo() {
   const id = useEditorStore((s) => (s.selection?.kind === 'prop' ? s.selection.id : null));
   const feetPerSquare = useEditorStore((s) => s.map?.grid.feetPerSquare ?? 5);
   const object = usePropObjects((s) => (id ? s.objects[id] : undefined));
-  const { gizmo, snap } = usePropTool();
+  const gizmo = usePropTool((s) => s.gizmo);
+  const snap = usePropTool((s) => s.snap);
   const commit = useCallback(() => {
     try {
       if (object && id) {
         const position = rounded(object.position.toArray());
-        const rotationDeg = rounded([object.rotation.x * DEG, object.rotation.y * DEG, object.rotation.z * DEG]);
+        const { x, y, z } = object.rotation;
+        const rotationDeg = rounded([x * RAD_TO_DEG, y * RAD_TO_DEG, z * RAD_TO_DEG]);
         const scale = rounded(object.scale.toArray());
         editItem(
           'Transform prop',
@@ -241,7 +269,7 @@ function PropGizmo() {
           object={object}
           mode={gizmo}
           translationSnap={snap ? feetPerSquare : null}
-          rotationSnap={snap ? ROTATION_SNAP_DEG / DEG : null}
+          rotationSnap={snap ? ROTATION_SNAP_DEG / RAD_TO_DEG : null}
           scaleSnap={snap ? SCALE_SNAP : null}
           onMouseUp={commit}
         />,

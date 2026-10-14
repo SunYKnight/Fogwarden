@@ -8,12 +8,13 @@ import { useMapRender } from '../mapRenderContext';
 /**
  * Memoized three.js resource that is disposed when its inputs change or the component unmounts.
  * `deps` may list inputs `create` reads indirectly, e.g. a terrain version for a mutated height field.
+ * `create` returns null when nothing is rendered, so no resource is built.
  */
-export function useDisposable<T extends { dispose(): void }>(create: () => T, deps: DependencyList): T {
+export function useDisposable<T extends { dispose(): void } | null>(create: () => T, deps: DependencyList): T {
   // Callers pass what `create` reads; the lint rule cannot see that.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const value = useMemo(create, deps);
-  useEffect(() => () => value.dispose(), [value]);
+  useEffect(() => () => value?.dispose(), [value]);
   return value;
 }
 

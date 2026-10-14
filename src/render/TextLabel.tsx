@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import { CanvasTexture, LinearFilter, PerspectiveCamera, SRGBColorSpace, Sprite, Vector3 } from 'three';
+import { noRaycast } from './structures/hooks';
 
 export interface LabelLine {
   text: string;
@@ -18,6 +19,10 @@ interface TextLabelProps {
   pickable?: boolean;
   /** Fill behind the text; dark by default. */
   background?: string;
+  /** Longer lines are cut with an ellipsis. */
+  maxTextPx?: number;
+  /** World width the label shrinks to when zoomed out, so neighbours' labels do not overlap. */
+  maxWidthFt?: number;
 }
 
 const FONT_PX = 11;
@@ -26,7 +31,6 @@ const PAD_PX = 4;
 const BAR_PX = 3;
 // Drawn at 3x so the label stays sharp on high-DPI screens.
 const SUPERSAMPLE = 3;
-const NO_RAYCAST = () => undefined;
 const LABEL_BACKGROUND = 'rgba(0, 0, 0, 0.65)';
 
 interface LabelImage {
@@ -35,13 +39,27 @@ interface LabelImage {
   heightPx: number;
 }
 
-function drawLabel(lines: LabelLine[], bar: TextLabelProps['bar'], background: string): LabelImage {
+/** `text` cut to `maxPx` with an ellipsis, measured in the context's current font. */
+function fitText(ctx: CanvasRenderingContext2D, text: string, maxPx: number): string {
+  let kept = text;
+  const shown = () => (kept.length < text.length ? `${kept.trimEnd()}…` : kept);
+  while (kept.length > 1 && ctx.measureText(shown()).width > maxPx) {
+    kept = kept.slice(0, -1);
+  }
+  return shown();
+}
+
+function drawLabel(input: LabelLine[], bar: TextLabelProps['bar'], background: string, maxTextPx: number): LabelImage {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     throw new Error('2D canvas is unavailable');
   }
   const font = (bold: boolean) => `${bold ? 600 : 400} ${FONT_PX}px 'Segoe UI', system-ui, sans-serif`;
+  const lines = input.map((l) => {
+    ctx.font = font(l.bold ?? false);
+    return { ...l, text: fitText(ctx, l.text, maxTextPx) };
+  });
   const textWidth = Math.max(
     ...lines.map((l) => {
       ctx.font = font(l.bold ?? false);
@@ -85,12 +103,14 @@ const scratch = new Vector3();
  */
 export function TextLabel(props: TextLabelProps) {
   const { position, lines, bar = null, opacity = 1, pickable = false, background = LABEL_BACKGROUND } = props;
+  const { maxTextPx = Infinity, maxWidthFt = Infinity } = props;
   const sprite = useRef<Sprite>(null);
   // Parsing the key back keeps the memo honest without a lint suppression.
-  const key = JSON.stringify([lines, bar, background]);
+  const key = JSON.stringify([lines, bar, background, maxTextPx]);
   const image = useMemo(() => {
-    const [l, b, fill] = JSON.parse(key) as [LabelLine[], TextLabelProps['bar'], string];
-    return drawLabel(l, b, fill);
+    const [l, b, fill, max] = JSON.parse(key) as [LabelLine[], TextLabelProps['bar'], string, number | null];
+    // JSON turns Infinity into null.
+    return drawLabel(l, b, fill, max ?? Infinity);
   }, [key]);
   useEffect(() => () => image.texture.dispose(), [image]);
 
@@ -102,17 +122,13 @@ export function TextLabel(props: TextLabelProps) {
         camera instanceof PerspectiveCamera
           ? (2 * distance * Math.tan((camera.fov * Math.PI) / 360)) / size.height
           : 1 / camera.zoom;
-      current.scale.set(image.widthPx * perPixel, image.heightPx * perPixel, 1);
+      const fit = Math.min(perPixel, maxWidthFt / image.widthPx);
+      current.scale.set(image.widthPx * fit, image.heightPx * fit, 1);
     }
   });
 
   return (
-    <sprite
-      ref={sprite}
-      position={position}
-      raycast={pickable ? Sprite.prototype.raycast : NO_RAYCAST}
-      renderOrder={10}
-    >
+    <sprite ref={sprite} position={position} raycast={pickable ? Sprite.prototype.raycast : noRaycast} renderOrder={10}>
       <spriteMaterial map={image.texture} transparent opacity={opacity} depthTest={false} depthWrite={false} />
     </sprite>
   );

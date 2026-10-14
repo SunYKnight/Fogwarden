@@ -307,7 +307,7 @@ function lightObjects(map: BattleMap): Object3D[] {
  * walls with their materials, doors, windows and bars closed, room floors and roofs, props, and
  * optionally the lights. Built in feet under one root scaled to meters.
  */
-export async function buildMapScene(
+async function buildMapScene(
   map: BattleMap,
   terrain: HeightField,
   sources: MapGlbSources,
