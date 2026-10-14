@@ -20,7 +20,11 @@ export default defineConfig({
   // Shown under Settings > About to tell builds apart.
   define: { __GIT_REVISION__: JSON.stringify(gitRevision(root)) },
   resolve: {
-    alias: { '@': resolve(root, 'src') },
+    alias: [
+      { find: '@', replacement: resolve(root, 'src') },
+      // See src/core/ndarrayStub.ts: they evaluate code at import, which the CSP blocks.
+      { find: /^ndarray(-pixels|-lanczos)?$/, replacement: resolve(root, 'src/core/ndarrayStub.ts') },
+    ],
   },
   server: {
     port: 1420,
