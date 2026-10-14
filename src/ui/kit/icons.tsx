@@ -54,6 +54,7 @@ export const ICON_PATHS = {
   close: ['M6 6l12 12', 'M18 6L6 18'],
   chevronRight: ['M9 6l6 6-6 6'],
   chevronDown: ['M6 9l6 6 6-6'],
+  chevronUp: ['M6 15l6-6 6 6'],
   search: [circle(11, 11, 7), 'M16 16l5 5'],
   upload: ['M12 16V4', 'M7 9l5-5 5 5', 'M4 16v4h16v-4'],
   folder: ['M3 6h6l2 2h10v11H3z'],

@@ -8,6 +8,7 @@ import { Button, PageHeader, useShortcuts } from '../kit';
 import { AddCombatantsDialog } from './AddCombatants';
 import { removeFromMap, stepTurn } from './combatantCommands';
 import { ConcentrationDialog } from './ConcentrationDialog';
+import { CreatureDock } from './CreatureDock';
 import { DifficultyBadge } from './EncounterDifficulty';
 import { cancelInteraction, chooseTool, useEncounterUi } from './encounterUiStore';
 import { EndCombatDialog } from './EndCombatDialog';
@@ -15,7 +16,6 @@ import { HpPromptDialog } from './HpPromptDialog';
 import { InitiativeStrip } from './InitiativeStrip';
 import { Inspector } from './Inspector';
 import { PlayViewport } from './PlayViewport';
-import { TurnBar } from './TurnBar';
 
 type CombatStep = 'setup' | 'combat' | 'wrapup';
 
@@ -95,7 +95,6 @@ function PlayHeader({ encounter, campaignName }: { encounter: Encounter; campaig
   const endCombatOpen = useEncounterUi((s) => s.endCombatOpen);
   const current = currentCombatant(encounter);
   const started = encounter.round > 0;
-  const empty = encounter.combatants.length === 0;
   const step: CombatStep = endCombatOpen ? 'wrapup' : started ? 'combat' : 'setup';
   const turn = current ? `Round ${encounter.round} · ${current.name}` : 'Combat not started';
   return (
@@ -112,20 +111,11 @@ function PlayHeader({ encounter, campaignName }: { encounter: Encounter; campaig
         combatants={encounter.combatants}
         onClick={() => {
           useEncounterStore.getState().select(null);
-          useEncounterUi.setState({ inspectorTab: 'creature' });
+          useEncounterUi.setState({ inspectorTab: 'encounter' });
         }}
       />
-      {started ? (
+      {started && (
         <Button icon="check" label="End combat" onClick={() => useEncounterUi.setState({ endCombatOpen: true })} />
-      ) : (
-        <Button
-          icon="next"
-          label="Start combat"
-          variant={empty ? 'default' : 'primary'}
-          shortcut="Space"
-          disabled={empty}
-          onClick={() => stepTurn('next')}
-        />
       )}
       <Button
         icon="undo"
@@ -166,7 +156,7 @@ function PlayLayout({ campaignName }: { campaignName: string }) {
             <div className="play-viewport waiting">No map for this encounter: initiative tracker only.</div>
           )}
           <Inspector encounter={encounter} hasMap={map !== null} />
-          <TurnBar encounter={encounter} hasMap={map !== null} />
+          <CreatureDock encounter={encounter} hasMap={map !== null} />
         </div>
         {addDialogOpen && <AddCombatantsDialog />}
         <HpPromptDialog />
@@ -178,8 +168,8 @@ function PlayLayout({ campaignName }: { campaignName: string }) {
 }
 
 /**
- * Plays one encounter: initiative strip, battle map in DM mode, turn bar and inspector tabs. The encounter itself
- * stays loaded by `useActiveEncounter` when the DM leaves this page.
+ * Plays one encounter: initiative strip, battle map in DM mode, creature dock and inspector tabs. The encounter
+ * itself stays loaded by `useActiveEncounter` when the DM leaves this page.
  */
 export function EncounterPage({ campaignId, encounterId }: { campaignId: string; encounterId: string }) {
   const repository = useAppStore((s) => s.repository);

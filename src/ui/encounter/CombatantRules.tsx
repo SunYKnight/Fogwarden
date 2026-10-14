@@ -163,7 +163,7 @@ function AddEffectForm({ c }: { c: Combatant }) {
 export function EffectsSection({ c }: { c: Combatant }) {
   const encounter = useEncounterStore((s) => s.encounter);
   return (
-    <Section title={`Effects (${c.effects.length})`} collapsible defaultOpen={c.effects.length > 0 || c.concentrating}>
+    <Section title="Timed effects">
       <CheckboxField
         label="Concentrating (asks for a CON save on damage)"
         value={c.concentrating}

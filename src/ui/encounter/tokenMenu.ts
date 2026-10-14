@@ -12,7 +12,7 @@ import {
 } from './combatantCommands';
 import { startPlacing, useEncounterUi } from './encounterUiStore';
 
-// The conditions a DM toggles most mid-fight; the rest live in the inspector.
+// Conditions a DM toggles most mid-fight; the rest live in the creature dock.
 const QUICK_CONDITIONS: Condition[] = ['prone', 'poisoned', 'frightened', 'restrained', 'unconscious'];
 
 /** Context menu of a combatant (token right-click or initiative strip row); selects it as well. */
@@ -37,7 +37,7 @@ export function openCombatantMenu(id: string, x: number, y: number): void {
       run: () => useEncounterUi.setState({ hpPrompt: { combatantId: id, change: 'heal' } }),
     },
     ...conditionItems,
-    { label: 'More conditions…', run: () => useEncounterUi.setState({ inspectorTab: 'creature' }) },
+    { label: 'More conditions…', run: () => useEncounterUi.setState({ dockCollapsed: false }) },
     { label: 'Roll initiative', icon: 'dice', run: () => rollInitiativeFor([id]) },
     c?.hiddenFromPlayers
       ? { label: 'Show to players', icon: 'eye', run: () => setHidden(id, false) }

@@ -4,14 +4,14 @@ import { Section } from '../kit';
 import { DifficultyBreakdown } from './EncounterDifficulty';
 import { HpBar } from './HpBar';
 
-/** Creature tab with nothing selected: how the fight stands at a glance. */
+/** Encounter tab: how the fight stands at a glance. */
 export function EncounterOverview({ encounter }: { encounter: Encounter }) {
   const party = encounter.combatants.filter((c) => c.side === 'player');
   const enemies = encounter.combatants.filter((c) => c.side === 'enemy');
   const standing = enemies.filter((c) => c.hp.current > 0).length;
   return (
     <div className="col encounter-overview">
-      <p className="muted small">Click a token or a name to see it here.</p>
+      <p className="muted small">Click a token or a name to show it in the creature dock under the map.</p>
       <Section title="Difficulty">
         <DifficultyBreakdown combatants={encounter.combatants} />
       </Section>

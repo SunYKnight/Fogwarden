@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Play: the right Creature tab and the bottom turn bar became one **creature dock** under the map: the selected
+  creature (during combat otherwise the current one) with side colour, name, AC, hit points, Damage / Heal / Temp,
+  condition chips and, during its turn, how far it moved; tabs Actions (attacks, roll mode, last roll, resources),
+  Effects, Token, Stats (stat block) and Notes, the last one remembered. It keeps its height, so a roll no longer
+  moves the layout, and folds to one line. Previous / Next turn (and before combat Roll initiative / Start combat)
+  moved to the top of the initiative list; the right panel opens on the Encounter overview, then Table, Dice, Log,
+  Areas. Attack results show every die and modifier in the dock and the log, e.g. `hit 17 = d20 14 (6) + 3 · dmg 5
+slashing = 1d6 [2] + 3` (dropped die of advantage in parentheses, `CRIT` with the extra dice, `NAT 1`).
+- Fix: release builds since the Poly Haven download (installer `98f5796`) showed an empty DM window. A texture
+  helper of `@gltf-transform/functions` compiles code with `Function()` when loaded, which the app's Content
+  Security Policy forbids; the texture packages it pulls in are now replaced by a stub (only texture resizing used
+  them, which the app never calls).
+- Play: area templates start from the centre of the square under the pointer (the preview follows it); aiming a
+  cone or line still follows the pointer freely.
 - Player view: a creature shows as soon as players see any part of the space it occupies (any visible fog cell of
   its footprint, the whole 10 ft for Large and up), as 5e line of sight works. Before, only the fog cell under the
   token's centre counted, which for a Medium creature was the south-east quarter of its square, so a creature

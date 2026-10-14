@@ -244,24 +244,59 @@ export function describeRoll(roll: DiceRoll): string {
 export interface DamageResult {
   type: DamageType;
   total: number;
-  text: string;
+  roll: DiceRoll;
+  /** Second roll of the dice on a critical hit; its flat bonus does not count. */
+  crit: DiceRoll | null;
 }
 
 export interface AttackResult {
   toHit: DiceRoll;
   critical: boolean;
   damage: DamageResult[];
-  /** Log line, e.g. `Goblin 1 · Scimitar: 17 to hit (…); 5 slashing (…)`. */
+  /** Log line: the attacker's name, then `describeAttack`. */
   text: string;
 }
 
 /** A critical hit rolls the damage dice twice; flat bonuses count once. */
 function rollDamage(formula: string, type: DamageType, critical: boolean, rng?: Rng): DamageResult {
   const roll = rollDice(formula, { rng });
-  const extra = critical ? rollDice(formula, { rng }) : null;
-  const total = roll.total + (extra ? extra.total - extra.flat : 0);
-  const detail = extra ? `${roll.detail}; crit dice ${extra.detail}` : roll.detail;
-  return { type, total, text: `${total} ${type} (${detail})` };
+  const crit = critical ? rollDice(formula, { rng }) : null;
+  const total = roll.total + (crit ? crit.total - crit.flat : 0);
+  return { type, total, roll, crit };
+}
+
+/** `1d6 [2, 5]` per dice group plus the flat bonus: `1d6 [2] + 1d4 [3] - 1`. */
+function describeSum(dice: string[], flat: number): string {
+  const head = dice.join(' + ');
+  const tail = flat === 0 ? '' : head === '' ? String(flat) : `${flat < 0 ? ' - ' : ' + '}${Math.abs(flat)}`;
+  return head + tail || '0';
+}
+
+function describeDiceGroups(roll: DiceRoll): string[] {
+  return roll.terms.map((t) => `${t.count}d${t.sides} [${t.results.join(', ')}]`);
+}
+
+/** `d20 14`, with advantage or disadvantage `d20 14 (6)`: the dropped die in parentheses. */
+function describeD20(toHit: DiceRoll): string {
+  const results = toHit.terms[0]?.results ?? [];
+  const kept = toHit.terms[0]?.kept[0] ?? 0;
+  const dropped = results.length === 2 ? ` (${results[results.indexOf(kept) === 0 ? 1 : 0]})` : '';
+  return `d20 ${kept}${dropped}`;
+}
+
+/**
+ * Attack roll with its dice, e.g. `Scimitar: hit 17 = d20 14 + 3 · dmg 5 slashing = 1d6 [2] + 3`; a critical
+ * hit reads `CRIT hit` and lists the extra dice as `crit 1d6 [4]`, a natural 1 reads `NAT 1 hit`.
+ */
+export function describeAttack(action: string, result: Omit<AttackResult, 'text'>): string {
+  const natural = result.toHit.terms[0]?.kept[0];
+  const mark = result.critical ? 'CRIT ' : natural === 1 ? 'NAT 1 ' : '';
+  const hit = `${mark}hit ${result.toHit.total} = ${describeSum([describeD20(result.toHit)], result.toHit.flat)}`;
+  const damage = result.damage.map((d) => {
+    const crit = d.crit ? describeDiceGroups(d.crit).map((g) => `crit ${g}`) : [];
+    return `${d.total} ${d.type} = ${describeSum([...describeDiceGroups(d.roll), ...crit], d.roll.flat)}`;
+  });
+  return `${action}: ${hit}${damage.length > 0 ? ` · dmg ${damage.join(' · ')}` : ''}`;
 }
 
 export function rollAttack(
@@ -272,10 +307,7 @@ export function rollAttack(
   rng?: Rng,
 ): AttackResult {
   const toHit = rollDice(`1d20${formatModifier(attack.toHit)}`, { rng, mode });
-  const natural = toHit.terms[0]?.kept[0];
-  const critical = natural === 20;
+  const critical = toHit.terms[0]?.kept[0] === 20;
   const damage = attack.damage.map((d) => rollDamage(d.formula, d.type, critical, rng));
-  const hitText = `${toHit.total} to hit (${toHit.detail})${critical ? ' CRITICAL' : natural === 1 ? ' miss (1)' : ''}`;
-  const damageText = damage.map((d) => d.text).join(' + ');
-  return { toHit, critical, damage, text: `${attacker} · ${action}: ${hitText}${damageText ? `; ${damageText}` : ''}` };
+  return { toHit, critical, damage, text: `${attacker} · ${describeAttack(action, { toHit, critical, damage })}` };
 }

@@ -6,7 +6,8 @@ import type { HitTag } from '@/render/mapRenderContext';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
 
 export type EncounterTool = 'select' | 'measure';
-export type InspectorTab = 'creature' | 'table' | 'dice' | 'log' | 'areas';
+export type InspectorTab = 'encounter' | 'table' | 'dice' | 'log' | 'areas';
+export type DockTab = 'actions' | 'effects' | 'token' | 'stats' | 'notes';
 export type HpChange = 'damage' | 'heal' | 'temp';
 
 /** Transient interaction state of the encounter page; nothing here is saved. */
@@ -28,6 +29,10 @@ interface EncounterUiState {
   /** Area marker being placed: origin set by the first click, aimed at the pointer. */
   placement: { template: MarkerTemplate; origin: MapPoint | null } | null;
   inspectorTab: InspectorTab;
+  /** Tab of the creature dock; it stays when another creature is shown. */
+  dockTab: DockTab;
+  /** Creature dock reduced to one line, giving the map more height. */
+  dockCollapsed: boolean;
   fogMenuOpen: boolean;
   addDialogOpen: boolean;
   /** Damage or heal amount asked for from the token context menu. */
@@ -50,7 +55,9 @@ export const useEncounterUi = create<EncounterUiState>(() => ({
   placingAll: false,
   measure: null,
   placement: null,
-  inspectorTab: 'creature',
+  inspectorTab: 'encounter',
+  dockTab: 'actions',
+  dockCollapsed: false,
   fogMenuOpen: false,
   addDialogOpen: false,
   hpPrompt: null,

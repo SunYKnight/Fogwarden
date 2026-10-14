@@ -5,6 +5,7 @@ import {
   applyDamage,
   applyHealing,
   createPc,
+  describeAttack,
   currentCombatant,
   movedThisTurnFt,
   grantTempHp,
@@ -203,6 +204,44 @@ describe('attacks', () => {
     expect(result.critical).toBe(false);
     expect(result.toHit.total).toBe(5);
     expect(result.damage[0]!.total).toBe(3);
+  });
+
+  /** Rolls the given faces in order; each pair is `[face, sides]`. */
+  const faces = (...rolls: [number, number][]) => {
+    let i = 0;
+    return () => {
+      const [face, sides] = rolls[i++]!;
+      return (face - 0.5) / sides;
+    };
+  };
+
+  it('describes both d20s of an advantage roll and every damage die with its bonus', () => {
+    const scimitar = { ...attack, toHit: 3, damage: [{ formula: '1d6+3', type: 'slashing' as const }] };
+    const result = rollAttack('Goblin 1', 'Scimitar', scimitar, 'advantage', faces([6, 20], [14, 20], [2, 6]));
+    expect(result.text).toBe('Goblin 1 · Scimitar: hit 17 = d20 14 (6) + 3 · dmg 5 slashing = 1d6 [2] + 3');
+  });
+
+  it('marks a critical hit, lists the crit dice and subtracts a negative modifier', () => {
+    const club = { ...attack, toHit: -1, damage: [{ formula: '1d6-1', type: 'bludgeoning' as const }] };
+    const result = rollAttack('Ogre', 'Club', club, 'normal', faces([20, 20], [4, 6], [5, 6]));
+    expect(describeAttack('Club', result)).toBe(
+      'Club: CRIT hit 19 = d20 20 - 1 · dmg 8 bludgeoning = 1d6 [4] + crit 1d6 [5] - 1',
+    );
+  });
+
+  it('marks a natural 1 and keeps the lower die with disadvantage', () => {
+    const bite = {
+      ...attack,
+      toHit: 2,
+      damage: [
+        { formula: '2d4', type: 'piercing' as const },
+        { formula: '1d6', type: 'poison' as const },
+      ],
+    };
+    const result = rollAttack('Wolf', 'Bite', bite, 'disadvantage', faces([1, 20], [15, 20], [1, 4], [3, 4], [6, 6]));
+    expect(describeAttack('Bite', result)).toBe(
+      'Bite: NAT 1 hit 3 = d20 1 (15) + 2 · dmg 4 piercing = 2d4 [1, 3] · 6 poison = 1d6 [6]',
+    );
   });
 });
 

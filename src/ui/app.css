@@ -595,7 +595,7 @@ h3 {
   border-color: var(--accent);
 }
 
-/* Play (U4): initiative strip, canvas toolbar, turn bar, inspector tabs */
+/* Play (U4): initiative strip, canvas toolbar, creature dock, inspector tabs */
 
 .play-body {
   flex: 1;
@@ -607,7 +607,7 @@ h3 {
 
 .play-strip {
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 1 / 3;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -645,25 +645,120 @@ h3 {
   padding: 10px;
 }
 
-.play-turnbar {
-  grid-column: 1 / 3;
+/* Fixed height: rolls, selections and tab changes never move the map edge. */
+.creature-dock {
+  grid-column: 2;
   grid-row: 2;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  position: relative;
+  min-width: 0;
+  height: min(250px, 34vh);
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
   background: var(--bg-raised);
   border-top: 1px solid var(--border);
 }
 
-/* Turn buttons stay in place; only the attack zone wraps. */
-.turn-actions {
-  flex: 1;
+.creature-dock.collapsed {
+  height: auto;
+  display: block;
+}
+
+.dock-collapse {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+}
+
+.dock-summary {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-right: 1px solid var(--border);
+}
+
+.dock-summary input {
   min-width: 0;
+}
+
+.dock-name {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dock-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Right padding keeps the last tab clear of the collapse button. */
+.dock-main .kit-tabs {
+  flex: none;
+  padding: 0 44px 0 6px;
+}
+
+.dock-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px;
+}
+
+.dock-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 4px 44px 4px 10px;
+}
+
+.dock-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 52px 12px 12px;
+}
+
+.dock-empty p {
+  margin: 0;
+}
+
+.dock-attacks {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+/* One reserved line; sticky so stat block rolls stay readable when scrolled. */
+.attack-result {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: block;
+  flex: none;
+  height: 28px;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  font-family: Consolas, monospace;
 }
 
 .strip-head {
@@ -675,6 +770,22 @@ h3 {
 
 .strip-head h2 {
   margin: 0;
+}
+
+.strip-turn {
+  display: flex;
+  gap: 6px;
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.strip-turn.setup {
+  flex-direction: column;
+}
+
+.strip-turn .btn:not(.btn-icon) {
+  justify-content: center;
 }
 
 .strip-list {
@@ -878,42 +989,6 @@ h3 {
   width: 100%;
   text-align: left;
   background: transparent;
-}
-
-.turn-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-}
-
-.turn-result {
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 4px 8px;
-  border-radius: var(--radius);
-  background: var(--bg-input);
-  font-family: Consolas, monospace;
-}
-
-.turn-hp {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.turn-hp input {
-  width: 64px;
-}
-
-.turn-hp .muted {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .add-matches {
@@ -3447,12 +3522,14 @@ video.encounter-thumb,
   cursor: pointer;
 }
 
-/* Five tabs share 340 px; the labels carry the meaning without icons. */
-.play-inspector .kit-tab {
+/* Five tabs share 340 px (dock: what the summary leaves); labels without icons. */
+.play-inspector .kit-tab,
+.dock-main .kit-tab {
   padding: 6px 8px;
 }
 
-.play-inspector .kit-tab .icon {
+.play-inspector .kit-tab .icon,
+.dock-main .kit-tab .icon {
   display: none;
 }
 

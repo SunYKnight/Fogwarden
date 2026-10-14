@@ -245,10 +245,11 @@ Screens follow the DM's order: set up once → prepare a session → at the tabl
   has Map · Grid · Lighting & ground tabs; Export is in the header's ⋯ menu.
 - **Compendium:** one split button per tab (New creature ▾ with the imports), filters behind a Filters button with
   removable chips.
-- **Play** follows the combat state (Set up · Combat · Wrap up): set-up bar before the fight, turn bar during it.
-  The map toolbar holds only map tools plus Help; Sound, Show to players, Scene and the player switches are in the
-  inspector's Table tab. With nothing selected the inspector shows the encounter overview; the Creature tab is
-  ordered by use (HP, conditions, attacks first; Token and Stat block collapsed). The hint line only shows context
-  hints.
+- **Play** follows the combat state (Set up · Combat · Wrap up). Turn buttons (Previous / Next turn, before combat
+  Roll initiative / Start combat) sit at the top of the initiative list. One **creature dock** under the map shows
+  the selected creature (during combat otherwise the current one): HP, AC, Damage / Heal / Temp and conditions on
+  the left, tabs Actions · Effects · Token · Stats · Notes on the right; it keeps a fixed height so rolls never move
+  the layout, and folds to one line. The right panel holds Encounter (overview) · Table · Dice · Log · Areas. The
+  map toolbar holds only map tools plus Help; the hint line only shows context hints.
 - **Command search (Ctrl+K):** every destination, create action, player action, play action and library item by
   name, so rare actions don't need permanent buttons.

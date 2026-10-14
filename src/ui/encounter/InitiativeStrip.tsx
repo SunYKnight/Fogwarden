@@ -5,7 +5,7 @@ import { currentCombatant, moveCombatant } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { OptionalNumberInput } from '../creature/creatureFields';
 import { Button, Icon, openContextMenu } from '../kit';
-import { patchCombatant, rollInitiativeFor, sortInitiative } from './combatantCommands';
+import { patchCombatant, rollInitiativeFor, sortInitiative, stepTurn } from './combatantCommands';
 import { useEncounterUi } from './encounterUiStore';
 import { HpBar } from './HpBar';
 import { openCombatantMenu } from './tokenMenu';
@@ -67,7 +67,52 @@ function StripRow({ c, current, selected, onDragStart, onDrop }: RowProps) {
   );
 }
 
-/** Left column of Play: the turn order only; everything else about a combatant lives in the inspector. */
+/**
+ * Rounds and turns: Previous and Next turn during combat, rolling and starting before it. The one primary
+ * button of Play lives here.
+ */
+function TurnNavigation({ encounter }: { encounter: Encounter }) {
+  const empty = encounter.combatants.length === 0;
+  return encounter.round > 0 ? (
+    <div className="strip-turn">
+      <Button
+        icon="previous"
+        label="Previous turn"
+        iconOnly
+        shortcut="Shift+Space"
+        onClick={() => stepTurn('previous')}
+      />
+      <Button
+        icon="next"
+        label="Next turn"
+        variant="primary"
+        className="grow"
+        shortcut="Space"
+        onClick={() => stepTurn('next')}
+      />
+    </div>
+  ) : (
+    <div className="strip-turn setup">
+      <Button
+        icon="dice"
+        label="Roll initiative"
+        disabled={empty}
+        title="Roll initiative for everyone and sort the order"
+        onClick={() => rollInitiativeFor(null)}
+      />
+      <Button
+        icon="next"
+        label="Start combat"
+        variant={empty ? 'default' : 'primary'}
+        shortcut="Space"
+        disabled={empty}
+        onClick={() => stepTurn('next')}
+      />
+    </div>
+  );
+}
+
+/** Left column of Play: the turn order and turn changes; everything else about a combatant is in the dock. */
 export function InitiativeStrip({ encounter }: { encounter: Encounter }) {
   const selectedId = useEncounterStore((s) => s.selectedCombatantId);
   const update = useEncounterStore((s) => s.update);
@@ -81,6 +126,7 @@ export function InitiativeStrip({ encounter }: { encounter: Encounter }) {
         <h2>Initiative</h2>
         <span className="muted small">{encounter.round > 0 ? `Round ${encounter.round}` : 'Not started'}</span>
       </div>
+      <TurnNavigation encounter={encounter} />
       <div className="strip-list">
         {encounter.combatants.map((c, i) => (
           <StripRow
@@ -98,15 +144,6 @@ export function InitiativeStrip({ encounter }: { encounter: Encounter }) {
         {empty && <p className="muted small strip-empty">Add creatures and player characters to start.</p>}
       </div>
       <div className="strip-foot">
-        {encounter.round === 0 && (
-          <Button
-            icon="dice"
-            label="Roll initiative"
-            disabled={empty}
-            title="Roll initiative for everyone and sort the order"
-            onClick={() => rollInitiativeFor(null)}
-          />
-        )}
         <div className="row">
           <Button
             icon="plus"
