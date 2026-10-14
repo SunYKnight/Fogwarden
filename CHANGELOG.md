@@ -13,7 +13,8 @@ slashing = 1d6 [2] + 3` (dropped die of advantage in parentheses, `CRIT` with th
 - Fix: release builds since the Poly Haven download (installer `98f5796`) showed an empty DM window. A texture
   helper of `@gltf-transform/functions` compiles code with `Function()` when loaded, which the app's Content
   Security Policy forbids; the texture packages it pulls in are now replaced by a stub (only texture resizing used
-  them, which the app never calls).
+  them, which the app never calls). The policy now also allows compiling WebAssembly (`'wasm-unsafe-eval'`, still no
+  JavaScript `eval`), which the model simplifier `meshoptimizer` needs.
 - Play: area templates start from the centre of the square under the pointer (the preview follows it); aiming a
   cone or line still follows the pointer freely.
 - Player view: a creature shows as soon as players see any part of the space it occupies (any visible fog cell of
