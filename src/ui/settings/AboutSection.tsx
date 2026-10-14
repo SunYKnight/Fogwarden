@@ -90,8 +90,8 @@ export function AboutSection({ settings, save }: { settings: Settings; save: (s:
           <p className="muted">Updates are available in the desktop app only.</p>
         )}
         <p className="muted small">
-          Creatures and area templates include material from the System Reference Document 5.1 by Wizards of the Coast
-          LLC, licensed under CC BY 4.0.
+          The built-in area templates include material from the System Reference Document 5.1 by Wizards of the Coast
+          LLC, licensed under CC BY 4.0. Imported packs carry their own attribution.
         </p>
         <p className="muted small">
           Creature type icons by Lorc and Delapouite from game-icons.net, licensed under CC BY 3.0

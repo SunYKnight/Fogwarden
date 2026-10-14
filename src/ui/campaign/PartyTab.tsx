@@ -3,17 +3,18 @@ import { useState } from 'react';
 import { newId, type Campaign, type PartyMember } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
-import { TextField } from '../components/fields';
+import { useDraft } from '../components/fields';
 import { CreatureThumb } from '../creatureTypes/CreatureThumb';
 import { useCreature, useHeldPackOf } from '../encounter/creatureLookup';
 import { Button, Dialog, EmptyState, Section } from '../kit';
 import { openAuroraImport } from '../library/compendiumUi';
+import { activateOnKey } from '../library/listRow';
 import { characterSummary } from '../library/PlayerLibrary';
 
 interface PartyTabProps {
   campaign: Campaign;
-  /** Saves the campaign with its changed party. */
-  onChange: (campaign: Campaign) => Promise<void>;
+  /** Saves the campaign with `change` applied to its newest saved party. */
+  onChange: (change: (party: PartyMember[]) => PartyMember[]) => Promise<void>;
 }
 
 function AuroraButton() {
@@ -39,17 +40,34 @@ interface MemberRowProps {
 function MemberRow({ member, busy, onChange, onRemove }: MemberRowProps) {
   const creature = useCreature(member.creature);
   const heldPack = useHeldPackOf(member.creature);
+  const [player, setPlayer] = useDraft(member.player);
+  const name = creature?.name ?? member.creature.id;
   const missing = heldPack
     ? `Its pack "${heldPack.name}" ${heldPack.hidden ? 'hides its creatures' : 'is disabled'}.`
     : 'This character is no longer in the compendium.';
+  const commit = () => {
+    if (player !== member.player) onChange({ ...member, player });
+  };
   return (
     <div className="encounter-row">
       {creature && <CreatureThumb creature={creature} alt="" className="creature-thumb" />}
       <div className="encounter-info">
-        <strong>{creature?.name ?? member.creature.id}</strong>
+        <strong>{name}</strong>
         <span className="muted">{creature ? characterSummary(creature) : missing}</span>
       </div>
-      <TextField label="Player" value={member.player} onChange={(player) => onChange({ ...member, player })} />
+      {/* A field label column would sit far from the box; the placeholder names it. */}
+      <input
+        type="text"
+        aria-label={`Player of ${name}`}
+        placeholder="Player name"
+        title="Who plays this character"
+        value={player}
+        onChange={(e) => setPlayer(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+        }}
+      />
       <Button icon="trash" label="Remove from the party" iconOnly variant="danger" disabled={busy} onClick={onRemove} />
     </div>
   );
@@ -88,9 +106,7 @@ function AddMembersDialog(props: {
                 aria-disabled={busy}
                 className="list-item"
                 onClick={add}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') add();
-                }}
+                onKeyDown={activateOnKey(add)}
               >
                 <CreatureThumb creature={e.doc} className="creature-row-thumb" />
                 <span className="grow">{e.doc.name}</span>
@@ -117,12 +133,12 @@ function AddMembersDialog(props: {
 export function PartyTab({ campaign, onChange }: PartyTabProps) {
   const reportError = useAppStore((s) => s.reportError);
   const [adding, setAdding] = useState(false);
-  // Each change builds on the saved party, so it waits for the last save.
+  // Adds wait for the last save, so the list never offers a character twice.
   const [saving, setSaving] = useState(false);
   const { party } = campaign;
-  const save = (next: PartyMember[]) => {
+  const save = (change: (party: PartyMember[]) => PartyMember[]) => {
     setSaving(true);
-    onChange({ ...campaign, party: next })
+    onChange(change)
       .catch(reportError)
       .finally(() => setSaving(false));
   };
@@ -145,8 +161,8 @@ export function PartyTab({ campaign, onChange }: PartyTabProps) {
             key={member.id}
             member={member}
             busy={saving}
-            onChange={(changed) => save(party.map((m) => (m.id === changed.id ? changed : m)))}
-            onRemove={() => save(party.filter((m) => m.id !== member.id))}
+            onChange={(changed) => save((p) => p.map((m) => (m.id === changed.id ? changed : m)))}
+            onRemove={() => save((p) => p.filter((m) => m.id !== member.id))}
           />
         ))}
       </div>
@@ -160,7 +176,7 @@ export function PartyTab({ campaign, onChange }: PartyTabProps) {
         <AddMembersDialog
           party={party}
           busy={saving}
-          onAdd={(m) => save([...party, m])}
+          onAdd={(m) => save((p) => [...p, m])}
           onClose={() => setAdding(false)}
         />
       )}

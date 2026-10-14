@@ -1,5 +1,5 @@
-import { useId, useState } from 'react';
-import { Field, TextField } from '../components/fields';
+import { useId } from 'react';
+import { Field, TextField, useDraft } from '../components/fields';
 
 interface OptionalNumberInputProps {
   value: number | undefined;
@@ -7,17 +7,14 @@ interface OptionalNumberInputProps {
   placeholder?: string;
   className?: string;
   id?: string;
+  /** Names the box for screen readers when no field label does. */
+  label?: string;
 }
 
 /** Integer input where an empty box means "no value"; commits on blur or Enter. */
-export function OptionalNumberInput({ value, onChange, placeholder, className, id }: OptionalNumberInputProps) {
+export function OptionalNumberInput({ value, onChange, placeholder, className, id, label }: OptionalNumberInputProps) {
   const committed = value === undefined ? '' : String(value);
-  const [text, setText] = useState(committed);
-  const [seen, setSeen] = useState(committed);
-  if (seen !== committed) {
-    setSeen(committed);
-    setText(committed);
-  }
+  const [text, setText] = useDraft(committed);
   const commit = () => {
     const parsed = Number(text);
     const next = text.trim() === '' || !Number.isFinite(parsed) ? undefined : Math.round(parsed);
@@ -29,6 +26,7 @@ export function OptionalNumberInput({ value, onChange, placeholder, className, i
   return (
     <input
       id={id}
+      aria-label={label}
       type="number"
       className={className}
       value={text}

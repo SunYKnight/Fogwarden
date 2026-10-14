@@ -9,7 +9,7 @@ import {
   type Trait,
 } from '@/core/model';
 import { abilityModifier, formatCr, formatModifier, proficiencyBonusForCr } from '@/core/rules/abilities';
-import { averageDice } from '@/core/rules/dice';
+import { averageDice, DiceError } from '@/core/rules/dice';
 
 const ATTACK_LABEL: Record<AttackKind, string> = {
   'melee-weapon': 'Melee Weapon Attack',
@@ -34,12 +34,24 @@ function listLine(label: string, items: string[]): ReactNode {
   );
 }
 
+/** Average of a damage formula; "?" for text that is no dice, e.g. from a hand-edited file. */
+function averageText(formula: string): string {
+  let text: string;
+  try {
+    text = String(averageDice(formula));
+  } catch (error) {
+    if (!(error instanceof DiceError)) throw error;
+    text = '?';
+  }
+  return text;
+}
+
 /** Stat block wording, e.g. "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) slashing". */
-export function attackSummary(attack: AttackRoll): string {
+function attackSummary(attack: AttackRoll): string {
   const reach = attack.reachFt !== null ? `reach ${attack.reachFt} ft.` : null;
   const range = attack.rangeFt ? `range ${attack.rangeFt.normal}/${attack.rangeFt.long} ft.` : null;
   const distance = [reach, range].filter((d) => d !== null).join(' or ');
-  const hits = attack.damage.map((d) => `${averageDice(d.formula)} (${d.formula}) ${d.type} damage`).join(' plus ');
+  const hits = attack.damage.map((d) => `${averageText(d.formula)} (${d.formula}) ${d.type} damage`).join(' plus ');
   const target = attack.targets ? ` ${attack.targets}.` : '';
   return `${ATTACK_LABEL[attack.kind]}: ${formatModifier(attack.toHit)} to hit, ${distance},${target} Hit: ${hits}.`;
 }
@@ -56,7 +68,13 @@ function Entry({ entry, suffix, onAttack }: EntryProps) {
   return (
     <p>
       {action?.attack && onAttack && (
-        <button className="roll-button" title={`Roll ${entry.name}`} onClick={() => onAttack(action)}>
+        <button
+          type="button"
+          className="roll-button"
+          title={`Roll ${entry.name}`}
+          aria-label={`Roll ${entry.name}`}
+          onClick={() => onAttack(action)}
+        >
           🎲
         </button>
       )}

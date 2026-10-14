@@ -1,5 +1,6 @@
 import { useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { CREATURE_TYPES, nowIso, type Creature } from '@/core/model';
+import { countOf } from '@/core/plural';
 import { formatCr } from '@/core/rules/abilities';
 import { DND5E_API_PACK } from '@/data/dnd5eApiImport';
 import { MY_CONTENT } from '@/data/packs';
@@ -13,6 +14,7 @@ import { attachPortraitsFromApi } from './AttachPortraitsDialog';
 import { openCreatureImport, openDndApiImport } from './compendiumUi';
 import { FilterRow, FilterSelect, type FilterChip } from './FilterRow';
 import { OriginBadge } from './OriginBadge';
+import { distinct } from './ItemSpellLibrary';
 
 type SortKey = 'name' | 'cr' | 'type';
 type Entry = LibraryEntry<'creature'>;
@@ -36,7 +38,7 @@ interface Filter {
 
 const NO_FILTER: Filter = { text: '', type: '', source: '', minCr: 0, maxCr: 30, mineOnly: false };
 
-// Free text also searches tags so the old tag filter needs no own field.
+// Free text also searches tags, so tags need no field of their own.
 function matches(entry: Entry, f: Filter): boolean {
   const c = entry.doc;
   const text = f.text.toLowerCase();
@@ -229,7 +231,7 @@ export function CreatureLibrary() {
   // Player characters have their own tab.
   const creatures = useMemo(() => listing.listed.filter((e) => e.doc.kind !== 'player'), [listing]);
 
-  const sources = useMemo(() => [...new Set(creatures.map((e) => e.doc.source))].sort(), [creatures]);
+  const sources = useMemo(() => distinct(creatures.map((e) => e.doc.source)), [creatures]);
   const entries = useMemo(
     () => creatures.filter((e) => matches(e, filter)).sort((a, b) => SORTERS[sort](a.doc, b.doc)),
     [creatures, filter, sort],
@@ -261,7 +263,7 @@ export function CreatureLibrary() {
         {unpictured > 0 && (
           <div className="row">
             <span className="muted grow">
-              {unpictured === 1 ? '1 SRD monster has' : `${unpictured} SRD monsters have`} no picture.
+              {countOf(unpictured, 'SRD monster')} {unpictured === 1 ? 'has' : 'have'} no picture.
             </span>
             <Button
               icon="download"
@@ -297,6 +299,11 @@ export function CreatureLibrary() {
               onDoubleClick={() => edit(entry)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') edit(entry);
+                if (e.key === ' ') {
+                  // Space would otherwise scroll the list.
+                  e.preventDefault();
+                  setSelectedId(entry.ref.id);
+                }
               }}
               onContextMenu={(e) => showMenu(e, entry)}
             >
@@ -310,18 +317,13 @@ export function CreatureLibrary() {
         </div>
         {entries.length === 0 && (
           <EmptyState
-            icon="search"
+            icon={creatures.length === 0 ? 'users' : 'search'}
             title={creatures.length === 0 ? 'No creatures yet.' : 'No creatures match the filters.'}
             action={
               creatures.length === 0 ? (
                 <>
-                  <Button
-                    icon="download"
-                    label="Import from the D&D 5e API…"
-                    variant="primary"
-                    onClick={openDndApiImport}
-                  />
-                  <Button icon="upload" label="Import from text" onClick={() => openCreatureImport('')} />
+                  <Button icon="download" label="Import from the D&D 5e API…" onClick={openDndApiImport} />
+                  <Button icon="upload" label="Stat block from text…" onClick={() => openCreatureImport('')} />
                 </>
               ) : (
                 <Button label="Reset filters" onClick={() => setFilter(NO_FILTER)} />

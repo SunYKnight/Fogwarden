@@ -6,6 +6,7 @@ import { useAppStore } from '@/state/appStore';
 import { Field } from '../components/fields';
 import { Markdown } from '../components/Markdown';
 import { Button, Dialog } from '../kit';
+import { serialQueue } from '../library/serialQueue';
 
 const SAVE_MS = 800;
 
@@ -26,9 +27,16 @@ export function NameDialog(props: {
   const { title, initial, confirmLabel, onSubmit, onClose } = props;
   const reportError = useAppStore((s) => s.reportError);
   const [name, setName] = useState(initial);
+  const [busy, setBusy] = useState(false);
   const id = useId();
-  const valid = name.trim() !== '';
-  const submit = () => onSubmit(name.trim()).then(onClose, reportError);
+  const valid = name.trim() !== '' && !busy;
+  const submit = () => {
+    setBusy(true);
+    onSubmit(name.trim()).then(onClose, (error: unknown) => {
+      setBusy(false);
+      reportError(error);
+    });
+  };
   return (
     <Dialog
       title={title}
@@ -64,33 +72,65 @@ export function Problems({ problems }: { problems: LoadProblem[] }) {
   ));
 }
 
-/** One campaign folder's documents of a kind, with local replace/drop after saves. */
+/**
+ * One campaign folder's documents of a kind. Edits and removals run one after another on the newest saved copy, so
+ * a change made while another save is in flight never writes back stale fields.
+ */
 export function useCampaignDocs<T extends CampaignDoc>(campaignId: string, kind: CampaignDocKind<T>) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const files = useMemo(() => new CampaignFiles(repository.storage, campaignId), [repository, campaignId]);
+  const [queue] = useState(serialQueue);
   const [listing, setListing] = useState<{ docs: T[]; problems: LoadProblem[] } | null>(null);
+  const latest = useRef(new Map<string, T>());
 
   useEffect(() => {
-    files.list(kind).then(setListing, reportError);
+    files.list(kind).then((loaded) => {
+      latest.current = new Map(loaded.docs.map((d) => [d.id, d]));
+      setListing(loaded);
+    }, reportError);
   }, [files, kind, reportError]);
 
-  const put = useCallback(
-    (doc: T) => setListing((l) => l && { ...l, docs: [...l.docs.filter((d) => d.id !== doc.id), doc] }),
-    [],
+  const put = useCallback((doc: T) => {
+    latest.current.set(doc.id, doc);
+    setListing((l) => l && { ...l, docs: [...l.docs.filter((d) => d.id !== doc.id), doc] });
+  }, []);
+  const drop = useCallback((id: string) => {
+    latest.current.delete(id);
+    setListing((l) => l && { ...l, docs: l.docs.filter((d) => d.id !== id) });
+  }, []);
+  /** Queues `write` with the newest saved copy of the document and keeps what it stored. */
+  const edit = useCallback(
+    (id: string, write: (doc: T) => Promise<T>) =>
+      queue(async () => {
+        const doc = latest.current.get(id);
+        if (doc === undefined) throw new Error('This entry was deleted in the meantime.');
+        const saved = await write(doc);
+        put(saved);
+        return saved;
+      }),
+    [queue, put],
   );
-  const drop = useCallback(
-    (id: string) => setListing((l) => l && { ...l, docs: l.docs.filter((d) => d.id !== id) }),
-    [],
+  const update = useCallback(
+    (id: string, patch: Partial<T>) => edit(id, (doc) => files.save(kind, { ...doc, ...patch })),
+    [edit, files, kind],
   );
-  return { files, docs: listing?.docs ?? null, problems: listing?.problems ?? [], put, drop };
+  const remove = useCallback(
+    (id: string) =>
+      queue(async () => {
+        await files.remove(kind, id);
+        drop(id);
+      }),
+    [queue, files, kind, drop],
+  );
+  return { files, docs: listing?.docs ?? null, problems: listing?.problems ?? [], put, edit, update, remove };
 }
 
 interface NotesEditorProps {
   value: string;
   label: string;
   placeholder: string;
-  onCommit: (text: string) => Promise<void>;
+  onCommit: (text: string) => Promise<unknown>;
 }
 
 /**
@@ -115,7 +155,14 @@ export function NotesEditor({ value, label, placeholder, onCommit }: NotesEditor
       setCommitted(text);
       setSaving(true);
       commit(text)
-        .catch(reportError)
+        .catch((error: unknown) => {
+          // Unsaved again, so the next blur or keystroke retries the write.
+          if (latest.current.committed === text) {
+            latest.current.committed = stored;
+            setCommitted(stored);
+          }
+          reportError(error);
+        })
         .finally(() => setSaving(false));
     }
   }, [reportError]);

@@ -8,6 +8,8 @@ import {
   type LegendaryAction,
   type Trait,
 } from '@/core/model';
+import { parseDice } from '@/core/rules/dice';
+import { useAppStore } from '@/state/appStore';
 import { CheckboxField, NumberField, SelectField, TextField } from '../components/fields';
 import { OptionalNumberField } from './creatureFields';
 
@@ -20,7 +22,7 @@ interface ListEditorProps<T> {
 }
 
 /** Ordered list with add, remove and move-up; items are edited by `renderItem`. */
-export function ListEditor<T>({ title, items, onChange, create, renderItem }: ListEditorProps<T>) {
+function ListEditor<T>({ title, items, onChange, create, renderItem }: ListEditorProps<T>) {
   const moveUp = (i: number) => onChange(items.map((x, j) => (j === i - 1 ? items[i]! : j === i ? items[i - 1]! : x)));
   return (
     <div className="col">
@@ -32,10 +34,15 @@ export function ListEditor<T>({ title, items, onChange, create, renderItem }: Li
       {items.map((item, i) => (
         <div key={i} className="entry-editor">
           <div className="row entry-tools">
-            <button disabled={i === 0} title="Move up" onClick={() => moveUp(i)}>
+            <button disabled={i === 0} title="Move up" aria-label="Move up" onClick={() => moveUp(i)}>
               ↑
             </button>
-            <button className="danger" title="Remove" onClick={() => onChange(items.filter((_, j) => j !== i))}>
+            <button
+              className="danger"
+              title="Remove"
+              aria-label="Remove"
+              onClick={() => onChange(items.filter((_, j) => j !== i))}
+            >
               ✕
             </button>
           </div>
@@ -75,7 +82,13 @@ export function LegendaryListEditor(props: { items: LegendaryAction[]; onChange:
       renderItem={(l, set) => (
         <>
           <TextField label="Name" value={l.name} onChange={(name) => set({ ...l, name })} />
-          <NumberField label="Cost" value={l.cost} min={1} max={3} onChange={(cost) => set({ ...l, cost })} />
+          <NumberField
+            label="Cost"
+            value={l.cost}
+            min={1}
+            max={3}
+            onChange={(cost) => set({ ...l, cost: Math.round(cost) })}
+          />
           <TextField
             label="Description"
             multiline
@@ -106,7 +119,11 @@ function AttackEditor({ attack, set }: { attack: AttackRoll; set: (next: AttackR
         options={ATTACK_KINDS}
         onChange={(kind) => set({ ...attack, kind })}
       />
-      <NumberField label="To hit" value={attack.toHit} onChange={(toHit) => set({ ...attack, toHit })} />
+      <NumberField
+        label="To hit"
+        value={attack.toHit}
+        onChange={(toHit) => set({ ...attack, toHit: Math.round(toHit) })}
+      />
       <OptionalNumberField
         label="Reach"
         suffix="ft"
@@ -127,7 +144,7 @@ function AttackEditor({ attack, set }: { attack: AttackRoll; set: (next: AttackR
           suffix="ft"
           min={0}
           value={attack.rangeFt.long}
-          onChange={(long) => set({ ...attack, rangeFt: { normal: attack.rangeFt!.normal, long } })}
+          onChange={(long) => set({ ...attack, rangeFt: { normal: attack.rangeFt!.normal, long: Math.round(long) } })}
         />
       )}
       <TextField label="Targets" value={attack.targets} onChange={(targets) => set({ ...attack, targets })} />
@@ -138,7 +155,21 @@ function AttackEditor({ attack, set }: { attack: AttackRoll; set: (next: AttackR
         create={() => ({ formula: '1d6', type: 'slashing' })}
         renderItem={(d, setDamage) => (
           <>
-            <TextField label="Dice" value={d.formula} onChange={(formula) => setDamage({ ...d, formula })} />
+            <TextField
+              label="Dice"
+              value={d.formula}
+              onChange={(formula) => {
+                let valid = true;
+                try {
+                  parseDice(formula);
+                } catch (error) {
+                  // The box keeps the text so it can be corrected.
+                  valid = false;
+                  useAppStore.getState().reportError(error);
+                }
+                if (valid) setDamage({ ...d, formula });
+              }}
+            />
             <SelectField
               label="Type"
               value={d.type}

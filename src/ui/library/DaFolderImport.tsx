@@ -1,8 +1,10 @@
 import { open } from '@tauri-apps/plugin-dialog';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { errorMessage } from '@/core/errors';
 import { damMargin, parseDamProject, type DamProject } from '@/core/import/damProject';
 import type { DamObjectChoices } from '@/core/import/damObjects';
 import { collectDaMaps, daFloorName, parseDaFloor, type DaFloor } from '@/core/import/dungeonAlchemist';
+import { countOf } from '@/core/plural';
 import { fitSquaresToImage } from '@/core/terrain/calibration';
 import { listFolder, readFileBytes, readFileText } from '@/data/tauriStorage';
 import { useAppStore } from '@/state/appStore';
@@ -67,7 +69,7 @@ export async function pickDaFolder(): Promise<FolderPlan | null> {
 
 function floorSummary(floor: DaFloor): string {
   const { walls, openings, lights } = floor.content;
-  return `${walls.length} walls, ${openings.length} doors, ${lights.length} lights`;
+  return [countOf(walls.length, 'wall'), countOf(openings.length, 'door'), countOf(lights.length, 'light')].join(', ');
 }
 
 /**
@@ -79,27 +81,32 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
   const reportError = useAppStore((s) => s.reportError);
   const [useProjects, setUseProjects] = useState(true);
   const [choices, setChoices] = useState<DamObjectChoices | null>(null);
+  const [choicesError, setChoicesError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const projects = plan.maps.flatMap((m) => (m.project ? [m.project] : []));
-  const withObjects = projects.filter((p) => p.objects.length > 0);
+  const projects = useMemo(() => plan.maps.flatMap((m) => (m.project ? [m.project] : [])), [plan]);
+  const withObjects = useMemo(() => projects.filter((p) => p.objects.length > 0), [projects]);
   const [previews, setPreviews] = useState<Record<string, DamPreview>>({});
+  // Importing before the choices load would place no objects without saying so.
+  const choicesPending = useProjects && withObjects.length > 0 && choices === null;
 
   const count = plan.maps.reduce((n, m) => n + m.floors.length, 0);
 
   useEffect(() => {
-    const projectsWithObjects = plan.maps.flatMap((m) => (m.project?.objects.length ? [m.project] : []));
-    if (projectsWithObjects.length > 0) {
+    if (withObjects.length > 0) {
       loadDamObjectChoices(repository)
         .then((kept) =>
-          projectsWithObjects.reduce(
-            async (all, p) => projectChoices(repository, p, await all, false),
-            Promise.resolve(kept),
-          ),
+          withObjects.reduce(async (all, p) => {
+            const current = await all;
+            return (await projectChoices(repository, p, current.gameFolder, false))(current);
+          }, Promise.resolve(kept)),
         )
         .then(setChoices)
-        .catch(reportError);
+        .catch((error: unknown) => {
+          setChoicesError(errorMessage(error));
+          reportError(error);
+        });
     }
-  }, [plan, repository, reportError]);
+  }, [withObjects, repository, reportError]);
 
   // The lowest floor's picture shows where each object kind stands.
   useEffect(() => {
@@ -152,12 +159,13 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
           });
         }
       }
-      await useLibraryStore.getState().refresh('map');
-      useAppStore.getState().notify(`${count} maps imported from ${plan.folder}`);
-      onClose();
     } finally {
       setBusy(false);
+      // Maps saved before a failing floor must still show in the library.
+      await useLibraryStore.getState().refresh('map').catch(reportError);
     }
+    useAppStore.getState().notify(`${countOf(count, 'map')} imported from ${plan.folder}`);
+    onClose();
   };
 
   return (
@@ -171,9 +179,9 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
           <div className="spacer" />
           <Button
             icon="check"
-            label={busy ? 'Importing…' : `Import ${count} ${count === 1 ? 'map' : 'maps'}`}
+            label={busy ? 'Importing…' : `Import ${countOf(count, 'map')}`}
             variant="primary"
-            disabled={busy}
+            disabled={busy || choicesPending}
             onClick={() => run().catch(reportError)}
           />
         </>
@@ -200,6 +208,14 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
             onChange={setUseProjects}
           />
         )}
+        {choicesPending && (
+          <p className={choicesError === null ? 'muted' : 'error-text'}>
+            {choicesError === null
+              ? 'Loading the object choices…'
+              : `The object choices could not be loaded: ${choicesError}. Untick the terrain and objects to ` +
+                'import the maps without them.'}
+          </p>
+        )}
         {useProjects &&
           choices &&
           withObjects.map((p) => (
@@ -208,7 +224,7 @@ export function DaFolderImportDialog({ plan, onClose }: { plan: FolderPlan; onCl
               project={p}
               choices={choices}
               preview={previews[p.fileName] ?? null}
-              onChange={setChoices}
+              onChange={(update) => setChoices((prev) => prev && update(prev))}
             />
           ))}
       </div>

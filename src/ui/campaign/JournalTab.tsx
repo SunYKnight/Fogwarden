@@ -1,29 +1,35 @@
 import { useState } from 'react';
 import { currentSession, newJournalEntry, sortJournal, type JournalEntry } from '@/core/campaign/journal';
+import { countOf } from '@/core/plural';
 import { JOURNAL } from '@/data/campaignFiles';
 import { useAppStore } from '@/state/appStore';
 import { Field, TextField } from '../components/fields';
 import { Button, confirmDialog, EmptyState } from '../kit';
+import { activateOnKey } from '../library/listRow';
 import { EncounterLinks, NotesEditor, Problems, useCampaignDocs, type CampaignTabProps } from './campaignUi';
 
 /** Session journal: one Markdown entry per session; Play appends its notable events to the current one. */
 export function JournalTab({ campaignId, encounters }: CampaignTabProps) {
   const reportError = useAppStore((s) => s.reportError);
-  const { files, docs, problems, put, drop } = useCampaignDocs(campaignId, JOURNAL);
+  const { files, docs, problems, put, update, remove: removeDoc } = useCampaignDocs(campaignId, JOURNAL);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const sorted = sortJournal(docs ?? []);
   const selected = sorted.find((e) => e.id === selectedId) ?? sorted[0] ?? null;
   const current = currentSession(sorted, new Date());
 
   const create = async () => {
-    const entry = newJournalEntry(sorted, new Date());
-    const saved = await files.save(JOURNAL, { ...entry, id: await files.newId(JOURNAL, entry.id) });
-    put(saved);
-    setSelectedId(saved.id);
-    useAppStore.getState().notify(`Created "${saved.title}"`, 'success');
+    setCreating(true);
+    try {
+      const entry = newJournalEntry(sorted, new Date());
+      const saved = await files.save(JOURNAL, { ...entry, id: await files.newId(JOURNAL, entry.id) });
+      put(saved);
+      setSelectedId(saved.id);
+      useAppStore.getState().notify(`Created "${saved.title}"`, 'success');
+    } finally {
+      setCreating(false);
+    }
   };
-
-  const update = async (entry: JournalEntry) => put(await files.save(JOURNAL, entry));
 
   const remove = async (entry: JournalEntry) => {
     const ok = await confirmDialog({
@@ -33,20 +39,26 @@ export function JournalTab({ campaignId, encounters }: CampaignTabProps) {
       danger: true,
     });
     if (ok) {
-      await files.remove(JOURNAL, entry.id);
-      drop(entry.id);
+      await removeDoc(entry.id);
       useAppStore.getState().notify(`Deleted "${entry.title}"`, 'success');
     }
   };
 
   const newButton = (
-    <Button icon="plus" label="New session" variant="primary" onClick={() => create().catch(reportError)} />
+    <Button
+      icon="plus"
+      label="New session"
+      variant="primary"
+      disabled={creating}
+      onClick={() => create().catch(reportError)}
+    />
   );
-  return (
+  // Before the entries load, an empty list and New session would number the entry as session 1.
+  return docs === null ? null : (
     <div className="campaign-split">
       <div className="campaign-list">
         <div className="row">
-          <span className="muted">{sorted.length} sessions</span>
+          <span className="muted">{countOf(sorted.length, 'session')}</span>
           <div className="spacer" />
           {sorted.length > 0 && newButton}
         </div>
@@ -60,6 +72,7 @@ export function JournalTab({ campaignId, encounters }: CampaignTabProps) {
               aria-selected={entry.id === selected?.id}
               className={entry.id === selected?.id ? 'list-item selected' : 'list-item'}
               onClick={() => setSelectedId(entry.id)}
+              onKeyDown={activateOnKey(() => setSelectedId(entry.id))}
             >
               <span className="row-name">{entry.title}</span>
               {entry.id === current?.id && <span className="status-chip running">current</span>}
@@ -75,7 +88,7 @@ export function JournalTab({ campaignId, encounters }: CampaignTabProps) {
               <TextField
                 label="Title"
                 value={selected.title}
-                onChange={(title) => update({ ...selected, title }).catch(reportError)}
+                onChange={(title) => update(selected.id, { title }).catch(reportError)}
               />
             </div>
             <Field label="Date">
@@ -83,7 +96,7 @@ export function JournalTab({ campaignId, encounters }: CampaignTabProps) {
                 type="date"
                 aria-label="Session date"
                 value={selected.date}
-                onChange={(e) => update({ ...selected, date: e.target.value }).catch(reportError)}
+                onChange={(e) => update(selected.id, { date: e.target.value }).catch(reportError)}
               />
             </Field>
             <Button icon="trash" label="Delete" variant="danger" onClick={() => remove(selected).catch(reportError)} />
@@ -92,7 +105,7 @@ export function JournalTab({ campaignId, encounters }: CampaignTabProps) {
             <EncounterLinks
               linked={selected.encounters}
               encounters={encounters}
-              onChange={(ids) => update({ ...selected, encounters: ids }).catch(reportError)}
+              onChange={(ids) => update(selected.id, { encounters: ids }).catch(reportError)}
             />
           </Field>
           {selected.id === current?.id && (
@@ -102,7 +115,7 @@ export function JournalTab({ campaignId, encounters }: CampaignTabProps) {
             label="Session notes"
             placeholder="What happened, what the players plan next. Markdown: # heading, - list, **bold**."
             value={selected.body}
-            onCommit={(body) => update({ ...selected, body })}
+            onCommit={(body) => update(selected.id, { body })}
           />
         </div>
       ) : (

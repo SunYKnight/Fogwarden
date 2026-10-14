@@ -15,7 +15,7 @@ import {
   type Creature,
 } from '@/core/model';
 import { abilityModifier, formatCr, formatModifier, proficiencyBonusForCr, xpForCr } from '@/core/rules/abilities';
-import { averageDice } from '@/core/rules/dice';
+import { averageDice, parseDice } from '@/core/rules/dice';
 import { useAppStore } from '@/state/appStore';
 import { AssetImage } from '../components/AssetImage';
 import { CheckboxField, Field, NumberField, SelectField, TextField } from '../components/fields';
@@ -148,7 +148,12 @@ function DefenseSection({ c, change }: { c: Creature; change: Change }) {
   };
   return (
     <Section title="Defense and movement" collapsible>
-      <NumberField label="Armor class" value={c.armorClass} onChange={(v) => change((d) => void (d.armorClass = v))} />
+      <NumberField
+        label="Armor class"
+        min={0}
+        value={c.armorClass}
+        onChange={(v) => change((d) => void (d.armorClass = Math.round(v)))}
+      />
       <TextField label="Armor note" value={c.armorNote} onChange={(v) => change((d) => void (d.armorNote = v))} />
       <NumberField
         label="Hit points"
@@ -165,7 +170,15 @@ function DefenseSection({ c, change }: { c: Creature; change: Change }) {
             style={{ flex: 1 }}
             onBlur={(e) => {
               const formula = e.target.value.trim();
-              change((d) => void (d.hitPoints.formula = formula));
+              let valid = true;
+              try {
+                if (formula !== '') parseDice(formula);
+              } catch (error) {
+                // The box keeps the text so it can be corrected.
+                valid = false;
+                reportError(error);
+              }
+              if (valid) change((d) => void (d.hitPoints.formula = formula));
             }}
           />
           <button title="Set hit points to the formula average" onClick={averageFromFormula}>

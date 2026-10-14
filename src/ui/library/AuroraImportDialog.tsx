@@ -2,6 +2,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { documentDir, join } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useState } from 'react';
+import { countOf } from '@/core/plural';
 import {
   AURORA_PACK,
   auroraBooks,
@@ -47,7 +48,7 @@ const PART_LABEL: Record<keyof AuroraParts, string> = {
 
 const PART_KEYS: (keyof AuroraParts)[] = ['characters', 'items', 'spells', 'portraits'];
 function fromBooks(count: number, books: string[]): string {
-  return `${count} from ${books.length} ${books.length === 1 ? 'book' : 'books'}`;
+  return `${count} from ${countOf(books.length, 'book')}`;
 }
 
 function partDetail(part: keyof AuroraParts, plan: AuroraPlan): string {
@@ -135,10 +136,11 @@ export function AuroraImportDialog({ onClose }: { onClose: () => void }) {
   };
 
   const plan = stage.step === 'plan' ? stage.plan : null;
+  const busy = stage.step === 'import' || stage.step === 'read';
   const footer =
     stage.step === 'done' ? (
       <Button label="Close" variant="primary" onClick={onClose} />
-    ) : stage.step === 'import' || stage.step === 'read' ? null : (
+    ) : busy ? null : (
       <>
         <Button
           icon="folder"
@@ -168,14 +170,23 @@ export function AuroraImportDialog({ onClose }: { onClose: () => void }) {
     );
 
   return (
-    <Dialog title="Import from Aurora Builder" onClose={onClose} width={560} footer={footer}>
+    <Dialog
+      title="Import from Aurora Builder"
+      onClose={() => {
+        // Closing mid-import would hide a job that keeps writing the pack.
+        if (stage.step !== 'import') onClose();
+      }}
+      width={560}
+      footer={footer}
+    >
       <div className="col">
         {stage.step === 'pick' && (
           <>
             <p>
               Pick Aurora Builder&apos;s documents folder (with <code>custom</code>, <code>portraits</code> and the
-              <code> .dnd5e</code> characters). Everything goes into the pack &quot;{AURORA_PACK.name}&quot; in your
-              data folder; importing again replaces it, so level-ups arrive.
+              <code> .dnd5e</code> characters), then tick the parts to import into the pack &quot;{AURORA_PACK.name}
+              &quot; in your data folder. Importing a part again replaces it, so level-ups arrive; unticked parts stay
+              as an earlier import left them.
             </p>
             {suggested ? (
               <p className="muted small">Found: {suggested}</p>
@@ -205,7 +216,7 @@ export function AuroraImportDialog({ onClose }: { onClose: () => void }) {
             </p>
             {plan.problems.length > 0 && (
               <details>
-                <summary>{plan.problems.length} files could not be read</summary>
+                <summary>{countOf(plan.problems.length, 'file')} could not be read</summary>
                 <ul className="small">
                   {plan.problems.map((p) => (
                     <li key={p.file}>
@@ -241,7 +252,7 @@ export function AuroraImportDialog({ onClose }: { onClose: () => void }) {
               ))}
             </dl>
             {stage.report.removed > 0 && (
-              <p className="muted small">Removed {stage.report.removed} files the earlier import had.</p>
+              <p className="muted small">Removed {countOf(stage.report.removed, 'file')} the earlier import had.</p>
             )}
           </>
         )}

@@ -183,15 +183,33 @@ export function CalendarTab({ campaignId }: CampaignTabProps) {
   const [calendar, setCalendar] = useState<Calendar | null | undefined>(undefined);
   const [preset, setPreset] = useState<CalendarPreset>('harptos');
   const [dialog, setDialog] = useState<OpenDialog>(null);
-  // Earlier current times, so a mistaken rest or jump can be taken back.
+  // Earlier current times, so a mistaken rest, jump or set date can be taken back.
   const [previous, setPrevious] = useState<CalendarDate[]>([]);
+  // Each step builds on the shown date, so the next waits for the last save.
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     new CampaignFiles(repository.storage, campaignId).loadCalendar().then(setCalendar, reportError);
   }, [repository, campaignId, reportError]);
 
   const save = async (next: Calendar) => {
-    setCalendar(await saveCampaignCalendar(campaignId, next));
+    setBusy(true);
+    try {
+      setCalendar(await saveCampaignCalendar(campaignId, next));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setDate = async (next: Calendar) => {
+    await save(next);
+    setPrevious((p) => [...p, calendar!.now]);
+  };
+
+  const saveMonths = async (next: Calendar) => {
+    await save(next);
+    // Earlier dates may lie in months that no longer exist.
+    setPrevious([]);
   };
 
   const start = async () => {
@@ -250,10 +268,16 @@ export function CalendarTab({ campaignId }: CampaignTabProps) {
               label={ADVANCE_STEPS[step].label}
               variant={step === 'longRest' ? 'primary' : 'default'}
               title={`${ADVANCE_STEPS[step].minutes} minutes`}
+              disabled={busy}
               onClick={() => advance(step).catch(reportError)}
             />
           ))}
-          <Button icon="undo" label="Undo" disabled={previous.length === 0} onClick={() => undo().catch(reportError)} />
+          <Button
+            icon="undo"
+            label="Undo"
+            disabled={previous.length === 0 || busy}
+            onClick={() => undo().catch(reportError)}
+          />
         </div>
         <div className="row">
           <Button icon="edit" label="Set date…" onClick={() => setDialog('date')} />
@@ -262,7 +286,7 @@ export function CalendarTab({ campaignId }: CampaignTabProps) {
       </div>
       <Section
         title={`Events (${calendar.events.length})`}
-        actions={<Button icon="plus" label="Add event" onClick={() => setDialog('event')} />}
+        actions={<Button icon="plus" label="Add event…" onClick={() => setDialog('event')} />}
       >
         <div className="list">
           {sortedEvents(calendar).map((event) => (
@@ -286,8 +310,8 @@ export function CalendarTab({ campaignId }: CampaignTabProps) {
         </div>
         {calendar.events.length === 0 && <p className="muted">Festivals, deadlines, appointments.</p>}
       </Section>
-      {dialog === 'date' && <SetDateDialog calendar={calendar} onSave={save} onClose={() => setDialog(null)} />}
-      {dialog === 'months' && <MonthsDialog calendar={calendar} onSave={save} onClose={() => setDialog(null)} />}
+      {dialog === 'date' && <SetDateDialog calendar={calendar} onSave={setDate} onClose={() => setDialog(null)} />}
+      {dialog === 'months' && <MonthsDialog calendar={calendar} onSave={saveMonths} onClose={() => setDialog(null)} />}
       {dialog === 'event' && <EventDialog calendar={calendar} onSave={save} onClose={() => setDialog(null)} />}
     </div>
   );

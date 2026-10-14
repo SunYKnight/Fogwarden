@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { create } from 'zustand';
 import { nowIso } from '@/core/model';
+import { countOf } from '@/core/plural';
 import { createRandomTable, parseTableFile, formatTableFile, type RandomTable, type TableRoll } from '@/core/tables';
 import { MY_CONTENT } from '@/data/packs';
 import type { LibraryEntry } from '@/data/repository';
@@ -11,8 +12,11 @@ import { appendToJournal } from '@/state/journalRecorder';
 import { useLibraryStore } from '@/state/libraryStore';
 import { rollTable } from '@/state/randomTables';
 import { NameDialog } from '../campaign/campaignUi';
-import { TextField } from '../components/fields';
+import { TextField, useDraft } from '../components/fields';
 import { Button, confirmDialog, EmptyState, Icon } from '../kit';
+import { activateOnKey } from './listRow';
+import { OriginBadge } from './OriginBadge';
+import { serialQueue } from './serialQueue';
 
 type Entry = LibraryEntry<'table'>;
 
@@ -59,7 +63,7 @@ export function TableActions() {
 }
 
 function describe(table: RandomTable): string {
-  const count = `${table.entries.length} ${table.entries.length === 1 ? 'entry' : 'entries'}`;
+  const count = countOf(table.entries.length, 'entry', 'entries');
   const dice = table.dice ?? `d${table.entries[table.entries.length - 1]?.to ?? 0}`;
   return table.kind === 'dice' ? `${dice} · ${count}` : count;
 }
@@ -69,13 +73,18 @@ function TableEditor({ entry }: { entry: Entry }) {
   const reportError = useAppStore((s) => s.reportError);
   const refresh = useLibraryStore((s) => s.refresh);
   const table = entry.doc;
-  const [text, setText] = useState(table.text);
+  // Follows the table when it changes from outside, e.g. after Revert.
+  const [text, setText] = useDraft(table.text);
   const [problem, setProblem] = useState<string | null>(null);
+  // Edits apply to the newest listed table, so a quick second edit keeps the first.
+  const [queue] = useState(serialQueue);
 
-  const save = async (next: RandomTable) => {
-    await repository.save('table', next);
-    await refresh('table');
-  };
+  const save = (change: (latest: RandomTable) => RandomTable) =>
+    queue(async () => {
+      const latest = useLibraryStore.getState().listings.table.entries.find((e) => e.ref.id === table.id)?.doc;
+      await repository.save('table', change(latest ?? table));
+      await refresh('table');
+    });
 
   // Checked before saving so a typo never replaces a working table.
   const commitText = () => {
@@ -87,13 +96,17 @@ function TableEditor({ entry }: { entry: Entry }) {
       setProblem(error instanceof Error ? error.message : String(error));
     }
     if (parsed && text !== table.text) {
-      save(parsed).catch(reportError);
+      save((latest) => parseTableFile(formatTableFile({ ...latest, text }), latest.id)).catch(reportError);
     }
   };
 
   return (
     <div className="col table-editor">
-      <TextField label="Name" value={table.name} onChange={(name) => save({ ...table, name }).catch(reportError)} />
+      <TextField
+        label="Name"
+        value={table.name}
+        onChange={(name) => save((latest) => ({ ...latest, name })).catch(reportError)}
+      />
       <textarea
         className="table-text"
         aria-label={`Entries of ${table.name}`}
@@ -136,7 +149,7 @@ function RollPanel({ table }: { table: RandomTable }) {
 
   return (
     <div className="col roll-panel">
-      <Button icon="dice" label={`Roll on ${table.name}`} variant="primary" onClick={roll} />
+      <Button icon="dice" label={`Roll on ${table.name}`} onClick={roll} />
       {last && (
         <div className="panel roll-result" aria-live="polite">
           <strong>{last.text}</strong>
@@ -215,13 +228,12 @@ export function TableLibrary() {
               aria-selected={entry.ref.id === selectedId}
               className={entry.ref.id === selectedId ? 'list-item selected' : 'list-item'}
               onClick={() => useTableUi.setState({ selectedId: entry.ref.id })}
+              onKeyDown={activateOnKey(() => useTableUi.setState({ selectedId: entry.ref.id }))}
             >
               <Icon name="dice" size={14} />
               <span className="row-name">{entry.doc.name}</span>
               <span className="muted">{describe(entry.doc)}</span>
-              <span className={`badge ${entry.pack === MY_CONTENT ? 'data' : 'content'}`}>
-                {entry.pack === MY_CONTENT ? (entry.overrides.length > 0 ? 'your copy' : 'yours') : entry.pack}
-              </span>
+              <OriginBadge entry={entry} />
             </div>
           ))}
         </div>

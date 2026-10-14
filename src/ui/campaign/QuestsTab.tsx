@@ -5,6 +5,7 @@ import { QUESTS } from '@/data/campaignFiles';
 import { useAppStore } from '@/state/appStore';
 import { Field, TextField } from '../components/fields';
 import { Button, confirmDialog, EmptyState, type IconName } from '../kit';
+import { activateOnKey } from '../library/listRow';
 import { NameDialog, NotesEditor, Problems, useCampaignDocs, type CampaignTabProps } from './campaignUi';
 
 const STATUS: Record<QuestStatus, { label: string; icon: IconName; chip: string }> = {
@@ -16,7 +17,7 @@ const STATUS: Record<QuestStatus, { label: string; icon: IconName; chip: string 
 /** Quests by status (open first), each with Markdown notes. */
 export function QuestsTab({ campaignId }: CampaignTabProps) {
   const reportError = useAppStore((s) => s.reportError);
-  const { files, docs, problems, put, drop } = useCampaignDocs(campaignId, QUESTS);
+  const { files, docs, problems, put, update, remove: removeDoc } = useCampaignDocs(campaignId, QUESTS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const selected = (docs ?? []).find((q) => q.id === selectedId) ?? null;
@@ -37,8 +38,6 @@ export function QuestsTab({ campaignId }: CampaignTabProps) {
     useAppStore.getState().notify(`Created "${saved.name}"`, 'success');
   };
 
-  const update = async (quest: Quest) => put(await files.save(QUESTS, quest));
-
   const remove = async (quest: Quest) => {
     const ok = await confirmDialog({
       title: 'Delete quest',
@@ -47,8 +46,7 @@ export function QuestsTab({ campaignId }: CampaignTabProps) {
       danger: true,
     });
     if (ok) {
-      await files.remove(QUESTS, quest.id);
-      drop(quest.id);
+      await removeDoc(quest.id);
       useAppStore.getState().notify(`Deleted "${quest.name}"`, 'success');
     }
   };
@@ -80,6 +78,7 @@ export function QuestsTab({ campaignId }: CampaignTabProps) {
                       aria-selected={quest.id === selectedId}
                       className={quest.id === selectedId ? 'list-item selected' : 'list-item'}
                       onClick={() => setSelectedId(quest.id)}
+                      onKeyDown={activateOnKey(() => setSelectedId(quest.id))}
                     >
                       <span className="row-name">{quest.name}</span>
                       <span className={`status-chip ${STATUS[quest.status].chip}`}>{STATUS[quest.status].label}</span>
@@ -103,7 +102,7 @@ export function QuestsTab({ campaignId }: CampaignTabProps) {
               <TextField
                 label="Quest"
                 value={selected.name}
-                onChange={(name) => update({ ...selected, name }).catch(reportError)}
+                onChange={(name) => update(selected.id, { name }).catch(reportError)}
               />
             </div>
             <Button icon="trash" label="Delete" variant="danger" onClick={() => remove(selected).catch(reportError)} />
@@ -116,7 +115,7 @@ export function QuestsTab({ campaignId }: CampaignTabProps) {
                   icon={STATUS[status].icon}
                   label={STATUS[status].label}
                   active={selected.status === status}
-                  onClick={() => update({ ...selected, status }).catch(reportError)}
+                  onClick={() => update(selected.id, { status }).catch(reportError)}
                 />
               ))}
             </div>
@@ -125,7 +124,7 @@ export function QuestsTab({ campaignId }: CampaignTabProps) {
             label={`Notes on ${selected.name}`}
             placeholder="Who gave it, the reward, leads, what is still unknown."
             value={selected.notes}
-            onCommit={(notes) => update({ ...selected, notes })}
+            onCommit={(notes) => update(selected.id, { notes })}
           />
         </div>
       ) : (

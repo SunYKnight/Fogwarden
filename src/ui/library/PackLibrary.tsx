@@ -1,6 +1,7 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { useRef, useState, type KeyboardEvent } from 'react';
+import { countOf } from '@/core/plural';
 import type { LibraryKind, PackSettings } from '@/core/model';
 import type { ZipFile } from '@/core/zip';
 import {
@@ -20,6 +21,7 @@ import { useAppStore } from '@/state/appStore';
 import { packName, useLibraryStore } from '@/state/libraryStore';
 import { Button, confirmDialog, EmptyState, Icon } from '../kit';
 import { openAuroraImport } from './compendiumUi';
+import { download } from './mapExport';
 
 const COUNT_LABELS: Record<LibraryKind | 'model' | 'portrait', [string, string]> = {
   creature: ['creature', 'creatures'],
@@ -33,7 +35,7 @@ const COUNT_LABELS: Record<LibraryKind | 'model' | 'portrait', [string, string]>
 };
 
 function countLabel(kind: keyof typeof COUNT_LABELS, count: number): string {
-  return `${count} ${COUNT_LABELS[kind][count === 1 ? 0 : 1]}`;
+  return countOf(count, ...COUNT_LABELS[kind]);
 }
 
 export function countText(counts: PackInfo['counts']): string {
@@ -104,15 +106,6 @@ async function importFolder(): Promise<void> {
   if (folder !== null) {
     await install(packFilesOf(await readFolder(folder.replace(/[\\/]+$/, ''))));
   }
-}
-
-function download(fileName: string, bytes: Uint8Array): void {
-  const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)]));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 async function exportToZip(pack: PackInfo): Promise<void> {
@@ -229,7 +222,7 @@ export function PackActions() {
 function Overridden({ pack }: { pack: PackInfo }) {
   const listings = useLibraryStore((s) => s.listings);
   const packs = useLibraryStore((s) => s.packs);
-  const hideDuplicates = useAppStore((s) => s.settings?.packs.hideDuplicates ?? false);
+  const hideDuplicates = useAppStore((s) => s.settings?.packs.hideDuplicates ?? true);
   const overridden = new Map<string, number>();
   const duplicated = new Map<string, number>();
   for (const listing of Object.values(listings)) {
@@ -373,7 +366,14 @@ function PackRow({ pack, index, busy, run, onDragStart, onDrop }: RowProps) {
       )}
       <Button icon="download" label="Export" disabled={busy} onClick={() => run(() => exportToZip(pack))} />
       {pack.origin === 'user' ? (
-        <Button icon="trash" label="Remove" iconOnly variant="danger" onClick={() => run(() => remove(pack))} />
+        <Button
+          icon="trash"
+          label="Remove"
+          iconOnly
+          variant="danger"
+          disabled={busy}
+          onClick={() => run(() => remove(pack))}
+        />
       ) : (
         <span className="pack-remove-gap" />
       )}

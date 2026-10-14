@@ -131,18 +131,22 @@ export function hasTransparency(rgba: Uint8ClampedArray): boolean {
 /** The picture scaled to `size`: PNG where it is transparent, else the much smaller JPEG. */
 async function encodeReduced(source: Blob, size: ImageSize): Promise<{ bytes: Uint8Array; extension: string }> {
   const { widthPx, heightPx } = size;
-  const bitmap = await createImageBitmap(source, {
-    resizeWidth: widthPx,
-    resizeHeight: heightPx,
-    resizeQuality: 'high',
-  });
+  // The canvas first: a bitmap open while it fails would never be closed.
   const canvas = new OffscreenCanvas(widthPx, heightPx);
   const context = canvas.getContext('2d');
   if (!context) {
     throw new Error('This system cannot draw images off screen to reduce the battlemap');
   }
-  context.drawImage(bitmap, 0, 0);
-  bitmap.close();
+  const bitmap = await createImageBitmap(source, {
+    resizeWidth: widthPx,
+    resizeHeight: heightPx,
+    resizeQuality: 'high',
+  });
+  try {
+    context.drawImage(bitmap, 0, 0);
+  } finally {
+    bitmap.close();
+  }
   const transparent = hasTransparency(context.getImageData(0, 0, widthPx, heightPx).data);
   const blob = await canvas.convertToBlob(
     transparent ? { type: 'image/png' } : { type: 'image/jpeg', quality: JPEG_QUALITY },

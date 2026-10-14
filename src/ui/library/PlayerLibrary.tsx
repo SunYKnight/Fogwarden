@@ -61,7 +61,13 @@ export function PlayerLibrary() {
   const actions = useCreatureActions(setSelectedId);
 
   useEffect(() => {
-    repository.listCampaigns().then((l) => setCampaigns(l.campaigns), reportError);
+    let ignore = false;
+    repository.listCampaigns().then((l) => {
+      if (!ignore) setCampaigns(l.campaigns);
+    }, reportError);
+    return () => {
+      ignore = true;
+    };
   }, [repository, reportError]);
 
   const characters = useMemo(
@@ -104,6 +110,11 @@ export function PlayerLibrary() {
                 onDoubleClick={() => actions.edit(entry)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') actions.edit(entry);
+                  if (e.key === ' ') {
+                    // Space would otherwise scroll the list.
+                    e.preventDefault();
+                    setSelectedId(entry.ref.id);
+                  }
                 }}
                 onContextMenu={(e) => showMenu(e, entry)}
               >
@@ -120,8 +131,9 @@ export function PlayerLibrary() {
           })}
         </div>
         {characters.length === 0 && (
-          <EmptyState icon="users" title="No player characters yet." action={<PlayerActions />}>
-            Import them from Aurora Builder or create one; campaign parties pick their characters from here.
+          <EmptyState icon="users" title="No player characters yet.">
+            Import them from Aurora Builder or create one with the buttons above; campaign parties pick their characters
+            from here.
           </EmptyState>
         )}
       </div>

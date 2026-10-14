@@ -7,6 +7,7 @@ import { useAppStore } from '@/state/appStore';
 import { AssetImage } from '../components/AssetImage';
 import { Field, SelectField, TextField } from '../components/fields';
 import { Button, confirmDialog, EmptyState, Icon, type IconName } from '../kit';
+import { activateOnKey } from '../library/listRow';
 import {
   EncounterLinks,
   NameDialog,
@@ -28,7 +29,7 @@ const FILTERS: Record<Filter, string> = { all: 'All', person: 'People', place: '
 /** NPCs and locations with picture, tags, notes and the encounters they appear in. */
 export function CastTab({ campaignId, encounters }: CampaignTabProps) {
   const reportError = useAppStore((s) => s.reportError);
-  const { files, docs, problems, put, drop } = useCampaignDocs(campaignId, CAST);
+  const { files, docs, problems, put, edit, update, remove: removeDoc } = useCampaignDocs(campaignId, CAST);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [text, setText] = useState('');
@@ -60,8 +61,6 @@ export function CastTab({ campaignId, encounters }: CampaignTabProps) {
     useAppStore.getState().notify(`Created "${saved.name}"`, 'success');
   };
 
-  const update = async (entry: CastEntry) => put(await files.save(CAST, entry));
-
   const remove = async (entry: CastEntry) => {
     const ok = await confirmDialog({
       title: `Delete ${entry.kind}`,
@@ -71,15 +70,15 @@ export function CastTab({ campaignId, encounters }: CampaignTabProps) {
     });
     if (ok) {
       await files.removePicture(entry);
-      await files.remove(CAST, entry.id);
-      drop(entry.id);
+      await removeDoc(entry.id);
       useAppStore.getState().notify(`Deleted "${entry.name}"`, 'success');
     }
   };
 
-  const pickPicture = async (file: File) => {
-    put(await files.importPicture(selected!, file.name, new Uint8Array(await file.arrayBuffer())));
-    useAppStore.getState().notify(`Picture set for "${selected!.name}"`, 'success');
+  const pickPicture = async (entry: CastEntry, file: File) => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    await edit(entry.id, (latest) => files.importPicture(latest, file.name, bytes));
+    useAppStore.getState().notify(`Picture set for "${entry.name}"`, 'success');
   };
 
   const mentioned = selected
@@ -119,6 +118,7 @@ export function CastTab({ campaignId, encounters }: CampaignTabProps) {
               aria-selected={entry.id === selectedId}
               className={entry.id === selectedId ? 'list-item selected' : 'list-item'}
               onClick={() => setSelectedId(entry.id)}
+              onKeyDown={activateOnKey(() => setSelectedId(entry.id))}
             >
               <AssetImage asset={files.pictureRef(entry)} alt="" className="cast-thumb" />
               <Icon name={KIND_LABEL[entry.kind].icon} size={14} title={KIND_LABEL[entry.kind].label} />
@@ -159,7 +159,7 @@ export function CastTab({ campaignId, encounters }: CampaignTabProps) {
               hidden
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) pickPicture(file).catch(reportError);
+                if (file) pickPicture(selected, file).catch(reportError);
                 e.target.value = '';
               }}
             />
@@ -167,20 +167,20 @@ export function CastTab({ campaignId, encounters }: CampaignTabProps) {
               <TextField
                 label="Name"
                 value={selected.name}
-                onChange={(name) => update({ ...selected, name }).catch(reportError)}
+                onChange={(name) => update(selected.id, { name }).catch(reportError)}
               />
               <SelectField
                 label="Kind"
                 value={selected.kind}
                 options={['person', 'place'] as CastKind[]}
                 format={(k) => KIND_LABEL[k].label}
-                onChange={(kind) => update({ ...selected, kind }).catch(reportError)}
+                onChange={(kind) => update(selected.id, { kind }).catch(reportError)}
               />
               <TextField
                 label="Tags"
                 placeholder="noble, Waterdeep"
                 value={selected.tags.join(', ')}
-                onChange={(tags) => update({ ...selected, tags: splitList(tags) }).catch(reportError)}
+                onChange={(tags) => update(selected.id, { tags: splitList(tags) }).catch(reportError)}
               />
             </div>
             <Button icon="trash" label="Delete" variant="danger" onClick={() => remove(selected).catch(reportError)} />
@@ -190,14 +190,14 @@ export function CastTab({ campaignId, encounters }: CampaignTabProps) {
               linked={selected.encounters}
               mentioned={mentioned}
               encounters={encounters}
-              onChange={(ids) => update({ ...selected, encounters: ids }).catch(reportError)}
+              onChange={(ids) => update(selected.id, { encounters: ids }).catch(reportError)}
             />
           </Field>
           <NotesEditor
             label={`Notes on ${selected.name}`}
             placeholder="Looks, wants, secrets, what the party knows."
             value={selected.notes}
-            onCommit={(notes) => update({ ...selected, notes })}
+            onCommit={(notes) => update(selected.id, { notes })}
           />
         </div>
       ) : (

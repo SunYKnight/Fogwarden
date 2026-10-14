@@ -156,7 +156,7 @@ export function DndApiImportDialog() {
   return (
     <Dialog title="Import from the D&D 5e API" onClose={close} width={600} footer={footer}>
       <div className="col">
-        {stage.step === 'list' && <p>Asking dnd5eapi.co what it has …</p>}
+        {stage.step === 'list' && <p>Asking dnd5eapi.co what it has…</p>}
         {stage.step === 'unreachable' && <p>The D&amp;D 5e API could not be reached.</p>}
         {stage.step === 'choose' && (
           <>

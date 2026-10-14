@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { countOf } from '@/core/plural';
+import { CampaignFiles } from '@/data/campaignFiles';
 import {
   HISTORY_KIND_LABELS,
   historyDocumentName,
@@ -6,12 +8,13 @@ import {
   historyFolderTime,
   restorePlan,
   type HistoryDocument,
-  type HistoryKind,
   type HistoryListing,
 } from '@/data/history';
 import { cleanHistory, listHistory, openHistoryFolder, restoreHistory } from '@/data/tauriStorage';
+import { reloadSounds } from '@/sound/soundStore';
 import { useAppStore } from '@/state/appStore';
 import { flushEncounter } from '@/state/autosave';
+import { useCalendarStore } from '@/state/calendarStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { SelectField } from '../components/fields';
 import { reloadActiveEncounter } from '../encounter/useActiveEncounter';
@@ -89,15 +92,23 @@ async function loadHistory(): Promise<Loaded> {
   return { listing, folders };
 }
 
-/** Brings every store that holds restored documents up to date. */
-async function reloadRestored(kind: HistoryKind): Promise<void> {
+/** Brings every store that holds restored documents up to date, so none writes its old copy back. */
+async function reloadRestored(doc: HistoryDocument): Promise<void> {
   const app = useAppStore.getState();
-  if (kind === 'settings') {
+  if (doc.kind === 'settings') {
     useAppStore.setState({ settings: await app.repository.loadSettings() });
   }
   await useLibraryStore.getState().refreshAll();
-  if (kind === 'encounter' || kind === 'map') {
+  if (doc.kind === 'encounter' || doc.kind === 'map') {
     await reloadActiveEncounter();
+  }
+  if (doc.kind === 'sounds') {
+    await reloadSounds();
+  }
+  // A calendar document's id is its campaign's id.
+  if (doc.kind === 'calendar' && useCalendarStore.getState().campaignId === doc.id) {
+    const calendar = await new CampaignFiles(app.repository.storage, doc.id).loadCalendar();
+    if (useCalendarStore.getState().campaignId === doc.id) useCalendarStore.setState({ calendar });
   }
 }
 
@@ -107,7 +118,8 @@ async function restoreDocument(listing: HistoryListing, folder: FolderView, view
   const ok = await confirmDialog({
     title: `Restore "${view.name}"?`,
     message:
-      `${label} "${view.name}" goes back to how it was ${folder.before}: ${plan.length} file(s) are replaced. ` +
+      `${label} "${view.name}" goes back to how it was ${folder.before}: ${countOf(plan.length, 'file')} ` +
+      `${plan.length === 1 ? 'is' : 'are'} replaced. ` +
       'The current version stays in the history, so you can restore it the same way.',
     confirmLabel: 'Restore',
   });
@@ -115,7 +127,7 @@ async function restoreDocument(listing: HistoryListing, folder: FolderView, view
     // A pending autosave of the open encounter would overwrite the restore.
     await flushEncounter();
     await restoreHistory(plan);
-    await reloadRestored(view.doc.kind);
+    await reloadRestored(view.doc);
     useAppStore.getState().notify(`Restored "${view.name}" as it was ${folder.before}`);
   }
   return ok;
@@ -154,7 +166,7 @@ export function HistorySection() {
       const days = Number(cleanDays);
       const ok = await confirmDialog({
         title: 'Clean up the history?',
-        message: `Deletes every version kept more than ${days} day(s) ago. They cannot be restored afterwards.`,
+        message: `Deletes every version kept more than ${countOf(days, 'day')} ago. They cannot be restored later.`,
         confirmLabel: 'Delete old versions',
         danger: true,
       });
@@ -184,7 +196,7 @@ export function HistorySection() {
           label="Clean up older than"
           value={cleanDays}
           options={CLEAN_DAYS}
-          format={(d) => (d === '1' ? '1 day' : `${d} days`)}
+          format={(d) => countOf(Number(d), 'day')}
           onChange={setCleanDays}
         />
         <Button icon="trash" label="Clean up…" disabled={busy || !loaded} onClick={cleanUp} />
@@ -200,14 +212,14 @@ export function HistorySection() {
                   <div className="grow">
                     <div>{view.name}</div>
                     <div className="muted small">
-                      {HISTORY_KIND_LABELS[view.doc.kind]} · {view.doc.files.length} file(s),{' '}
+                      {HISTORY_KIND_LABELS[view.doc.kind]} · {countOf(view.doc.files.length, 'file')},{' '}
                       {formatBytes(view.doc.files.reduce((sum, f) => sum + f.bytes, 0))}
                     </div>
                     {view.problem && <div className="error-text small">Name unreadable: {view.problem}</div>}
                   </div>
                   <Button
                     icon="undo"
-                    label="Restore this version"
+                    label="Restore this version…"
                     disabled={busy}
                     onClick={() => restore(folder, view)}
                   />

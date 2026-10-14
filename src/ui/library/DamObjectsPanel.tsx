@@ -5,6 +5,7 @@ import { fitUnitFt, type DamCatalog } from '@/core/import/damCatalog';
 import type { DamProject } from '@/core/import/damProject';
 import { damObjectKinds, type DamObjectChoice, type DamObjectChoices } from '@/core/import/damObjects';
 import type { MapImage } from '@/core/model';
+import { countOf } from '@/core/plural';
 import type { GridCalibration } from '@/core/terrain/calibration';
 import {
   downloadPolyHaven,
@@ -14,6 +15,7 @@ import {
   polyHavenStandIns,
 } from '@/data/polyHaven';
 import { useAppStore } from '@/state/appStore';
+import { useDraft } from '../components/fields';
 import { Button, confirmDialog } from '../kit';
 import { loadDamCatalog, modelSize, projectChoices } from './daCatalog';
 import {
@@ -40,11 +42,39 @@ export interface DamPreview {
 
 interface DamObjectsPanelProps {
   project: DamProject;
-  /** Already completed by `choicesForProject`. */
+  /** Already completed by `projectChoices`. */
   choices: DamObjectChoices;
   /** Null while the picture loads. */
   preview: DamPreview | null;
-  onChange: (choices: DamObjectChoices) => void;
+  /** Gets an update, so choices edited while a model loads are kept. */
+  onChange: (update: (choices: DamObjectChoices) => DamObjectChoices) => void;
+}
+
+/** Commits on blur or Enter, so emptying the field to retype never resets the size. */
+function UnitFtInput({ value, onChange }: { value: number; onChange: (unitFt: number) => void }) {
+  const [text, setText] = useDraft(String(value));
+  const commit = () => {
+    const parsed = Number(text);
+    const valid = text.trim() !== '' && Number.isFinite(parsed) && parsed > 0;
+    setText(String(valid ? parsed : value));
+    if (valid && parsed !== value) {
+      onChange(parsed);
+    }
+  };
+  return (
+    <input
+      type="number"
+      min={0.01}
+      step={0.1}
+      value={text}
+      aria-label="Size in feet per model unit"
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+      }}
+    />
+  );
 }
 
 /**
@@ -91,20 +121,41 @@ export function DamObjectsPanel({ project, choices, preview, onChange }: DamObje
     setMissing(count);
   }, [repository]);
   useEffect(() => {
-    listLibraryModels(repository).then(setLibrary, reportError);
+    let current = true;
+    listLibraryModels(repository).then((models) => {
+      if (current) setLibrary(models);
+    }, reportError);
     refreshPolyHaven().catch(reportError);
+    return () => {
+      current = false;
+    };
   }, [repository, reportError, refreshPolyHaven]);
   useEffect(() => {
+    let current = true;
     if (choices.modelFolder !== null && isTauri()) {
-      listFolderModels(choices.modelFolder).then(setFolderModels, reportError);
+      listFolderModels(choices.modelFolder).then((paths) => {
+        if (current) setFolderModels(paths);
+      }, reportError);
     }
+    return () => {
+      current = false;
+    };
   }, [choices.modelFolder, reportError]);
   useEffect(() => {
-    loadDamCatalog(choices.gameFolder).then(setCatalog, reportError);
+    let current = true;
+    loadDamCatalog(choices.gameFolder).then((found) => {
+      if (current) setCatalog(found);
+    }, reportError);
+    return () => {
+      current = false;
+    };
   }, [choices.gameFolder, reportError]);
 
   const update = (blockId: string, patch: Partial<DamObjectChoice>) =>
-    onChange({ ...choices, objects: { ...choices.objects, [blockId]: { ...choices.objects[blockId]!, ...patch } } });
+    onChange((prev) => ({
+      ...prev,
+      objects: { ...prev.objects, [blockId]: { ...prev.objects[blockId]!, ...patch } },
+    }));
   // Sized to the kind when Dungeon Alchemist's database knows its size.
   const assign = async (blockId: string, option: ModelOption) => {
     const sizeFt = catalog?.[blockId]?.sizeFt;
@@ -136,13 +187,14 @@ export function DamObjectsPanel({ project, choices, preview, onChange }: DamObje
       throw new Error(`"${folder}" is not Dungeon Alchemist's folder; choose the one with Dungeon Alchemist.exe`);
     }
     if (folder !== null) {
-      onChange(await projectChoices(repository, project, { ...choices, gameFolder: folder }, false));
+      const suggest = await projectChoices(repository, project, folder, false);
+      onChange((prev) => suggest({ ...prev, gameFolder: folder }));
     }
   };
   const pickFolder = async () => {
     const folder = await open({ directory: true, title: 'Folder with glTF models' });
     if (folder !== null) {
-      onChange({ ...choices, modelFolder: folder });
+      onChange((prev) => ({ ...prev, modelFolder: folder }));
     }
   };
   const downloadPolyHavenModels = async () => {
@@ -165,15 +217,15 @@ export function DamObjectsPanel({ project, choices, preview, onChange }: DamObje
         setDownload(null);
       }
       await refreshPolyHaven();
-      onChange(await projectChoices(repository, project, choices, true));
+      onChange(await projectChoices(repository, project, choices.gameFolder, true));
     }
   };
 
   return (
     <div className="col">
       <p className="muted">
-        {project.objects.length} objects of {kinds.length} kinds. Dungeon Alchemist's own models stay in Dungeon
-        Alchemist; pick a stand-in per kind. Choices are kept for later imports.
+        {countOf(project.objects.length, 'object')} of {countOf(kinds.length, 'kind')}. Dungeon Alchemist's own models
+        stay in Dungeon Alchemist; pick a stand-in per kind. Choices are kept for later imports.
         {catalog === null && " Dungeon Alchemist wasn't found, so the kinds have no names."}
       </p>
       <div className="row">
@@ -182,7 +234,7 @@ export function DamObjectsPanel({ project, choices, preview, onChange }: DamObje
             icon="cube"
             label="Auto-assign stand-ins"
             title="Give every kind with a matching stand-in that model, sized as in Dungeon Alchemist"
-            onClick={() => projectChoices(repository, project, choices, true).then(onChange, reportError)}
+            onClick={() => projectChoices(repository, project, choices.gameFolder, true).then(onChange, reportError)}
           />
         )}
         {catalog === null && isTauri() && (
@@ -265,14 +317,7 @@ export function DamObjectsPanel({ project, choices, preview, onChange }: DamObje
                       </select>
                     </td>
                     <td>
-                      <input
-                        type="number"
-                        min={0.01}
-                        step={0.1}
-                        value={choice.unitFt}
-                        aria-label="Size in feet per model unit"
-                        onChange={(e) => update(blockId, { unitFt: Number(e.target.value) || choice.unitFt })}
-                      />
+                      <UnitFtInput value={choice.unitFt} onChange={(unitFt) => update(blockId, { unitFt })} />
                     </td>
                     <td>
                       <input

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import { create } from 'zustand';
 import { createCampaign, nowIso, type Campaign, type Encounter } from '@/core/model';
+import { countOf } from '@/core/plural';
 import type { LoadProblem } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
@@ -15,6 +16,7 @@ import { AssetImage } from '../components/AssetImage';
 import { Button, confirmDialog, EmptyState, openContextMenu, PageHeader, Section, Tabs, type TabSpec } from '../kit';
 import { openNewEncounter } from './compendiumUi';
 import { encounterStatus, statusLabel } from './encounterStatus';
+import { serialQueue } from './serialQueue';
 
 const CAMPAIGNS = { page: 'campaigns', campaignId: null } as const;
 
@@ -147,9 +149,7 @@ export function CampaignList() {
             >
               <span className="body">
                 <strong>{campaign.name}</strong>
-                <span className="muted">
-                  {encounters} {encounters === 1 ? 'encounter' : 'encounters'}
-                </span>
+                <span className="muted">{countOf(encounters, 'encounter')}</span>
                 <span className="muted">
                   {lastPlayed ? `Last activity ${formatWhen(lastPlayed)}` : 'Not played yet'}
                 </span>
@@ -184,17 +184,23 @@ function EncounterRow({ encounter, onChanged }: { encounter: Encounter; onChange
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const map = useLibraryStore((s) => s.listings.map.entries.find((m) => m.ref.id === encounter.map?.id));
+  const [duplicating, setDuplicating] = useState(false);
   const status = encounterStatus(encounter);
   const locator = { campaignId: encounter.campaignId, encounterId: encounter.id };
 
   const duplicate = async () => {
-    const at = nowIso();
-    const name = `${encounter.name} copy`;
-    const id = await repository.newEncounterId(encounter.campaignId, name);
-    const copy = { ...encounter, id, name, createdAt: at, updatedAt: at };
-    await repository.saveEncounter(copy);
-    useAppStore.getState().notify(`Created "${copy.name}"`);
-    onChanged();
+    setDuplicating(true);
+    try {
+      const at = nowIso();
+      const name = `${encounter.name} copy`;
+      const id = await repository.newEncounterId(encounter.campaignId, name);
+      const copy = { ...encounter, id, name, createdAt: at, updatedAt: at };
+      await repository.saveEncounter(copy);
+      useAppStore.getState().notify(`Created "${copy.name}"`);
+      onChanged();
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const remove = async () => {
@@ -221,8 +227,10 @@ function EncounterRow({ encounter, onChanged }: { encounter: Encounter; onChange
       <div className="encounter-info">
         <strong>{encounter.name}</strong>
         <span className="muted">
-          {mapName} · {encounter.combatants.length} combatants ·{' '}
-          {status.kind === 'not-started' ? 'Created' : 'Last played'} {formatWhen(encounter.updatedAt)}
+          {mapName} · {countOf(encounter.combatants.length, 'combatant')} ·{' '}
+          {status.kind === 'not-started'
+            ? `Created ${formatWhen(encounter.createdAt)}`
+            : `Last played ${formatWhen(encounter.updatedAt)}`}
         </span>
       </div>
       <span className={`status-chip ${status.kind}`}>{statusLabel(status)}</span>
@@ -231,7 +239,13 @@ function EncounterRow({ encounter, onChanged }: { encounter: Encounter; onChange
         label="Play"
         onClick={() => useAppStore.getState().openEncounter(locator).catch(reportError)}
       />
-      <Button icon="copy" label="Duplicate" iconOnly onClick={() => duplicate().catch(reportError)} />
+      <Button
+        icon="copy"
+        label="Duplicate"
+        iconOnly
+        disabled={duplicating}
+        onClick={() => duplicate().catch(reportError)}
+      />
       <Button icon="trash" label="Delete" iconOnly variant="danger" onClick={() => remove().catch(reportError)} />
     </div>
   );
@@ -251,11 +265,18 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
   const [listing, setListing] = useState<{ encounters: Encounter[]; problems: LoadProblem[] } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [tab, setTab] = useState<CampaignTab>('encounters');
+  // Rename, notes and party edits apply to the newest saved campaign, one at a time.
+  const latest = useRef<Campaign | null>(null);
+  const [queue] = useState(serialQueue);
 
   useEffect(() => {
-    repository
-      .listCampaigns()
-      .then((l) => setCampaign(l.campaigns.find((c) => c.id === campaignId) ?? null), reportError);
+    repository.listCampaigns().then((l) => {
+      const found = l.campaigns.find((c) => c.id === campaignId) ?? null;
+      latest.current = found;
+      setCampaign(found);
+      // A new campaign starts with its party; encounters then add it at once.
+      if (found?.party.length === 0) setTab('party');
+    }, reportError);
   }, [repository, campaignId, reportError]);
 
   const loadEncounters = useCallback(
@@ -266,13 +287,13 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
     loadEncounters();
   }, [loadEncounters]);
 
-  const rename = async (name: string) => {
-    if (campaign) setCampaign(await repository.saveCampaign({ ...campaign, name }));
-  };
-
-  const saveNotes = async (notes: string) => {
-    if (campaign) setCampaign(await repository.saveCampaign({ ...campaign, notes }));
-  };
+  const updateCampaign = (change: (current: Campaign) => Campaign) =>
+    queue(async () => {
+      if (latest.current === null) throw new Error('This campaign no longer exists.');
+      const saved = await repository.saveCampaign(change(latest.current));
+      latest.current = saved;
+      setCampaign(saved);
+    });
 
   const remove = async (target: Campaign) => {
     if (await deleteCampaign(target)) navigate(CAMPAIGNS);
@@ -290,8 +311,8 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
     </div>
   ) : (
     <div className="page-frame">
-      <PageHeader crumbs={[{ label: 'Campaigns', route: CAMPAIGNS }, { label: campaign?.name ?? '...' }]}>
-        <Button icon="edit" label="Rename" disabled={!campaign} onClick={() => setRenaming(true)} />
+      <PageHeader crumbs={[{ label: 'Campaigns', route: CAMPAIGNS }, { label: campaign?.name ?? '…' }]}>
+        <Button icon="edit" label="Rename…" disabled={!campaign} onClick={() => setRenaming(true)} />
         <Button
           icon="download"
           label="Export…"
@@ -352,7 +373,10 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
           </>
         ) : tab === 'party' ? (
           campaign && (
-            <PartyTab campaign={campaign} onChange={async (next) => setCampaign(await repository.saveCampaign(next))} />
+            <PartyTab
+              campaign={campaign}
+              onChange={(change) => updateCampaign((c) => ({ ...c, party: change(c.party) }))}
+            />
           )
         ) : (
           <>
@@ -363,7 +387,7 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
                   label="Campaign notes"
                   placeholder="Plot threads, NPCs, what happened last session. Markdown: # heading, - list, **bold**."
                   value={campaign.notes}
-                  onCommit={saveNotes}
+                  onCommit={(notes) => updateCampaign((c) => ({ ...c, notes }))}
                 />
               </Section>
             )}
@@ -376,7 +400,7 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
           title="Rename campaign"
           initial={campaign.name}
           confirmLabel="Rename"
-          onSubmit={rename}
+          onSubmit={(name) => updateCampaign((c) => ({ ...c, name }))}
           onClose={() => setRenaming(false)}
         />
       )}

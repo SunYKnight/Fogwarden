@@ -1,16 +1,16 @@
-import { useEffect, useId, useState } from 'react';
+import { type ReactNode, useEffect, useId, useState } from 'react';
 import { createCampaign, createEncounter, type Campaign, type Creature, type DocRef } from '@/core/model';
 import { parseStatBlock, StatBlockError } from '@/core/import/statblock';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
-import { AssetImage } from '../components/AssetImage';
 import { Field, TextField } from '../components/fields';
+import { MapPicker } from '../components/MapPicker';
 import { StatBlock } from '../creature/StatBlock';
 import { Button, Dialog, Icon } from '../kit';
 import { AttachPortraitsDialog } from './AttachPortraitsDialog';
 import { AuroraImportDialog } from './AuroraImportDialog';
 import { DndApiImportDialog } from './DndApiImportDialog';
-import { closeCompendiumDialog, useCompendiumDialogStore } from './compendiumUi';
+import { closeCompendiumDialog, useCompendiumDialogStore, type CompendiumDialog } from './compendiumUi';
 
 // Long enough to wait out a burst of typing, short enough to feel live.
 const PARSE_DELAY_MS = 300;
@@ -60,13 +60,20 @@ function CreatureImportDialog({ initialText }: { initialText: string }) {
   const current = result?.text === text && result.source === source && result.license === license;
   const parsed = current ? result.creature : null;
 
+  const [busy, setBusy] = useState(false);
+
   const save = async (creature: Creature) => {
-    const id = await repository.newLibraryId('creature', creature.name);
-    const stored = await repository.save('creature', { ...creature, id });
-    await refresh('creature');
-    closeCompendiumDialog();
-    useAppStore.getState().notify(`Imported "${stored.name}"`);
-    useAppStore.getState().navigate({ page: 'creature-editor', ref: { area: 'data', id: stored.id } });
+    setBusy(true);
+    try {
+      const id = await repository.newLibraryId('creature', creature.name);
+      const stored = await repository.save('creature', { ...creature, id });
+      await refresh('creature');
+      closeCompendiumDialog();
+      useAppStore.getState().notify(`Imported "${stored.name}"`);
+      useAppStore.getState().navigate({ page: 'creature-editor', ref: { area: 'data', id: stored.id } });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -81,8 +88,8 @@ function CreatureImportDialog({ initialText }: { initialText: string }) {
             icon="upload"
             label="Save and edit"
             variant="primary"
-            disabled={!parsed}
-            onClick={() => parsed && save(parsed).catch(reportError)}
+            disabled={!parsed || busy}
+            onClick={() => parsed && !busy && save(parsed).catch(reportError)}
           />
         </>
       }
@@ -90,9 +97,10 @@ function CreatureImportDialog({ initialText }: { initialText: string }) {
       <div className="import-body">
         <div className="col">
           <textarea
+            aria-label="Stat block text"
             rows={20}
             value={text}
-            placeholder="Paste a stat block (name, size/type line, Armor Class, Hit Points, ...)"
+            placeholder="Paste a stat block (name, size/type line, Armor Class, Hit Points, …)"
             onChange={(e) => setText(e.target.value)}
           />
           <TextField label="Source" value={source} onChange={setSource} />
@@ -120,7 +128,6 @@ const NEW_CAMPAIGN = '';
 function NewEncounterDialog({ campaignId, initialMap }: { campaignId: string | null; initialMap: DocRef | null }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
-  const maps = useLibraryStore((s) => s.listings.map.entries);
   const [campaigns, setCampaigns] = useState<Campaign[] | null>(null);
   const [chosenCampaign, setChosenCampaign] = useState(campaignId ?? NEW_CAMPAIGN);
   const [campaignName, setCampaignName] = useState('');
@@ -146,8 +153,11 @@ function NewEncounterDialog({ campaignId, initialMap }: { campaignId: string | n
     try {
       let targetId = chosenCampaign;
       if (creatingCampaign) {
-        const campaign = { ...createCampaign(campaignName.trim()), id: await repository.newCampaignId(campaignName) };
+        const trimmed = campaignName.trim();
+        const campaign = { ...createCampaign(trimmed), id: await repository.newCampaignId(trimmed) };
         targetId = (await repository.saveCampaign(campaign)).id;
+        // A retry after a failed encounter save must reuse this campaign.
+        setChosenCampaign(targetId);
       }
       const draft = createEncounter(name.trim(), targetId, map);
       const encounterId = await repository.newEncounterId(targetId, draft.name);
@@ -159,7 +169,6 @@ function NewEncounterDialog({ campaignId, initialMap }: { campaignId: string | n
     }
   };
 
-  const mapKey = map ? `${map.area}:${map.id}` : '';
   return (
     <Dialog
       title="New encounter"
@@ -201,7 +210,7 @@ function NewEncounterDialog({ campaignId, initialMap }: { campaignId: string | n
                   {c.name}
                 </option>
               ))}
-              <option value={NEW_CAMPAIGN}>New campaign...</option>
+              <option value={NEW_CAMPAIGN}>New campaign…</option>
             </select>
           </Field>
         )}
@@ -211,55 +220,25 @@ function NewEncounterDialog({ campaignId, initialMap }: { campaignId: string | n
           </Field>
         )}
         <span className="muted">Map</span>
-        <div className="map-picker" role="listbox" aria-label="Map">
-          <button
-            type="button"
-            role="option"
-            aria-selected={map === null}
-            className={map === null ? 'map-pick selected' : 'map-pick'}
-            onClick={() => setMap(null)}
-          >
-            <span className="map-pick-thumb">
-              <Icon name="list" size={28} />
-            </span>
-            <span>No map (tracker only)</span>
-          </button>
-          {maps.map((m) => {
-            const key = `${m.ref.area}:${m.ref.id}`;
-            return (
-              <button
-                key={key}
-                type="button"
-                role="option"
-                aria-selected={key === mapKey}
-                className={key === mapKey ? 'map-pick selected' : 'map-pick'}
-                onClick={() => setMap(m.ref)}
-              >
-                <AssetImage asset={m.doc.image?.asset ?? null} alt="" className="map-pick-thumb" />
-                <span>{m.doc.name}</span>
-              </button>
-            );
-          })}
-        </div>
+        <MapPicker value={map} onChange={setMap} />
       </form>
     </Dialog>
   );
 }
 
+type DialogOf<K extends CompendiumDialog['kind']> = Extract<CompendiumDialog, { kind: K }>;
+
+const DIALOGS: { [K in CompendiumDialog['kind']]: (dialog: DialogOf<K>) => ReactNode } = {
+  'creature-import': (d) => <CreatureImportDialog initialText={d.text} />,
+  'new-encounter': (d) => <NewEncounterDialog campaignId={d.campaignId} initialMap={d.map} />,
+  'attach-portraits': (d) => <AttachPortraitsDialog source={d.source} files={d.files} />,
+  'aurora-import': () => <AuroraImportDialog onClose={closeCompendiumDialog} />,
+  'dnd5e-api-import': () => <DndApiImportDialog />,
+};
+
 /** Mounted once in the shell so any page can open these dialogs. */
 export function CompendiumDialogHost() {
   const dialog = useCompendiumDialogStore((s) => s.dialog);
-  let shown = null;
-  if (dialog?.kind === 'creature-import') {
-    shown = <CreatureImportDialog initialText={dialog.text} />;
-  } else if (dialog?.kind === 'new-encounter') {
-    shown = <NewEncounterDialog campaignId={dialog.campaignId} initialMap={dialog.map} />;
-  } else if (dialog?.kind === 'attach-portraits') {
-    shown = <AttachPortraitsDialog source={dialog.source} files={dialog.files} />;
-  } else if (dialog?.kind === 'aurora-import') {
-    shown = <AuroraImportDialog onClose={closeCompendiumDialog} />;
-  } else if (dialog?.kind === 'dnd5e-api-import') {
-    shown = <DndApiImportDialog />;
-  }
-  return shown;
+  const render = dialog && (DIALOGS[dialog.kind] as (d: CompendiumDialog) => ReactNode);
+  return render ? render(dialog) : null;
 }

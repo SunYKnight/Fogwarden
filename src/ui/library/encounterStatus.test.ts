@@ -44,7 +44,21 @@ describe('encounterStatus', () => {
 
   it('is finished after the DM ended combat', () => {
     const log = [{ id: newId(), at: nowIso(), kind: 'turn' as const, text: COMBAT_ENDED_TEXT }];
-    expect(encounterStatus(encounter({ log })).kind).toBe('finished');
+    expect(encounterStatus(encounter({ log }))).toEqual({ kind: 'finished', rounds: null });
+  });
+
+  it('stays finished when rolls follow the closing line, with the rounds fought', () => {
+    const line = (kind: 'turn' | 'roll', text: string) => ({ id: newId(), at: nowIso(), kind, text });
+    const log = [
+      line('turn', 'Round 1: Goblin'),
+      line('turn', 'Round 2: Goblin'),
+      line('turn', COMBAT_ENDED_TEXT),
+      line('roll', 'd20 12'),
+    ];
+    const status = encounterStatus(encounter({ log }));
+    expect(status).toEqual({ kind: 'finished', rounds: 2 });
+    expect(statusLabel(status)).toBe('Ended · 2 rounds');
+    expect(statusLabel({ kind: 'finished', rounds: 1 })).toBe('Ended · 1 round');
   });
 
   it('needs at least one enemy to count as defeated', () => {

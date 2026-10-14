@@ -26,7 +26,12 @@ function MonitorMap({ settings, save }: { settings: Settings; save: (s: Settings
 
   return (
     <div className="col">
-      <div className="monitor-map" style={{ width: layout.width, height: layout.height }} role="radiogroup">
+      <div
+        className="monitor-map"
+        style={{ width: layout.width, height: layout.height }}
+        role="radiogroup"
+        aria-label="Player view monitor"
+      >
         {layout.placed.map(({ item: { monitor, index }, rect }) => (
           <button
             key={`${monitor.name}-${index}`}

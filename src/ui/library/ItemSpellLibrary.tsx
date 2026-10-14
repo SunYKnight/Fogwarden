@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { itemSubtitle, type Item } from '@/core/items';
 import { spellSubtitle } from '@/core/spells';
 import type { LibraryDocs, LibraryEntry } from '@/data/repository';
@@ -10,14 +11,18 @@ import { openAuroraImport, openDndApiImport } from './compendiumUi';
 import { FilterRow, FilterSelect, type FilterChip } from './FilterRow';
 import { OriginBadge } from './OriginBadge';
 import { SplitButton } from './SplitButton';
+import { activateOnKey } from './listRow';
 
 /** Rows rendered at once; more need a narrower search, so typing stays quick with thousands of entries. */
 const MAX_ROWS = 300;
 const MUNDANE = '(mundane)';
 
-function distinct(values: string[]): string[] {
+/** Sorted unique non-blank values, for filter options and list keys. */
+export function distinct(values: string[]): string[] {
   return [...new Set(values.filter((v) => v !== ''))].sort((a, b) => a.localeCompare(b));
 }
+
+const AURORA_TITLE = isTauri() ? undefined : 'Needs the desktop app';
 
 /** Compendium header actions of the Items and Spells tabs: both only come from imports and packs. */
 export function ReferenceActions() {
@@ -29,7 +34,7 @@ export function ReferenceActions() {
       onClick={openDndApiImport}
       menuLabel="More ways to add content"
       items={[
-        { label: 'Import from Aurora Builder…', icon: 'upload', run: openAuroraImport },
+        { label: 'Import from Aurora Builder…', icon: 'upload', disabled: !isTauri(), run: openAuroraImport },
         {
           label: 'Manage content packs…',
           icon: 'package',
@@ -57,12 +62,18 @@ interface SplitProps<K extends 'item' | 'spell'> {
   reset: () => void;
   describe: (doc: LibraryDocs[K]) => string;
   facts: (doc: LibraryDocs[K]) => [string, string][];
+  /** Entry selected and scrolled to on mount. */
+  initialId?: string;
 }
 
 /** List left (filters, rows), preview right (name, subtitle, facts, description). */
 function ReferenceSplit<K extends 'item' | 'spell'>(props: SplitProps<K>) {
-  const { icon, noun, total, entries, search, chips, filters, reset, describe, facts } = props;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { icon, noun, total, entries, search, chips, filters, reset, describe, facts, initialId } = props;
+  const [selectedId, setSelectedId] = useState<string | null>(initialId ?? null);
+  const list = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, []);
   const selected = entries.find((e) => e.ref.id === selectedId);
   const doc = selected?.doc;
   return (
@@ -75,7 +86,7 @@ function ReferenceSplit<K extends 'item' | 'spell'>(props: SplitProps<K>) {
           {entries.length} of {total}
           {entries.length > MAX_ROWS && `, showing ${MAX_ROWS}: refine the search`}
         </span>
-        <div className="list" role="listbox" aria-label={`${noun}s`}>
+        <div className="list" role="listbox" aria-label={`${noun}s`} ref={list}>
           {entries.slice(0, MAX_ROWS).map((entry) => (
             <div
               key={entry.ref.id}
@@ -84,6 +95,7 @@ function ReferenceSplit<K extends 'item' | 'spell'>(props: SplitProps<K>) {
               aria-selected={entry.ref.id === selectedId}
               className={entry.ref.id === selectedId ? 'list-item selected' : 'list-item'}
               onClick={() => setSelectedId(entry.ref.id)}
+              onKeyDown={activateOnKey(() => setSelectedId(entry.ref.id))}
             >
               <span className="row-name">{entry.doc.name}</span>
               <span className="muted row-detail" title={describe(entry.doc)}>
@@ -108,7 +120,13 @@ function ReferenceSplit<K extends 'item' | 'spell'>(props: SplitProps<K>) {
                     variant="primary"
                     onClick={openDndApiImport}
                   />
-                  <Button icon="upload" label="Import from Aurora Builder…" onClick={openAuroraImport} />
+                  <Button
+                    icon="upload"
+                    label="Import from Aurora Builder…"
+                    disabled={!isTauri()}
+                    title={AURORA_TITLE}
+                    onClick={openAuroraImport}
+                  />
                 </>
               ) : (
                 <Button label="Reset filters" onClick={reset} />
@@ -156,23 +174,33 @@ function itemKind(item: Item): string {
 }
 
 /** Compendium tab Items: mundane and magic items with search, type and rarity filters. */
-export function ItemLibrary() {
+export function ItemLibrary({ entryId }: { entryId?: string }) {
   const listing = useLibraryStore((s) => s.listings.item);
   const [filter, setFilter] = useState(NO_ITEM_FILTER);
-  const needle = filter.text.toLowerCase();
-  const entries = listing.listed.filter(
-    ({ doc }) =>
-      doc.name.toLowerCase().includes(needle) &&
-      (filter.type === '' || itemKind(doc) === filter.type) &&
-      (filter.rarity === '' || (doc.rarity || MUNDANE) === filter.rarity) &&
-      (filter.source === '' || doc.source === filter.source),
-  );
-  const docs = listing.listed.map((e) => e.doc);
+  const entries = useMemo(() => {
+    const needle = filter.text.toLowerCase();
+    return listing.listed.filter(
+      ({ doc }) =>
+        doc.name.toLowerCase().includes(needle) &&
+        (filter.type === '' || itemKind(doc) === filter.type) &&
+        (filter.rarity === '' || (doc.rarity || MUNDANE) === filter.rarity) &&
+        (filter.source === '' || doc.source === filter.source),
+    );
+  }, [listing, filter]);
+  const options = useMemo(() => {
+    const docs = listing.listed.map((e) => e.doc);
+    return {
+      types: distinct(docs.map(itemKind)),
+      rarities: [MUNDANE, ...distinct(docs.map((d) => d.rarity))],
+      sources: distinct(docs.map((d) => d.source)),
+    };
+  }, [listing]);
   return (
     <ReferenceSplit<'item'>
       icon="shield"
       noun="item"
       total={listing.listed.length}
+      initialId={entryId}
       entries={entries}
       search={{ label: 'Search items', value: filter.text, onChange: (text) => setFilter({ ...filter, text }) }}
       chips={[
@@ -195,14 +223,14 @@ export function ItemLibrary() {
             label="Type"
             all="All types"
             value={filter.type}
-            options={distinct(docs.map(itemKind))}
+            options={options.types}
             onChange={(type) => setFilter({ ...filter, type })}
           />
           <FilterSelect
             label="Rarity"
             all="All rarities"
             value={filter.rarity}
-            options={[MUNDANE, ...distinct(docs.map((d) => d.rarity))]}
+            options={options.rarities}
             format={formatRarity}
             onChange={(rarity) => setFilter({ ...filter, rarity })}
           />
@@ -210,7 +238,7 @@ export function ItemLibrary() {
             label="Source"
             all="All sources"
             value={filter.source}
-            options={distinct(docs.map((d) => d.source))}
+            options={options.sources}
             onChange={(source) => setFilter({ ...filter, source })}
           />
         </>
@@ -223,24 +251,34 @@ const NO_SPELL_FILTER = { text: '', level: '', school: '', className: '', source
 const formatLevel = (l: string) => (l === '0' ? 'Cantrip' : `Level ${l}`);
 
 /** Compendium tab Spells: search with level, school and class filters. */
-export function SpellLibrary() {
+export function SpellLibrary({ entryId }: { entryId?: string }) {
   const listing = useLibraryStore((s) => s.listings.spell);
   const [filter, setFilter] = useState(NO_SPELL_FILTER);
-  const needle = filter.text.toLowerCase();
-  const entries = listing.listed.filter(
-    ({ doc }) =>
-      doc.name.toLowerCase().includes(needle) &&
-      (filter.level === '' || String(doc.level) === filter.level) &&
-      (filter.school === '' || doc.school === filter.school) &&
-      (filter.className === '' || doc.classes.includes(filter.className)) &&
-      (filter.source === '' || doc.source === filter.source),
-  );
-  const docs = listing.listed.map((e) => e.doc);
+  const entries = useMemo(() => {
+    const needle = filter.text.toLowerCase();
+    return listing.listed.filter(
+      ({ doc }) =>
+        doc.name.toLowerCase().includes(needle) &&
+        (filter.level === '' || String(doc.level) === filter.level) &&
+        (filter.school === '' || doc.school === filter.school) &&
+        (filter.className === '' || doc.classes.includes(filter.className)) &&
+        (filter.source === '' || doc.source === filter.source),
+    );
+  }, [listing, filter]);
+  const options = useMemo(() => {
+    const docs = listing.listed.map((e) => e.doc);
+    return {
+      schools: distinct(docs.map((d) => d.school)),
+      classes: distinct(docs.flatMap((d) => d.classes)),
+      sources: distinct(docs.map((d) => d.source)),
+    };
+  }, [listing]);
   return (
     <ReferenceSplit<'spell'>
       icon="book"
       noun="spell"
       total={listing.listed.length}
+      initialId={entryId}
       entries={entries}
       search={{ label: 'Search spells', value: filter.text, onChange: (text) => setFilter({ ...filter, text }) }}
       chips={[
@@ -273,21 +311,21 @@ export function SpellLibrary() {
             label="School"
             all="All schools"
             value={filter.school}
-            options={distinct(docs.map((d) => d.school))}
+            options={options.schools}
             onChange={(school) => setFilter({ ...filter, school })}
           />
           <FilterSelect
             label="Class"
             all="All classes"
             value={filter.className}
-            options={distinct(docs.flatMap((d) => d.classes))}
+            options={options.classes}
             onChange={(className) => setFilter({ ...filter, className })}
           />
           <FilterSelect
             label="Source"
             all="All sources"
             value={filter.source}
-            options={distinct(docs.map((d) => d.source))}
+            options={options.sources}
             onChange={(source) => setFilter({ ...filter, source })}
           />
         </>

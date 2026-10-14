@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { create } from 'zustand';
 import { damMargin, parseDamProject, type DamProject } from '@/core/import/damProject';
 import type { DamObjectChoices } from '@/core/import/damObjects';
 import type { ImportedContent, StructureSources } from '@/core/import/importedMap';
 import { isUvttFileName, parseUvtt } from '@/core/import/uvtt';
 import type { BattleMap, Vec2 } from '@/core/model';
+import { countOf } from '@/core/plural';
 import { calibrateFromSquare, fitSquaresToImage, type GridCalibration } from '@/core/terrain/calibration';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
@@ -117,7 +118,7 @@ async function withProject(draft: Draft, file: File): Promise<Draft> {
   damMargin(project, fitSquaresToImage(draft.image, draft.calibration.pxPerSquare));
   const { repository } = useAppStore.getState();
   const kept = project.objects.length > 0 ? await loadDamObjectChoices(repository) : null;
-  const objects = kept && (await projectChoices(repository, project, kept, false));
+  const objects = kept && (await projectChoices(repository, project, kept.gameFolder, false))(kept);
   return { ...draft, source: { ...draft.source, project, objects } };
 }
 
@@ -136,15 +137,14 @@ async function readFiles(files: File[], current: Draft | null): Promise<Draft> {
 }
 
 function exportSummary(content: ImportedContent): string {
-  const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const doors = content.openings.filter((o) => o.kind === 'door').length;
-  const rooms = content.rooms.length > 0 ? [count(content.rooms.length, 'room')] : [];
+  const rooms = content.rooms.length > 0 ? [countOf(content.rooms.length, 'room')] : [];
   return [
     ...rooms,
-    count(content.walls.length, 'wall'),
-    count(doors, 'door'),
-    count(content.openings.length - doors, 'window'),
-    count(content.lights.length, 'light'),
+    countOf(content.walls.length, 'wall'),
+    countOf(doors, 'door'),
+    countOf(content.openings.length - doors, 'window'),
+    countOf(content.lights.length, 'light'),
   ].join(', ');
 }
 
@@ -156,10 +156,12 @@ function projectSummary(project: DamProject): string {
     max = Math.max(max, height);
   }
   const { structure } = project;
-  const objects = project.objects.length > 0 ? `, ${project.objects.length} objects` : '';
-  const rooms = structure.rooms.length > 0 ? `, ${structure.rooms.length} rooms` : '';
+  const heights =
+    project.terrain.data.length > 0 ? `ground heights ${min.toFixed(1)} to ${max.toFixed(1)} ft` : 'no ground heights';
+  const objects = project.objects.length > 0 ? `, ${countOf(project.objects.length, 'object')}` : '';
+  const rooms = structure.rooms.length > 0 ? `, ${countOf(structure.rooms.length, 'room')}` : '';
   const upper = structure.otherLevelParts > 0 ? '; upper floors are not imported yet' : '';
-  return `ground heights ${min.toFixed(1)} to ${max.toFixed(1)} ft${rooms}${objects}${upper}`;
+  return `${heights}${rooms}${objects}${upper}`;
 }
 
 type Step = 'image' | 'project' | 'grid' | 'objects' | 'done';
@@ -204,12 +206,33 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [created, setCreated] = useState<BattleMap | null>(null);
   const [busy, setBusy] = useState(false);
+  // File reads finish out of order; only the latest request may set the draft.
+  const request = useRef(0);
+
+  const loadDraft = useCallback(
+    (read: Promise<Draft>, base: Draft | null) => {
+      request.current += 1;
+      const id = request.current;
+      read.then((next) => {
+        if (id === request.current) {
+          setDraft(next);
+        } else if (next.url !== base?.url) {
+          URL.revokeObjectURL(next.url);
+        }
+      }, reportError);
+    },
+    [reportError],
+  );
 
   useEffect(() => {
     if (initialFiles.length > 0) {
-      readFiles(initialFiles, null).then(setDraft, reportError);
+      loadDraft(readFiles(initialFiles, null), null);
     }
-  }, [initialFiles, reportError]);
+    // Reads finishing after the wizard closed are dropped like stale ones.
+    return () => {
+      request.current += 1;
+    };
+  }, [initialFiles, loadDraft]);
 
   useEffect(() => {
     const url = draft?.url;
@@ -235,11 +258,12 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
         project,
         props: project && objects ? damPropsFor(repository, project, objects) : undefined,
       });
+      // Shown at once, so a failing refresh cannot invite a second map.
+      setCreated(map);
+      setStep('done');
       await useLibraryStore.getState().refresh('map');
       await completeOnboardingStep('mapFromImage');
       useAppStore.getState().notify(`Map "${map.name}" created`);
-      setCreated(map);
-      setStep('done');
     } finally {
       setBusy(false);
     }
@@ -277,7 +301,7 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
     if (!draft || !file) {
       reportError(new Error('Choose a Dungeon Alchemist project file (.dam)'));
     } else {
-      withProject(draft, file).then(setDraft, reportError);
+      loadDraft(withProject(draft, file), draft);
     }
   };
   const projectStep = hasProjectStep(draft);
@@ -285,7 +309,7 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
   let body = (
     <ImageStep
       draft={draft}
-      onFiles={(files) => readFiles(files, draft).then(setDraft, reportError)}
+      onFiles={(files) => loadDraft(readFiles(files, draft), draft)}
       onRename={(name) => draft && setDraft({ ...draft, name })}
     />
   );
@@ -305,7 +329,13 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
       {draft?.source ? (
         exportActions
       ) : (
-        <Button label="Next" icon="chevronRight" variant="primary" disabled={!draft} onClick={() => setStep('grid')} />
+        <Button
+          label="Next"
+          icon="chevronRight"
+          variant={draft ? 'primary' : 'default'}
+          disabled={!draft}
+          onClick={() => setStep('grid')}
+        />
       )}
     </>
   );
@@ -328,7 +358,7 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
           }}
         />
         <Button
-          label={busy ? 'Creating…' : 'Continue'}
+          label={busy ? 'Creating…' : draft.source?.objects ? 'Next' : 'Create map'}
           icon="chevronRight"
           variant="primary"
           disabled={busy || !hasProject}
@@ -368,13 +398,16 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
     );
   }
   if (step === 'objects' && draft?.source?.project && draft.source.objects) {
-    const source = draft.source;
     body = (
       <DamObjectsPanel
         project={draft.source.project}
         choices={draft.source.objects}
         preview={{ url: draft.url, image: draft.image, calibration: draft.calibration }}
-        onChange={(objects) => setDraft({ ...draft, source: { ...source, objects } })}
+        onChange={(update) =>
+          setDraft((d) =>
+            d?.source?.objects ? { ...d, source: { ...d.source, objects: update(d.source.objects) } } : d,
+          )
+        }
       />
     );
     footer = (
@@ -386,7 +419,7 @@ function NewMapWizard({ initialFiles }: { initialFiles: File[] }) {
     );
   }
   if (step === 'done' && created) {
-    const placed = created.props.length > 0 ? `, ${created.props.length} objects` : '';
+    const placed = created.props.length > 0 ? `, ${countOf(created.props.length, 'object')}` : '';
     const stored = created.image;
     const reduced =
       draft && stored && (stored.widthPx !== draft.image.widthPx || stored.heightPx !== draft.image.heightPx);
@@ -471,7 +504,7 @@ function ImageStep({ draft, onFiles, onRename }: ImageStepProps) {
         )}
         <Button
           icon="upload"
-          label={draft ? 'Choose another file' : 'Choose file'}
+          label={draft ? 'Choose another file…' : 'Choose file…'}
           variant={draft ? 'default' : 'primary'}
           onClick={() => input.current?.click()}
         />
@@ -527,7 +560,7 @@ function ProjectStep({ draft, onFiles, onRemove }: ProjectStepProps) {
           <>
             <Icon name="upload" size={32} />
             <span>Drop the .dam file here</span>
-            <Button label="Choose .dam file" icon="upload" onClick={() => input.current?.click()} />
+            <Button label="Choose .dam file…" icon="upload" onClick={() => input.current?.click()} />
           </>
         )}
         <input

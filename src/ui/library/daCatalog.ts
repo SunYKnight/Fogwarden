@@ -87,6 +87,14 @@ const KENNEY_SLOTS: Partial<Record<StandInSlot, string>> = {
   bed: 'bed',
 };
 
+/** The shipped Kenney stand-ins of the slot; none for slots without a Kenney model. */
+export function shippedStandIns(slot: StandInSlot): AssetRef[] {
+  const kenney = KENNEY_SLOTS[slot];
+  return kenney === undefined
+    ? []
+    : CC0_MODELS.filter((o) => o.model.path.endsWith(`/${kenney}.glb`)).map((o) => o.model);
+}
+
 /** Stand-in variants with their sizes for the slots of the project's kinds. */
 async function standInModels(
   repository: Repository,
@@ -103,9 +111,7 @@ async function standInModels(
   const downloaded = await polyHavenStandIns(repository);
   const entries = await Promise.all(
     [...slots].map(async (slot): Promise<[StandInSlot, DamStandInModel[]]> => {
-      const kenney = KENNEY_SLOTS[slot];
-      const fallback = CC0_MODELS.filter((o) => o.model.path.endsWith(`/${kenney}.glb`)).map((o) => o.model);
-      const models = downloaded[slot]?.length ? downloaded[slot] : fallback;
+      const models = downloaded[slot]?.length ? downloaded[slot] : shippedStandIns(slot);
       const sized = await Promise.all(
         models.map(async (model) => ({ model, size: await modelSize(repository, model) })),
       );
@@ -117,15 +123,16 @@ async function standInModels(
 
 /**
  * `suggestDamChoices` with Dungeon Alchemist's database and the best downloaded or shipped
- * stand-ins; without an install, unknown kinds are added unnamed and skipped.
+ * stand-ins; without an install, unknown kinds are added unnamed and skipped. Returned as an
+ * update, so choices edited while the database and models load are kept.
  */
 export async function projectChoices(
   repository: Repository,
   project: DamProject,
-  choices: DamObjectChoices,
+  gameFolder: string | null,
   reassign: boolean,
-): Promise<DamObjectChoices> {
-  const catalog = (await loadDamCatalog(choices.gameFolder)) ?? {};
+): Promise<(choices: DamObjectChoices) => DamObjectChoices> {
+  const catalog = (await loadDamCatalog(gameFolder)) ?? {};
   const standIns = await standInModels(repository, project, catalog);
-  return suggestDamChoices(project, choices, catalog, standIns, reassign);
+  return (choices) => suggestDamChoices(project, choices, catalog, standIns, reassign);
 }

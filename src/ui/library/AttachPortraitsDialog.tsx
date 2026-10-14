@@ -1,6 +1,7 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { useMemo, useState } from 'react';
 import { matchPortraits } from '@/core/import/portraitMatch';
+import { countOf } from '@/core/plural';
 import { downloadApiPictures, listApiPictures } from '@/data/dnd5eapiPictures';
 import { MY_CONTENT_SOURCE } from '@/data/packs';
 import { creaturePictureRef, type LibraryEntry } from '@/data/repository';
@@ -62,11 +63,7 @@ async function attach(source: PortraitSource, plan: PlannedPortrait[], onProgres
         );
   await useLibraryStore.getState().refresh('creature');
   const missed = lacking.length > 0 ? `; the API had no picture for ${lacking.length}` : '';
-  notify(`Attached ${pictures(plan.length - lacking.length)}${missed}`);
-}
-
-function pictures(count: number): string {
-  return `${count} ${count === 1 ? 'picture' : 'pictures'}`;
+  notify(`Attached ${countOf(plan.length - lacking.length, 'picture')}${missed}`);
 }
 
 const SOURCE_TEXT: Record<PortraitSource['kind'], { title: string; intro: string }> = {
@@ -126,7 +123,10 @@ export function AttachPortraitsDialog({ source, files }: { source: PortraitSourc
   return (
     <Dialog
       title={text.title}
-      onClose={closeCompendiumDialog}
+      onClose={() => {
+        // The job keeps running; its final close would hit the next dialog.
+        if (!busy) closeCompendiumDialog();
+      }}
       width={640}
       footer={
         <>
@@ -138,7 +138,7 @@ export function AttachPortraitsDialog({ source, files }: { source: PortraitSourc
           <Button label="Cancel" onClick={closeCompendiumDialog} disabled={busy} />
           <Button
             icon={source.kind === 'api' ? 'download' : 'image'}
-            label={`${action} ${pictures(plan.length)}`}
+            label={`${action} ${countOf(plan.length, 'picture')}`}
             variant="primary"
             disabled={plan.length === 0 || busy}
             onClick={() => apply().catch(reportError)}
@@ -149,11 +149,11 @@ export function AttachPortraitsDialog({ source, files }: { source: PortraitSourc
       <div className="col portrait-attach">
         {source.kind === 'folder' && <p className="muted portrait-folder">{source.folder}</p>}
         <p>
-          <strong>{planned.length}</strong> creatures matched. {text.intro}
+          <strong>{countOf(planned.length, 'creature')}</strong> matched. {text.intro}
         </p>
         {existing > 0 && (
           <CheckboxField
-            label={`Replace the image of ${existing} creatures that already have one`}
+            label={`Replace the existing image (${countOf(existing, 'creature')})`}
             value={replace}
             onChange={setReplace}
           />
@@ -169,7 +169,7 @@ export function AttachPortraitsDialog({ source, files }: { source: PortraitSourc
         </ul>
         {matching.unmatched.length > 0 && (
           <details>
-            <summary>{matching.unmatched.length} pictures without a matching creature</summary>
+            <summary>{countOf(matching.unmatched.length, 'picture')} without a matching creature</summary>
             <ul className="portrait-list">
               {matching.unmatched.map((f) => (
                 <li key={f}>{f}</li>
@@ -179,7 +179,9 @@ export function AttachPortraitsDialog({ source, files }: { source: PortraitSourc
         )}
         {matching.duplicates.length > 0 && (
           <details>
-            <summary>{matching.duplicates.length} pictures skipped: another picture fits the same creatures</summary>
+            <summary>
+              {countOf(matching.duplicates.length, 'picture')} skipped: another picture fits the same creatures
+            </summary>
             <ul className="portrait-list">
               {matching.duplicates.map((f) => (
                 <li key={f}>{f}</li>

@@ -14,26 +14,43 @@ import { useAppStore } from '@/state/appStore';
 import { packName, useLibraryStore } from '@/state/libraryStore';
 import { CheckboxField, ColorField, NumberField, SelectField, TextField } from '../components/fields';
 import { Button, confirmDialog, EmptyState, openContextMenu, Section } from '../kit';
+import { activateOnKey } from './listRow';
 import { OriginBadge } from './OriginBadge';
+import { serialQueue } from './serialQueue';
 
 type Entry = LibraryEntry<'marker'>;
 
-// The header action creates a template the list then selects.
-const useMarkerUi = create<{ selectedId: string | null }>(() => ({ selectedId: null }));
+// The header action creates a template the list then selects; `creating` stops a double click making two.
+const useMarkerUi = create<{ selectedId: string | null; creating: boolean }>(() => ({
+  selectedId: null,
+  creating: false,
+}));
 
 async function createTemplate(): Promise<void> {
   const repository = useAppStore.getState().repository;
-  const id = await repository.newLibraryId('marker', 'New area');
-  const stored = await repository.save('marker', { ...createMarkerTemplate('New area'), id });
-  await useLibraryStore.getState().refresh('marker');
-  useMarkerUi.setState({ selectedId: stored.id });
+  useMarkerUi.setState({ creating: true });
+  try {
+    const id = await repository.newLibraryId('marker', 'New area');
+    const stored = await repository.save('marker', { ...createMarkerTemplate('New area'), id });
+    await useLibraryStore.getState().refresh('marker');
+    useMarkerUi.setState({ selectedId: stored.id });
+  } finally {
+    useMarkerUi.setState({ creating: false });
+  }
 }
 
 /** Compendium header actions of the Area templates tab. */
 export function MarkerActions() {
   const reportError = useAppStore((s) => s.reportError);
+  const creating = useMarkerUi((s) => s.creating);
   return (
-    <Button icon="plus" label="New template" variant="primary" onClick={() => createTemplate().catch(reportError)} />
+    <Button
+      icon="plus"
+      label="New template"
+      variant="primary"
+      disabled={creating}
+      onClick={() => createTemplate().catch(reportError)}
+    />
   );
 }
 
@@ -48,35 +65,60 @@ const SIZE_LABEL: Record<MarkerTemplate['shape'], string> = {
 
 const VIEW = 200;
 const PAD = 24;
+const INNER = VIEW - 2 * PAD;
+const MID = VIEW / 2;
+
+interface AreaStyle {
+  fill: string;
+  fillOpacity: number;
+  stroke: string;
+  strokeWidth: number;
+}
+
+function radialDrawing(t: MarkerTemplate, style: AreaStyle): { shape: ReactNode; label: string } {
+  return {
+    shape: (
+      <>
+        <circle cx={MID} cy={MID} r={INNER / 2} {...style} />
+        <line x1={MID} y1={MID} x2={MID + INNER / 2} y2={MID} stroke="currentColor" strokeDasharray="4 3" />
+      </>
+    ),
+    label: `r ${t.sizeFt} ft${t.shape === 'cylinder' ? ` · h ${t.heightFt} ft` : ''}`,
+  };
+}
+
+const AREA_DRAWING: Record<
+  MarkerTemplate['shape'],
+  (t: MarkerTemplate, style: AreaStyle) => { shape: ReactNode; label: string }
+> = {
+  sphere: radialDrawing,
+  cylinder: radialDrawing,
+  cube: (t, style) => ({
+    shape: <rect x={PAD} y={PAD} width={INNER} height={INNER} {...style} />,
+    label: `${t.sizeFt} × ${t.sizeFt} ft`,
+  }),
+  line: (t, style) => {
+    const thick = Math.max(4, (INNER * t.widthFt) / Math.max(t.sizeFt, t.widthFt));
+    return {
+      shape: <rect x={PAD} y={MID - thick / 2} width={INNER} height={thick} {...style} />,
+      label: `${t.sizeFt} ft × ${t.widthFt} ft`,
+    };
+  },
+  // A 5e cone is as wide at its end as it is long.
+  cone: (t, style) => ({
+    shape: <polygon points={`${PAD},${MID} ${VIEW - PAD},${PAD} ${VIEW - PAD},${VIEW - PAD}`} {...style} />,
+    label: `${t.sizeFt} ft long`,
+  }),
+};
 
 /** Top-down drawing of the area with its dimensions, scaled to fit the preview box; `thumb` drops the caption. */
 function AreaPreview({ t, thumb = false }: { t: MarkerTemplate; thumb?: boolean }) {
-  const style = { fill: t.color, fillOpacity: t.opacity, stroke: t.color, strokeWidth: 2 };
-  const inner = VIEW - 2 * PAD;
-  const mid = VIEW / 2;
-  const radial = t.shape === 'sphere' || t.shape === 'cylinder';
-  let shape: ReactNode;
-  let label: string;
-  if (radial) {
-    shape = (
-      <>
-        <circle cx={mid} cy={mid} r={inner / 2} {...style} />
-        <line x1={mid} y1={mid} x2={mid + inner / 2} y2={mid} stroke="currentColor" strokeDasharray="4 3" />
-      </>
-    );
-    label = `r ${t.sizeFt} ft${t.shape === 'cylinder' ? ` · h ${t.heightFt} ft` : ''}`;
-  } else if (t.shape === 'cube') {
-    shape = <rect x={PAD} y={PAD} width={inner} height={inner} {...style} />;
-    label = `${t.sizeFt} × ${t.sizeFt} ft`;
-  } else if (t.shape === 'line') {
-    const thick = Math.max(4, (inner * t.widthFt) / Math.max(t.sizeFt, t.widthFt));
-    shape = <rect x={PAD} y={mid - thick / 2} width={inner} height={thick} {...style} />;
-    label = `${t.sizeFt} ft × ${t.widthFt} ft`;
-  } else {
-    // A 5e cone is as wide at its end as it is long.
-    shape = <polygon points={`${PAD},${mid} ${VIEW - PAD},${PAD} ${VIEW - PAD},${VIEW - PAD}`} {...style} />;
-    label = `${t.sizeFt} ft long`;
-  }
+  const { shape, label } = AREA_DRAWING[t.shape](t, {
+    fill: t.color,
+    fillOpacity: t.opacity,
+    stroke: t.color,
+    strokeWidth: 2,
+  });
   const drawing = (
     <svg
       viewBox={`0 0 ${VIEW} ${VIEW}`}
@@ -159,12 +201,15 @@ function TemplateEditor({ template }: { template: MarkerTemplate }) {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const refresh = useLibraryStore((s) => s.refresh);
+  // Edits apply to the newest listed template, so a quick second edit keeps the first.
+  const [queue] = useState(serialQueue);
   // Every committed field is saved at once; pack templates get a user copy.
   const set = <K extends keyof MarkerTemplate>(key: K, value: MarkerTemplate[K]) =>
-    repository
-      .save('marker', { ...template, [key]: value })
-      .then(() => refresh('marker'))
-      .catch(reportError);
+    queue(async () => {
+      const latest = useLibraryStore.getState().listings.marker.entries.find((e) => e.ref.id === template.id)?.doc;
+      await repository.save('marker', { ...(latest ?? template), [key]: value });
+      await refresh('marker');
+    }).catch(reportError);
   return (
     <Section title="Properties">
       <TextField label="Name" value={template.name} onChange={(v) => set('name', v)} />
@@ -209,6 +254,7 @@ export function MarkerLibrary() {
   const listing = useLibraryStore((s) => s.listings.marker);
   const refresh = useLibraryStore((s) => s.refresh);
   const selectedId = useMarkerUi((s) => s.selectedId);
+  const creating = useMarkerUi((s) => s.creating);
   const [text, setText] = useState('');
   const selected = listing.entries.find((e) => e.ref.id === selectedId);
   const needle = text.toLowerCase();
@@ -265,6 +311,7 @@ export function MarkerLibrary() {
               aria-selected={entry.ref.id === selectedId}
               className={entry.ref.id === selectedId ? 'list-item selected' : 'list-item'}
               onClick={() => useMarkerUi.setState({ selectedId: entry.ref.id })}
+              onKeyDown={activateOnKey(() => useMarkerUi.setState({ selectedId: entry.ref.id }))}
               onContextMenu={(e) => showMenu(e, entry)}
             >
               <AreaPreview t={entry.doc} thumb />
@@ -280,7 +327,14 @@ export function MarkerLibrary() {
           <EmptyState
             icon="area"
             title={listing.listed.length === 0 ? 'No area templates yet.' : 'No templates match.'}
-            action={<Button icon="plus" label="New template" onClick={() => createTemplate().catch(reportError)} />}
+            action={
+              <Button
+                icon="plus"
+                label="New template"
+                disabled={creating}
+                onClick={() => createTemplate().catch(reportError)}
+              />
+            }
           />
         )}
       </div>

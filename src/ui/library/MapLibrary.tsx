@@ -84,7 +84,7 @@ function MapCard({ entry }: { entry: LibraryEntry<'map'> }) {
     const items: MenuItem[] = [
       { label: 'Edit', icon: 'edit', run: edit },
       { label: 'Duplicate', icon: 'copy', run: duplicate },
-      { label: 'Use in a new encounter', icon: 'swords', run: () => openNewEncounter(null, ref) },
+      { label: 'Use in a new encounter…', icon: 'swords', run: () => openNewEncounter(null, ref) },
       { label: 'Export…', icon: 'download', run: () => setExporting(true) },
       { label: 'Delete', icon: 'trash', danger: true, run: remove },
     ];
@@ -109,7 +109,7 @@ function MapCard({ entry }: { entry: LibraryEntry<'map'> }) {
             )}
             {overrides.length > 0 && (
               <span className="badge data" title="Your copy of a pack's map">
-                Edited
+                your copy
               </span>
             )}
           </div>
@@ -145,12 +145,12 @@ export function MapLibrary({ filter }: { filter: string }) {
   );
   if (listing.entries.length === 0) {
     content = (
-      <EmptyState icon="map" title="No maps yet" action={newMap}>
+      <EmptyState icon="map" title="No maps yet." action={newMap}>
         Create a map from a battlemap image, or drop an image anywhere on this page.
       </EmptyState>
     );
   } else if (entries.length === 0) {
-    content = <EmptyState icon="search" title={`No maps match "${filter.trim()}"`} />;
+    content = <EmptyState icon="search" title={`No maps match "${filter.trim()}".`} />;
   }
   return content;
 }

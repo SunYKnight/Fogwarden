@@ -6,6 +6,7 @@ import { useAppStore, type CompendiumTab } from '@/state/appStore';
 import { packName, useLibraryStore } from '@/state/libraryStore';
 import { Button, confirmDialog, EmptyState, PageHeader } from '../kit';
 import { CreatureForm, type Change } from './CreatureEditor';
+import { draftAfterSave } from './draftAfterSave';
 import { StatBlock } from './StatBlock';
 
 const COMPENDIUM_TAB: Record<CreatureKind, CompendiumTab> = {
@@ -23,7 +24,7 @@ const NEW_CREATURE: Record<CreatureKind, () => Creature> = {
 function confirmDiscard(): Promise<boolean> {
   return confirmDialog({
     title: 'Discard changes',
-    message: 'Your unsaved changes to this creature are lost.',
+    message: 'Your unsaved changes to this creature will be lost.',
     confirmLabel: 'Discard',
     danger: true,
   });
@@ -54,25 +55,26 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
 
   const save = async () => {
     const unpictured = (c: Creature) => JSON.stringify({ ...c, image: null, token: null });
+    const snapshot = draft;
     setBusy(true);
     try {
-      if (shipped && unpictured(draft) === unpictured(saved)) {
-        const pictures = await repository.storeCreaturePictures(draft.id, draft);
-        const stored = { ...draft, ...pictures };
+      if (shipped && unpictured(snapshot) === unpictured(saved)) {
+        const pictures = await repository.storeCreaturePictures(snapshot.id, snapshot);
+        const stored = { ...snapshot, ...pictures };
         setSaved(stored);
-        setDraft(stored);
+        setDraft((d) => draftAfterSave(d, snapshot, stored));
         await refresh('creature');
-        useAppStore.getState().notify(`Saved the pictures of "${draft.name}"; the creature stays in "${original}"`);
+        useAppStore.getState().notify(`Saved the pictures of "${snapshot.name}"; the creature stays in "${original}"`);
       } else {
         // Ids outlive renames, so a new one comes from the first saved name.
-        const id = entry ? draft.id : await repository.newLibraryId('creature', draft.name);
-        const stored = await repository.save('creature', { ...draft, id });
-        if (id !== draft.id) {
+        const id = entry ? snapshot.id : await repository.newLibraryId('creature', snapshot.name);
+        const stored = await repository.save('creature', { ...snapshot, id });
+        if (id !== snapshot.id) {
           // Pictures picked before saving were stored under the draft id.
-          await repository.storeCreaturePictures(draft.id, { image: null, token: null });
+          await repository.storeCreaturePictures(snapshot.id, { image: null, token: null });
         }
         setSaved(stored);
-        setDraft(stored);
+        setDraft((d) => draftAfterSave(d, snapshot, stored));
         await refresh('creature');
         useAppStore.getState().notify(shipped ? `Saved your copy of "${stored.name}"` : 'Saved');
       }
@@ -89,15 +91,20 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
       danger: true,
     });
     if (ok) {
-      await repository.remove('creature', draft.id);
-      await refresh('creature');
-      const restored = useLibraryStore.getState().listings.creature.entries.find((e) => e.ref.id === draft.id);
-      if (!restored) {
-        throw new Error(`"${draft.name}" is no longer in "${original}"`);
+      setBusy(true);
+      try {
+        await repository.remove('creature', draft.id);
+        await refresh('creature');
+        const restored = useLibraryStore.getState().listings.creature.entries.find((e) => e.ref.id === draft.id);
+        if (!restored) {
+          throw new Error(`"${draft.name}" is no longer in "${original}"`);
+        }
+        setSaved(restored.doc);
+        setDraft(restored.doc);
+        useAppStore.getState().notify(`Reverted "${restored.doc.name}"`);
+      } finally {
+        setBusy(false);
       }
-      setSaved(restored.doc);
-      setDraft(restored.doc);
-      useAppStore.getState().notify(`Reverted "${restored.doc.name}"`);
     }
   };
 
@@ -108,7 +115,12 @@ function CreatureEditorBody({ creature }: { creature: Creature }) {
         status={dirty ? 'Unsaved changes' : entry ? 'Saved' : 'Not saved yet'}
       >
         {entry !== undefined && entry.overrides.length > 0 && (
-          <Button icon="undo" label="Revert to pack version" onClick={() => revert().catch(reportError)} />
+          <Button
+            icon="undo"
+            label="Revert to pack version"
+            disabled={busy}
+            onClick={() => revert().catch(reportError)}
+          />
         )}
         <Button
           icon="check"

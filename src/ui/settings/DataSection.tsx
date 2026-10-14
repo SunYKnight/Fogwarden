@@ -6,6 +6,7 @@ import { copyDataRootTo, openDataRootFolder } from '@/data/tauriStorage';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { Field } from '../components/fields';
+import { completeOnboardingStep } from '../home/onboarding';
 import { Button, confirmDialog, Dialog, Section } from '../kit';
 import { HistorySection } from './HistorySection';
 
@@ -15,11 +16,7 @@ async function switchDataRoot(roots: StorageRoots): Promise<void> {
   useAppStore.setState({ roots });
   await app.init();
   await useLibraryStore.getState().refreshAll();
-  const settings = useAppStore.getState().settings;
-  if (settings) {
-    const done = { ...settings.onboarding.done, dataFolder: true };
-    await app.setSettings({ ...settings, onboarding: { ...settings.onboarding, done } });
-  }
+  await completeOnboardingStep('dataFolder');
   app.notify(`Data folder: ${roots.dataRoot}`);
 }
 
