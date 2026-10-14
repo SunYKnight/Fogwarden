@@ -41,9 +41,9 @@ work in progress is never hidden behind "back".
 ```
 ┌───┬───────────────────────────────────────────────────────────────┐
 │ H │  Home        dashboard: continue, recent, first steps          │
-│ M │  Maps        map library → map editor                          │
 │ C │  Compendium  creatures · area templates (tabs)                 │
 │ K │  Campaigns   campaigns → encounters → Play                     │
+│ M │  Maps        map library → map editor                          │
 │ ▶ │  Play        the running encounter (badge when active)         │
 │───│                                                               │
 │ P │  Players     status chip: off · window · LAN (n) → popover     │
@@ -63,9 +63,10 @@ work in progress is never hidden behind "back".
 
 - **Continue** card: last encounter (map thumbnail, round, whose turn) → _Resume_.
 - **Recent**: last 6 maps / encounters.
-- **First steps** (shown until done, dismissible): _Choose data folder_ · _Create a map from an image_ ·
-  _Download the SRD rules content_ (D&D 5e API import: monsters, spells, items, area templates; pictures optional) ·
-  _Open the sample encounter_ (a sample map; its SRD monsters come from the D&D 5e API).
+- **First steps** (shown until done, dismissible), in a new DM's order: _Choose data folder_ · _Download the SRD
+  rules content_ (D&D 5e API import: monsters, spells, items, area templates; pictures optional) · _Add the player
+  characters_ · _Create a campaign_ · _Create a map from an image_ · optional _Try the sample encounter_ (a sample
+  map; its SRD monsters come from the D&D 5e API).
 - Big drop zone: dropping an image creates a map (→ 4.2 wizard); dropping a `.txt` stat block opens the creature import.
 
 ### 4.2 New map wizard (instead of "uncalibrated map + find the tool")
@@ -233,8 +234,9 @@ Verification per phase: GUI smoke in the running app over the WebView2 DevTools 
 
 Screens follow the DM's order: set up once → prepare a session → at the table → wrap up.
 
-- **Rail:** Home · Campaigns · Maps · Compendium · Play; Search (Ctrl+K), Players, Settings at the bottom. No Server
-  entry: online play lives in Settings > Players.
+- **Rail:** Home · Compendium · Campaigns · Maps · Play (content first, since a new install imports its rules
+  content); Search (Ctrl+K), Players, Settings at the bottom. No Server entry: online play lives in Settings > Players
+  (hidden until tested against a real server, see `PLAN.md`).
 - **One accent button per screen state:** only the next step of the flow is accent; everything else is default or
   ghost. Rarely changed fields sit in collapsed _Advanced_ sections.
 - **Home** is the current campaign's dashboard: Continue, Next session (open encounters, open quests, quick journal

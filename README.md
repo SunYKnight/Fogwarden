@@ -1,14 +1,16 @@
 # Fogwarden
 
 Fogwarden is a desktop app for a 5e Dungeon Master: turn 2D battlemaps into 3D scenes, run encounters, and show
-players a fog-of-war view on a second screen or in any browser on the local network or the internet.
+players a fog-of-war view on a second screen or in any browser on the local network.
 
 - **Map editor**: calibrate the grid to the battlemap image, sculpt terrain, draw walls with doors and windows, rooms
   with roofs, regions, lights and imported Blender models (`.glb`/`.gltf`). The image is projected from above onto
-  every surface, so the top view still looks like the original map.
+  every surface, so the top view still looks like the original map. Roofs do not yet block sight or light from above
+  in the players' fog.
 - **Encounters**: initiative, HP, conditions, attack and dice rolls with a log, tokens on the map, area templates,
   doors, measuring; encounter difficulty, area saves with resistances, timed effects and concentration, monster
-  resources (legendary, recharge, slots), death saves, carried torches, XP and loot at the end of combat.
+  resources (legendary, recharge, slots), death saves, carried torches, XP and loot at the end of combat. Play's
+  **Change map…** gives an encounter another map.
 - **Libraries**: creatures (SRD 5.1 monsters, spells, magic items and equipment from the D&D 5e API import, stat
   block import from text), player characters, items, spells, area markers, maps, random tables (names, loot,
   rumours as editable text), a picture library, campaigns; Aurora Builder characters, items, spells and portraits
@@ -20,14 +22,17 @@ players a fog-of-war view on a second screen or in any browser on the local netw
   for another computer or a co-DM; packs they use are named, not copied. "Open the sample encounter" on Home sets
   up a sample campaign around a ruined chapel that shows all of this, including a night encounter with vision,
   light and fog of war; it imports its monsters from the D&D 5e API first, so it needs internet once.
-- **Player view**: second window, LAN browser or any browser on the internet through a small relay server; each
-  screen sees through one character's eyes or the whole party's (line of sight, light, darkvision, truesight), with
-  explored areas remembered per character.
+- **Player view**: second window or a browser on the local network; each screen sees through one character's eyes
+  or the whole party's (line of sight, light, darkvision, truesight), with explored areas remembered per character.
 
 The left rail follows the order of work: **Home** (dashboard of the current campaign: continue, next session,
-recent maps) · **Campaigns** · **Maps** · **Compendium** (creatures, player characters, items, spells, area
-templates, tables) · **Play**, with **Search** (Ctrl+K: every command, creature, map, campaign and encounter by
-name), **Players** (player window, LAN and online status with one button each) and **Settings** at the bottom.
+recent maps) · **Compendium** (creatures, player characters, items, spells, area templates, tables) ·
+**Campaigns** · **Maps** · **Play**, with **Search** (Ctrl+K: every command, creature, spell, item, map, campaign
+and encounter by name), **Players** (player window and LAN status with one button each) and **Settings** at the
+bottom.
+
+Home's first steps follow a new DM's order: choose the data folder, download the SRD rules content, add the player
+characters, create a campaign, create a map from an image; the sample encounter is optional.
 
 Background and design: [`PLAN.md`](PLAN.md). Code layout and module contracts:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -68,10 +73,11 @@ The desktop app looks for updates at
 start unless switched off there) and installs only installers signed with the key whose public half is
 `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
 
-1. `pnpm set-version 0.2.0` sets the version in `package.json`, `src-tauri/tauri.conf.json` and
-   `src-tauri/Cargo.toml`.
+1. `pnpm set-version 0.2.0` sets the version in `package.json`, `src-tauri/tauri.conf.json`,
+   `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock`.
 2. In `CHANGELOG.md`, rename `## Unreleased` to `## 0.2.0`: the newest section becomes the release notes the app
-   shows. Commit, so the installer's revision has no `-dirty`.
+   shows, and `pnpm package` stops unless the newest `## ` heading is exactly `## <version>`. Commit, so the
+   installer's revision has no `-dirty`.
 3. `pnpm package` builds and writes to `artifacts/`: `Fogwarden_0.2.0_x64-setup-<revision>.exe`, the same name with
    `.sig`, and `latest.json` (version, notes, date, signature and the download URL of the installer in the release
    `v0.2.0`).
@@ -120,11 +126,12 @@ an outdated relay and asks you to run the setup again.
 
 ## Player links
 
-In Settings > Players (LAN and Online) and in the rail's Players popover, _Link for_ picks a view: **Party** shows
-what all characters see and have explored, each player character's link only what that character sees and
-remembers. The links stay valid across restarts and work for LAN and relay alike (with the respective address);
-**New link** replaces a view's link and disconnects everyone still using the old one. Player links of party members
-stay the same for the whole campaign; hand each player their link or QR code once. Characters added by hand in an
+In Settings > Players > LAN and in the rail's Players popover, _Link for_ picks a view: **Party** shows what all
+characters see and have explored, each player character's link only what that character sees and remembers. Every
+party member of the open campaign has a link, also when the character is not in the open encounter. The links stay
+valid across restarts and work for LAN and relay alike (with the respective address); **New link** replaces a view's
+link and disconnects everyone still using the old one. Player links of party members stay the same for the whole
+campaign; hand each player their link or QR code once. Characters added by hand in an
 encounter get a link for that encounter only. The player window picks its view under Settings > Players > _Shows_;
 Esc closes it.
 
@@ -213,7 +220,7 @@ document back to how it was before that day's changes; what it replaces is kept 
 `history/<YYYY-MM-DD> <HH-MM-SS> before restore/`, listed there too, so a restore can be restored away again.
 _Open history folder_ shows the files, the size readout and _Clean up older than…_ free space. You can also copy a
 file back by hand while the app does not have its document open. The history is never sent to players (LAN or
-relay). Command-line tools write without keeping a history.
+relay). Command-line tools keep replaced versions in the history as well and never write into `history/`.
 
 ## Content packs
 
@@ -236,7 +243,7 @@ removes imported packs and imports new ones (**Import pack…** for a `.zip`, **
 ```
 
 - Your own content (`library/`) always wins. Among packs, the one higher in the list wins when two hold an entry with
-  the same id; drag a pack to change the order. The Packs tab says what is overridden by whom.
+  the same id; drag a pack to change the order. Each pack row says what is overridden by whom.
 - Switched-off packs disappear from the Compendium, the Maps page and the Add dialog. Running encounters keep their
   combatants (hit points, armor class, conditions); a creature's stat block and a map from a switched-off pack show
   a notice naming the pack until you switch it on again. Untick a kind on a pack (e.g. its spells) to hide just that
@@ -332,7 +339,8 @@ dialog asks where the file goes (outside the app's data and content folders).
 | Image (`.png`)            | any image viewer                                   | the battlemap cut and turned to the grid, grid lines optional                                                                |
 
 Pictures are cut to the map's squares and reduced to 4096 px on the long edge, as the 3D view shows them. A video
-battlemap exports its first frame.
+battlemap exports its first frame. Universal VTT has no magical darkness: a map with magical darkness as ambient
+light reads back as darkness.
 
 ## Creature pictures and standees
 

@@ -97,7 +97,7 @@ Toolchain on this machine: Node 24, pnpm 10, Rust 1.95 (MSVC target), WebView2 1
 - Writes are atomic (write temp file, rename) and debounced; no save-on-every-property-change.
 - Shipped `content/` is read-only; editing a shipped entry creates a user copy ("override").
 
-**Copyright**: `MonsterRawData/MM` and the JSON derived from it are Monster Manual content. They are imported into the user data dir by a tool, never committed. The repo ships SRD 5.1 (CC-BY-4.0) creatures only, with attribution.
+**Copyright**: `MonsterRawData/MM` and the JSON derived from it are Monster Manual content. They are imported into the user data dir by a tool, never committed. The repo ships no creatures: SRD 5.1 (CC-BY-4.0) monsters, spells and items come from the D&D 5e API import into the data folder, with attribution; the only shipped SRD content is five area templates.
 
 ## 4. Domain model (core)
 
@@ -214,13 +214,14 @@ Order: M0 → M1 (only what M2 needs first: map schema, storage) → **M2** → 
   registry ≈ 0.5 GB, `src-tauri/target` debug ≈ 3 GB + release ≈ 1.5 GB → ≈ 6 GB; MSVC workload, if missing, +6–8 GB.
 - WebView2 WebGL performance on the target machine/TV laptop — measure in M2 with the 100×100 budget.
 - Wall tracing effort per map; later option: semi-automatic wall detection from dark lines in the image.
-- SRD creature source for `content/`: convert from an SRD 5.1 dataset with compatible license (to verify before M1 content step).
+- SRD creature source: the D&D 5e API (dnd5eapi.co, SRD 5.1, CC-BY-4.0), imported at run time into the data folder.
 - Phase 2 LAN server exposes a port: bind to LAN only, random session token in URL.
 - Testing the LAN view on a phone touches the local network → ask before M6 tests.
 - **To do: online play.** The relay (Settings > Players > Online, Players popover "Online", server deploy) is hidden
   by `ONLINE_PLAY_AVAILABLE = false` in `src/ui/server/OnlineSection.tsx` because it was never tried against a real
   server. Before switching it on: deploy the relay to a server with a domain, connect from the app, join from a
   phone on mobile data, check map, fog, token moves, handouts and reconnects; then add the search keywords back.
+- **To do: roofs in player fog.** Roofs do not block sight or light from above in the players' fog yet.
 
 ## 11. Conventions
 

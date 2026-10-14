@@ -24,7 +24,7 @@ between modules.
 | `src/sync`    | DM → player protocol and transports.                                                                        |
 | `src/ui`      | React pages and components.                                                                                 |
 | `src/workers` | Web workers (visibility).                                                                                   |
-| `src-tauri`   | Rust shell: storage commands, later LAN server.                                                             |
+| `src-tauri`   | Rust shell: storage and version history commands, LAN server, relay deployment (SSH).                       |
 | `tools`       | Node CLI scripts (run with `pnpm tsx tools/<script>.ts`).                                                   |
 | `content`     | Shipped, read-only content packs in `content/packs/` (SRD 5.1 area templates, CC0 models, the sample map).  |
 
@@ -49,8 +49,21 @@ between modules.
   Existing ULID documents keep theirs: encounters (campaign, map, creature refs) and settings refer to them.
 - `Storage` (`src/data/storage.ts`): area `'data'` (user data root) or `'content'` (shipped). Implementations:
   `TauriStorage` (desktop), `BrowserStorage` (IndexedDB, dev in a browser), `MemoryStorage` (tests),
-  `NodeStorage` (`tools/nodeStorage.ts`, CLI tools; same path rules and atomic writes as the Rust side).
+  `NodeStorage` (`tools/nodeStorage.ts`, CLI tools; same path rules, atomic writes and version history as the Rust
+  side: it refuses writes and removes in `history/` and leaves `history` out of data root listings).
   `readBytes` (Rust `storage_read_bytes`, raw IPC response) reads PNG blobs.
+- Desktop storage and history commands are `#[tauri::command(async)]`, so file work never blocks the windows. A data
+  write goes to a unique temp file (`<name>.<pid>-<n>.tmp`), `sync_all`, then the rename, so a power loss leaves the
+  old or the new file, never an empty one. `storage_set_data_root` refuses relative paths; `storage_copy_data_root`
+  copies `history/` with `history::copy_history` (objects once, dated files hard-linked). A `bootstrap.json` naming a
+  missing folder, or one that does not parse, makes that session use the app data folder with a native warning
+  dialog; the file stays, so the next start tries the chosen folder again.
+- Command permissions: `src-tauri/build.rs` lists every app command in `AppManifest::commands`, so each needs an
+  `allow-*` grant. `capabilities/default.json` (DM and player window): `core:default`, `core:window:allow-close` and
+  the read-only storage commands (`storage_roots`, `_read_text`, `_read_bytes`, `_list`, `_exists`, `_asset_path`).
+  `capabilities/dm.json`: every other command, player window placement, `core:window:allow-destroy`, dialogs, updater
+  and restart. The monitor number windows (`identify-*`) get no commands. A new command goes into `build.rs` and a
+  capability.
 - Version history (`src-tauri/src/history.rs`, desktop only): every data area write (`storage_write_text`/
   `_bytes`, `_import_file`, `_copy` file by file, all atomic) and `storage_remove` first calls `history::keep`:
   unless `history/<YYYY-MM-DD>/<path>` (local date) exists or the new bytes equal the old ones, the current file's
@@ -65,7 +78,7 @@ between modules.
   to its document (kind, id, own file; a map's pictures and terrain belong to the map), `historyDocuments(folder)`,
   `restorePlan(listing, folder, key)` (per file of the document the version of the first folder from `folder` on,
   i.e. the document as it was before that folder's changes), `historyDocumentName`. UI: `HistorySection`
-  (Settings > Data). `NodeStorage` and `BrowserStorage` keep no history.
+  (Settings > Data). `BrowserStorage` keeps no history.
 - Creature pictures are files named after the creature id next to its text file (`<id>.<png|jpg|jpeg|webp>`,
   `<id>.token.<ext>`); they resolve by pack precedence like documents, so a picture in My content's
   `library/creatures/` pictures a pack's creature without a user copy. Token picture precedence `resolveTokenAsset`:
@@ -160,7 +173,7 @@ Packs (`content/packs/<id>/`, `<data root>/packs/<id>/`) use the same folders as
 - **Area template** (`library/markers/<id>.json`): `{schema: "marker", version, id, name, createdAt, updatedAt,
 shape, sizeFt, widthFt, heightFt, color, opacity, notes, save?}`; the optional `save` is `{ability, dc, damage,
 damageType, halfOnSuccess}` (`damage` a dice formula rolled once for all targets) and is copied into placed markers.
-- **Map** (`map.json`, schema `map` v2): the map document with `terrain.heightmap` instead of the heights:
+- **Map** (`map.json`, schema `map` v3): the map document with `terrain.heightmap` instead of the heights:
   `"heightmap": { "file": "terrain.png", "baseFt": -3, "feetPerUnit": 0.0078125 }`. Pixel value `v` (0..65535) of
   `terrain.png` is the height `baseFt + v * feetPerUnit` feet; the image has `squaresX * samplesPerSquare + 1`
   columns (east) and `squaresY * samplesPerSquare + 1` rows (south), north-west corner first. `feetPerUnit` is the
@@ -192,7 +205,8 @@ title, notes}]}`; months and days count from 1, days have 24 hours, years are th
   the campaign files.
 - **Portraits** (`portraits/` in My content or a pack): PNG, JPEG or WebP files offered by the picture library
   (`repository.listPortraits()`); picking one for a creature copies it to the creature's picture name on save.
-- **Encounter** (`encounter.json`, schema `encounter` v6): combatants, markers, door states, log, notes,
+- **Encounter** (`encounter.json`, schema `encounter` v7): combatants, markers, door states, log, notes,
+  `turnStart` (where the current combatant began its turn; v7),
   `playersMoveTokens` (players may drag their own token) and `fog.cellsPerSquare`. Since v5 every combatant has
   `level` (player characters, else null), `effects` (`{id, name, condition, expires: {round, turnOf, at:
 "start"|"end"} | null}`), `concentrating`, `deathSaves` (`{successes, failures}`), `resources` (spent ones:
@@ -205,13 +219,14 @@ cellsPerSquare` × `squaresY * cellsPerSquare`), white = set. Paint white into `
   `encounterActions.ts`, Add combatants > Add party), so its player view, link token, `settings.playerWindow.view`
   and fog key (`fog.exploredBy`, `fog/explored/<id>.png`) are the same in every encounter of the campaign. Absent
   for everyone else; no encounter schema bump (optional field).
-- **Settings** (`settings.json`, schema `settings` v6): UI and server preferences. Secrets, keep the file private:
+- **Settings** (`settings.json`, schema `settings` v12): UI and server preferences. Secrets, keep the file private:
   `remote.dmKey` (authenticates the app at the internet relay as DM) and `playerLinks.secret` (all player links are
   derived from it; changing it invalidates every link).
 - **Dungeon Alchemist object choices** (`library/dungeon-alchemist-objects.json`, `damObjectChoicesSchema`):
-  `{schema: "dungeon-alchemist-objects", version: 1, modelFolder, objects: {<block id>: {name, model, unitFt,
-rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet per model unit (5 for models made
-  for Dungeon Alchemist, where one unit is one square), `rotationDeg` is added clockwise.
+  `{schema: "dungeon-alchemist-objects", version: 1, modelFolder, gameFolder, objects: {<block id>: {name, model,
+unitFt, rotationDeg}}}`; `gameFolder` is the Dungeon Alchemist install the DM located (null finds Steam installs),
+  `model` is an `AssetRef` (null skips the kind), `unitFt` feet per model unit (5 for models made for Dungeon
+  Alchemist, where one unit is one square), `rotationDeg` is added clockwise.
 - **Migration** (`migrateDataRoot`, run by `appStore.init` on every start and data root switch, a no-op once
   converted): creature `.json` → `.txt` plus pictures from `library/creatures/assets/` and `library/portraits.json`
   (portrait index, removed) under the convention names; map heights → `terrain.png`; encounter `.json` → encounter
@@ -219,7 +234,8 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
   document is written in the new layout, read back and compared with the old one (heights within half a heightmap
   step); only then is the old file replaced or deleted. A failing document keeps its old file and is listed as
   "Kept in the old format: …" in the load problems; old pictures and the portrait index stay until all documents
-  converted.
+  converted. Maps and campaigns are checked by version on every start, so a conversion cut short before its last
+  write (the old JSON) is redone.
 - **Pack migration** (`migrateToPacks`, `src/data/packMigration.ts`, after `migrateDataRoot`, only while
   `settings.json` is older than v7 or missing): asset references to shipped files (`content:creatures/…`,
   `markers/`, `maps/`, `models/cc0/`) are rewritten in maps, encounters and `dungeon-alchemist-objects.json` (any
@@ -261,13 +277,16 @@ area, root}`, `MY_CONTENT_SOURCE`, `packSource`, `writableSource`, `orderPacks`,
   (zip with `pack.json` at the top; references into the exported root become `data:packs/<id>/…`; My content
   exports as `my-content-<date>`), `readPackZip`/`packFilesOf` (`pack.json` at the top or in the single top
   folder), `installPack` (staging folder `packs/<id>.importing`, every file read back and compared, then the old
-  version replaced; `PackExistsError` asks before replacing; built-in ids refused), `removePack`. ZIP:
-  `src/core/zip.ts` (dependency-free, stored/deflate via `CompressionStream('deflate-raw')`, CRC-32 checked, unsafe
-  names refused, no ZIP64). LAN and relay serve pack pictures and models like any asset; `pack.json`, stat block
+  version replaced; the staging folder stays when swapping in fails, as the only complete copy, and the next import
+  clears it; `PackExistsError` asks before replacing; built-in ids refused), `removePack`. ZIP: `src/core/zip.ts`
+  (dependency-free, stored/deflate via `CompressionStream('deflate-raw')`, CRC-32 checked, unsafe names and names
+  with `:` refused, each entry inflated only up to its stated size, overlapping entries and archives over 2 GiB
+  unpacked refused, no ZIP64). LAN and relay serve pack pictures and models like any asset; `pack.json`, stat block
   text and `terrain.png` are documents and never served.
-- UI: Compendium tab Packs (`PackLibrary.tsx`): rows in precedence order (drag or Alt+Up/Down to reorder), name,
-  version, author, license, counts (also portraits), "n overridden by …", enable switch, Export, Remove (imported
-  packs, confirmed); header actions Import from Aurora Builder… and Import folder… (desktop), Import pack… (.zip).
+- UI: Settings > Content (`PackLibrary`, `PackActions` in `PackLibrary.tsx`): rows in precedence order (drag or
+  Alt+Up/Down to reorder), name, version, author, license, counts (also portraits), "n overridden by …", enable
+  switch, Export, Remove (imported packs, confirmed); header actions Import from Aurora Builder… and Import folder…
+  (desktop), Import pack… (.zip).
   `OriginBadge` names an entry's pack. Compendium tabs Items and Spells (`ItemSpellLibrary.tsx`): search, filters
   (item type and rarity; spell level, school and class; source book for both), rows with the source book (the
   pack shows in the preview), at most 300 rows at once, preview with the facts and the
@@ -285,12 +304,14 @@ area, root}`, `MY_CONTENT_SOURCE`, `packSource`, `writableSource`, `orderPacks`,
   folder), `library/…` (My content maps, creatures with pictures and area templates its encounters use) and other
   data files its JSON or bundled maps refer to. `exportCampaign(repository, campaignId, now)` bundles a document when
   My content holds it, else lists its pack; it also bundles the My content creatures of `campaign.json`'s party and
-  names the packs holding the others. `readCampaignZip` validates the manifest with zod and the file layout.
+  names the packs holding the others. `readCampaignZip` validates the manifest with zod and the file layout; ids
+  must be names Windows keeps as written (no `<>:"|?*`, control characters, trailing dot or space, device names).
   `importCampaign(repository, archive, 'fail' | 'replace' | 'copy')`: `CampaignExistsError` for `'fail'`; a copy is
   `Name (2)`… under `newCampaignId`; documents identical to My content's are shared, others whose id is taken get
   `newLibraryId(kind, id)` and the references follow (party `creature` refs too); assets keep their path when free
   or identical, else go to `campaigns/<id>/imported-assets/<path>`; staged in `campaigns.importing/<id>`, read back,
-  then swapped in; the result names `missingPacks`. UI (`src/ui/campaign/campaignArchiveUi.ts`): campaign page
+  then swapped in (the staging folder stays when swapping in fails and the next import clears it); the result names
+  `missingPacks`. UI (`src/ui/campaign/campaignArchiveUi.ts`): campaign page
   Export…, campaign card context menu Export…, Campaigns header Import campaign…, Home Import…/drop (`.zip`),
   commands `campaign:import` and `campaign:export`; Replace campaign / Import as copy via `choiceDialog` (kit).
   Sound moods are not bundled.
@@ -336,7 +357,7 @@ area, root}`, `MY_CONTENT_SOURCE`, `packSource`, `writableSource`, `orderPacks`,
   source books"): portraits (all with `portraits`, else only those the imported characters reference), items,
   spells, characters (portrait from the folder by file name, else the embedded one), then deletes the files of the
   ticked parts the import did not write; unticked parts keep their files. `auroraBooks(docs)` lists source books.
-  UI: `AuroraImportDialog` (Compendium > Packs, Compendium > Players, campaign Party tab, Add combatants > Player
+  UI: `AuroraImportDialog` (Settings > Content, Compendium > Players, campaign Party tab, Add combatants > Player
   character > From Aurora…; folder dialog starting in `Documents/5e Character Builder`, counts preview, progress,
   report).
 - **D&D 5e API import** (`src/core/import/dnd5eApi.ts` pure conversion, `src/data/dnd5eApiImport.ts` I/O,
@@ -439,7 +460,8 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
 - Structures (`src/render/structures/`, `src/render/props/`): `StructureLayer` (mitered wall prisms, openings cut out
   and filled by door/pane/bars; players see shut secret doors as wall), `RoomLayer` (floors, roofs peeled per room in
   play views while the camera or a token is inside), `RegionLayer` (draped polygons; players only see non-hidden
-  hazard/note regions, discarded in unknown fog), `LightLayer` (point lights, first 8 cast shadows, carried lights
+  hazard/note regions, discarded in unknown fog), `LightLayer` (point lights, the first `graphics.shadowedLights`
+  (default 4) cast shadows, carried lights
   follow their combatant, also those combatants carry themselves via `useCarriedLights`; editor gizmos), `PropLayer`
   (glTF/GLB via `useModel`, optional battlemap projection).
   Editor `layers` toggles apply in mode `'editor'` only (`useLayerVisible`). Live door states: `useOpeningStates()`
@@ -464,7 +486,10 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
 - `useEditorStore` holds the open map, the live `HeightField` and history. Every change goes through
   `edit(label, recipe)` (immer patches, undoable), `replaceTerrain(label, field, recipe?)` (resize/resample), or a
   sculpt stroke `beginTerrainStroke()` → mutate `terrain.data` + `terrainChanged()` → `endTerrainStroke(label)`.
-  Autosave writes `snapshot()` about 800 ms after the last change.
+  Autosave writes `snapshot()` about 800 ms after the last change. Edits to the same fields under one label within
+  1 s join one undo step (sliders, colour pickers). Saves of one store run one after another and revisions never
+  reset, so a late save of the previous document cannot mark the next one's edits saved. The DM window's close
+  request (Tauri `onCloseRequested`) waits for the map and encounter saves; a failed save keeps the window open.
 - Sculpt brushes are pure functions in `src/core/terrain/brushes.ts` returning the touched `SampleRect`. Before each
   `terrainChanged()` of a stroke call `markTerrainDirty(field, rect)` (`src/render/terrain/terrainDirty.ts`); the
   terrain mesh then rewrites only that region (positions, normals, BVH nodes). Unmarked version bumps (undo, load)
@@ -504,7 +529,8 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   at their openings (`wallPieces`; a closed wall's last run continues into its first): full height (≥ 10 ft) as
   `line_of_sight`, lower as `objects_line_of_sight`; every opening on them is a portal (`closed` false for windows,
   portcullises and arrow slits, which let sight through); enabled unattached lights with `range` = bright + dim in
-  squares; ambient level as a gray tint. `parseUvtt` reads the result back to the same walls, openings, lights and
+  squares; ambient level as a gray tint (black for magical darkness, which reads back as plain darkness).
+  `parseUvtt` reads the result back to the same walls, openings, lights and
   grid (`uvtt.test.ts`).
 - GLB: `exportMapGlb(map, terrain, sources, {lights})` (`src/render/export/mapGlb.ts`) builds the scene from the
   render code's geometry: `createTerrainGeometry`, `buildWallGeometry`, `openingFrame` (`openingShape.ts`, also used
@@ -571,18 +597,26 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   combatants) and `typeIconTexture` (token without picture: icon in the side color plus the combatant's number).
   Ad-hoc combatants without a library creature keep initials. Players get the icon key as `PlayerCombatant.typeIcon`
   (`typeIconOf` beside `tokenOf`).
-- Sync (`src/sync/protocol.ts`, protocol 2): the DM sends `map` (filtered for players), `encounter`
-  (`PlayerEncounter`), `fog` (`PlayerFog`), `camera` and `view` (the view's name, shown in the player page's status
-  corner); the player sends `hello` to request a resend and the requests of "Player devices" below. Filtering happens
-  on the DM side; the player never receives
-  hidden combatants, secret doors, hidden regions or notes. Combatant tokens are sent resolved
-  (`filterEncounterForPlayers(..., { showTurnOrder, standees, tokenOf, typeIconOf })`).
+- Sync (`src/sync/protocol.ts`, protocol 2): the DM sends `map` (filtered for players, with a `revision`),
+  `encounter` (`PlayerEncounter`), `fog` (`PlayerFog`), `camera` and `view` (the view's name, shown in the player
+  page's status corner); the player sends `hello` to request a resend and the requests of "Player devices" below.
+  `hello` may carry `mapRevision`, the map the page already has; `onResend(view, mapRevision)` and
+  `startDmPublisher` then leave the map out of the resend. Messages are parsed with zod: the DM side with
+  `playerMessageSchema`, the player side with an envelope schema (`protocol`, `from`, payload with a string `type`).
+  Filtering happens on the DM side; the player never receives hidden combatants, secret doors, hidden regions or
+  notes. Combatant tokens are sent resolved (`filterEncounterForPlayers(..., { showTurnOrder, standees, tokenOf,
+typeIconOf })`).
 - Player views (`src/sync/views.ts`): `PARTY_VIEW` (`'party'`, all vision sources) or one player character's
   combatant id, which for party members is their member id (`playerViews` uses `partyMemberId ?? id`); only that
   character's vision. View id = combatant id everywhere (fog, sheets, moves, `rebuildPlayerMessage`, `lan.rs`,
   relay), so nothing needs translating. `playerViews(encounter)` lists Party plus the encounter's player
-  characters; `useViewLinksStore` keeps them (also while no encounter is open, so leaving Play withdraws no link)
-  with one link token each. `startViewLinks()` (in `DmApp`) derives the tokens: `linkToken(secret, view, rotation)`
+  characters; `useViewLinksStore` keeps them as `views` (link picker, Show, player window; also while no encounter
+  is open, so leaving Play withdraws no link) and as `linked`: those views, the open campaign's party members (id =
+  member id, name = the character's name from the creature library, else the player's name; read with
+  `repository.listCampaigns()` when an encounter opens or the page changes, since the campaign page saves straight
+  to the repository) and characters of the campaign's earlier encounters this session. Opening another campaign's
+  encounter drops the old campaign's views. `linkTable` and the derived tokens cover `linked`, one link token each.
+  `startViewLinks()` (in `DmApp`) derives the tokens: `linkToken(secret, view, rotation)`
   is HMAC-SHA256 under `settings.playerLinks.secret` (created on first start), truncated to 128 bits; `rotateLink`
   bumps `settings.playerLinks.rotations[view]`. The servers only get the token → view table (`linkTable`), so no
   token reveals or leads to another view's. In a character's view every player character stays visible (the table
@@ -591,9 +625,9 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   view only learns the paths in its own payload, so it never asks for a token picture of a combatant it cannot see.
 - Transports. Player side (`SyncTransport`): `TauriEventTransport`, `BroadcastChannelTransport`
   (`createLocalTransport(role)`), `WebSocketTransport` (`src/sync/wsTransport.ts`; reconnects with backoff,
-  announces every connect with `hello`, stops for good on close code `RELAY_LINK_REVOKED` and the page says the
-  link no longer works). DM side (`DmTransport`: `send(views, payload)`, `onResend`, `onPlayerRequest`,
-  `watchViews`):
+  announces every connect with `hello` naming the last map revision it received, stops for good on close code
+  `RELAY_LINK_REVOKED` and the page says the link no longer works). DM side (`DmTransport`: `send(views, payload)`,
+  `onResend`, `onPlayerRequest`, `watchViews`):
   `LocalViewTransport` (player window; `DmApp` sets its view from `settings.playerWindow.view`, Party when that
   character is not in the encounter, none while the window is closed) and `ViewSocketTransport` (LAN and relay
   socket: view frames out, per-view hellos, player requests and status frames in; the first status after every
@@ -622,7 +656,8 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
 ## Campaign tools
 
 - Campaign page (`CampaignDetail` in `src/ui/library/CampaignLibrary.tsx`): tab bar under the header (Encounters ·
-  Journal · People & places · Quests · Calendar, `CAMPAIGN_TABS`/`TAB_BODIES`), each tab's primary action inside its
+  Party · Journal · People & places · Quests · Calendar, `CAMPAIGN_TABS`/`TAB_BODIES`; a campaign without a party
+  opens on Party), each tab's primary action inside its
   body. Tabs live in `src/ui/campaign/` and share `useCampaignDocs`, `NotesEditor` (Write/Preview, saves 800 ms
   after typing, on blur and on close), `EncounterLinks` and `NameDialog` (`campaignUi.tsx`). Markdown preview:
   `src/ui/components/Markdown.tsx` (headings, lists, quotes, code, bold, italic; React elements only, never HTML;
@@ -652,9 +687,13 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   generates a DM token (in `dmUrl`, accepted from loopback only); player tokens are the links' keys.
 - Routes: `/player.html?token=` (sets an `/asset`-scoped cookie with that token so relative `.gltf` resources load),
   `/assets/*` (Vite bundle, public), `/asset/{area}/{path}?token=` (images and models only, path stays inside the
-  storage root via `storage::resolve`; documents are never served, nor the PNGs inside campaign folders (fog masks)
-  except a campaign's `handouts/`, or `terrain.png`, nor anything in `history/`), `/ws?token=` (relay). The DM
-  socket speaks the internet relay's view frames and status frames (see below); a player gets only frames of its
+  storage root via `storage::resolve`; the canonical path below the canonical root decides, so case, `./`, trailing
+  dots, 8.3 short names and links cannot reach a DM-only file; documents are never served, nor the PNGs inside
+  campaign folders (fog masks) except a campaign's `handouts/` and `imported-assets/`, or `terrain.png`, nor anything
+  in `history/`; a single `Range: bytes=` request gets 206 or 416 with `Accept-Ranges: bytes` via `byte_range`,
+  mirroring the relay's `byteRange`), `/ws?token=` (relay). `lan_stop` waits at most 2 s for open responses, then
+  aborts the server task. The DM socket speaks the internet relay's view frames and status frames (see below); a
+  player gets only frames of its
   link's view, and only the player messages `rebuild_player_message` accepts pass, rebuilt and at most 10 at once
   then one per 500 ms (more are dropped); any other player message closes its socket. Changed links close the
   sockets of withdrawn tokens with `RELAY_LINK_REVOKED` and of reassigned ones with 1013.
@@ -673,7 +712,7 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
 ## Internet relay
 
 - The DM app connects out to a relay on a server the DM controls; the relay only receives what the player filter
-  already produced. Contract shared by both sides: `src/sync/relayApi.ts` (`RELAY_API_VERSION` 3, routes, limits,
+  already produced. Contract shared by both sides: `src/sync/relayApi.ts` (`RELAY_API_VERSION` 4, routes, limits,
   file type allowlists, schemas, view frames); player messages are validated and rebuilt by `rebuildPlayerMessage`
   (`protocol.ts`) and rate-limited like on the LAN server, and DM messages pass unparsed behind their view list, so
   sync protocol bumps need no relay redeploy unless players send something new.
@@ -689,7 +728,8 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   `Authorization: Bearer <key>`: `GET /api/session` (`{api, players}`), `PUT /api/links` (replaces the token → view
   table, kept in `dataDir/links.json` across restarts; withdrawn tokens' sockets close with `RELAY_LINK_REVOKED`,
   reassigned ones with 1013), `POST /api/missing` (which upload targets differ by SHA-256), `PUT
-/api/asset/{area}/{path}` and `PUT /api/bundle/{path}` (hash header checked, 128 MiB limit, extension allowlist,
+/api/asset/{area}/{path}` and `PUT /api/bundle/{path}` (hash header checked, 1 GiB limit `RELAY_MAX_UPLOAD_BYTES`,
+  nginx `client_max_body_size 1024m`, extension allowlist,
   `containedPath`, atomic rename). The relay pings every 30 s and drops players more than 16 MiB behind.
 - Player bundle: `tools/vite-relay-plugin.ts` copies `relay.mjs` into `dist/` (so `pnpm build` fails without
   `build:server`, which `pnpm build` runs first) and writes `dist/player-bundle.json` (every built file except
@@ -712,7 +752,7 @@ setup)`, `deploy_host_key(host, port)` (`SHA256:` fingerprint, confirmed and sto
   the nginx site (WebSocket upgrade on `/ws`) and, given an email, a certbot certificate.
 - UI: `src/ui/server/OnlineSection.tsx` in Settings > Players (`src/ui/settings/PlayersSection.tsx`): Online (URL,
   DM key, connect, connection test via `/health` + `/api/session`, link + QR) and _Set up a server…_ (dialog with
-  domain, email, relay port and `DeployDialog`); the old `server` route redirects there. Settings `remote` (schema
+  domain, email, relay port and `DeployDialog`). Settings `remote` (schema
   v5): `url`, `dmKey`, `setup`, `ssh` (no password), `knownHosts`.
 
 ## Player devices
@@ -801,7 +841,8 @@ no stubs/TODOs. Format with `pnpm format`; check with `pnpm typecheck`, `pnpm li
   by `onBlocked`) at `settings.audio.volume * dmVolume`. Interludes: `startInterlude(asset)` / `stopInterlude()`
   (`src/sound/interlude.ts`, used by Show).
 - Sync: `startAtmospherePublisher(transports)` (`src/sync/atmospherePublisher.ts`) sends `audio` (track, position
-  at sending time, playing, master volume), `sfx`, `scene` (`minute`, `weather`) and `interlude` to every view, on
+  at sending time, playing, master volume), `sfx`, `scene` (`minute`, `weather`) and `interlude` (with `id`, the
+  DM's `startedAtMs`, so a resend of the same interlude does not restart it in `usePlayerStore`) to every view, on
   change and on resend; `view` carries `combatantId`. The player page keeps them in `usePlayerStore`;
   `PlayerSound` plays them at master × the device's own volume (`localStorage`) and computes the ambience from the
   received map, combatants and `viewCombatantId`; `InterludeVideo` shows the interlude fullscreen.
@@ -811,7 +852,7 @@ no stubs/TODOs. Format with `pnpm format`; check with `pnpm typecheck`, `pnpm li
   frame whatever the map size; editor views draw none.
 - Video battlemaps: `useProjectionUniforms` loads `.mp4`/`.webm` images with `loadVideoTexture` (muted, looping,
   no mipmaps); `AssetImage` shows their first frame. LAN `asset_mime` and `RELAY_ASSET_TYPES` include audio and
-  video; the relay serves single byte ranges (`byteRange`).
+  video; LAN (`byte_range`) and relay (`byteRange`) serve single byte ranges.
 
 ## Updates
 
@@ -826,5 +867,6 @@ no stubs/TODOs. Format with `pnpm format`; check with `pnpm typecheck`, `pnpm li
   `settings.updates.lastCheck` and reports a found version or a failure as a notice.
 - Release: `tools/package.ts` builds with the signing key (`TAURI_SIGNING_PRIVATE_KEY*` env or
   `data-local/signing/fogwarden.key`) and writes installer, `.sig` and `latest.json` (`tools/updateManifest.ts`:
-  notes = newest `CHANGELOG.md` section, URL = asset of release `v<version>`) to `artifacts/`;
-  `tools/set-version.ts` sets the version in `package.json`, `tauri.conf.json` and `Cargo.toml`.
+  notes = the newest `CHANGELOG.md` section, which must be headed `## <version>`, else packaging stops before the
+  build; URL = asset of release `v<version>`) to `artifacts/`; release builds ship without source maps.
+  `tools/set-version.ts` sets the version in `package.json`, `tauri.conf.json`, `Cargo.toml` and `Cargo.lock`.
