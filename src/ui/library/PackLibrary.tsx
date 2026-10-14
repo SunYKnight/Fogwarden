@@ -32,7 +32,7 @@ const COUNT_LABELS: Record<LibraryKind | 'model' | 'portrait', [string, string]>
   portrait: ['portrait', 'portraits'],
 };
 
-function countText(counts: PackInfo['counts']): string {
+export function countText(counts: PackInfo['counts']): string {
   const parts = (Object.keys(COUNT_LABELS) as (keyof typeof COUNT_LABELS)[])
     .filter((kind) => counts[kind] > 0)
     .map((kind) => `${counts[kind]} ${COUNT_LABELS[kind][counts[kind] === 1 ? 0 : 1]}`);
@@ -151,7 +151,7 @@ async function remove(pack: PackInfo): Promise<void> {
   }
 }
 
-async function setEnabled(pack: PackInfo, enabled: boolean): Promise<void> {
+export async function setPackEnabled(pack: PackInfo, enabled: boolean): Promise<void> {
   const id = pack.source.pack;
   await changePackSettings((packs) => ({
     ...packs,
@@ -284,7 +284,7 @@ function PackRow({ pack, index, busy, run, onDragStart, onDrop }: RowProps) {
             role="switch"
             checked={pack.enabled}
             disabled={busy}
-            onChange={(e) => run(() => setEnabled(pack, e.target.checked))}
+            onChange={(e) => run(() => setPackEnabled(pack, e.target.checked))}
           />
           {pack.enabled ? 'On' : 'Off'}
         </label>

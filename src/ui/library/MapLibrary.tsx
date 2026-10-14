@@ -10,6 +10,7 @@ import { Button, confirmDialog, EmptyState, Icon, openContextMenu, type MenuItem
 import { openNewEncounter } from './compendiumUi';
 import { openNewMapWizard } from './NewMapWizard';
 import { MapExportDialog } from './MapExportDialog';
+import { countText, setPackEnabled } from './PackLibrary';
 
 async function duplicateMap(ref: DocRef, name: string): Promise<void> {
   const { repository, notify } = useAppStore.getState();
@@ -38,6 +39,31 @@ async function deleteMap(entry: LibraryEntry<'map'>): Promise<void> {
   }
 }
 
+/**
+ * Pack files belong to the pack, so a pack's map goes by turning the pack off; Settings > Content brings it
+ * back. The confirm names everything else the pack holds, since that goes too.
+ */
+async function hidePackMap(entry: LibraryEntry<'map'>): Promise<void> {
+  const pack = useLibraryStore.getState().packs.find((p) => p.source.pack === entry.pack);
+  if (!pack) {
+    throw new Error(`The pack "${entry.pack}" of "${entry.doc.name}" is not installed`);
+  }
+  const { name } = pack.manifest;
+  const alone = Object.entries(pack.counts).every(([kind, n]) => n === (kind === 'map' ? 1 : 0));
+  const ok = await confirmDialog({
+    title: 'Delete map',
+    message:
+      `"${entry.doc.name}" comes with the pack "${name}" and is removed by turning that pack off` +
+      `${alone ? '' : `, which also hides the rest of it (${countText(pack.counts)})`}. Encounters using it ` +
+      'will have no map. Turn the pack on again in Settings > Content to get it back.',
+    confirmLabel: alone ? 'Delete map' : 'Turn pack off',
+    danger: true,
+  });
+  if (ok) {
+    await setPackEnabled(pack, false);
+  }
+}
+
 function MapCard({ entry }: { entry: LibraryEntry<'map'> }) {
   const navigate = useAppStore((s) => s.navigate);
   const reportError = useAppStore((s) => s.reportError);
@@ -46,7 +72,7 @@ function MapCard({ entry }: { entry: LibraryEntry<'map'> }) {
   const fromPack = useLibraryStore((s) => packName(s.packs, pack));
   const edit = () => navigate({ page: 'map-editor', map: ref });
   const duplicate = () => duplicateMap(ref, doc.name).catch(reportError);
-  const remove = () => deleteMap(entry).catch(reportError);
+  const remove = () => (shipped ? hidePackMap(entry) : deleteMap(entry)).catch(reportError);
   const [exporting, setExporting] = useState(false);
   const loadForExport = async () => {
     const map = await useAppStore.getState().repository.load('map', ref);
@@ -60,7 +86,7 @@ function MapCard({ entry }: { entry: LibraryEntry<'map'> }) {
       { label: 'Duplicate', icon: 'copy', run: duplicate },
       { label: 'Use in a new encounter', icon: 'swords', run: () => openNewEncounter(null, ref) },
       { label: 'Export…', icon: 'download', run: () => setExporting(true) },
-      { label: 'Delete', icon: 'trash', danger: true, disabled: shipped, run: remove },
+      { label: 'Delete', icon: 'trash', danger: true, run: remove },
     ];
     openContextMenu(e.clientX, e.clientY, items);
   };
@@ -94,7 +120,7 @@ function MapCard({ entry }: { entry: LibraryEntry<'map'> }) {
             <Button icon="edit" label="Edit" onClick={edit} />
             <Button icon="copy" label="Duplicate" onClick={duplicate} />
             <div className="spacer" />
-            {!shipped && <Button icon="trash" label="Delete" iconOnly variant="danger" onClick={remove} />}
+            <Button icon="trash" label="Delete" iconOnly variant="danger" onClick={remove} />
           </div>
         </div>
       </div>
