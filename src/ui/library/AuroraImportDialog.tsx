@@ -4,8 +4,11 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useState } from 'react';
 import {
   AURORA_PACK,
+  auroraBooks,
+  DEFAULT_AURORA_PARTS,
   planAuroraImport,
   runAuroraImport,
+  type AuroraParts,
   type AuroraPlan,
   type AuroraReport,
   type AuroraSource,
@@ -35,31 +38,54 @@ async function defaultFolder(): Promise<string | null> {
   );
 }
 
-function countLines(counts: Omit<AuroraReport, 'removed'>): [string, number][] {
-  return [
-    ['Characters', counts.characters],
-    ['Items', counts.items],
-    ['Magic items', counts.magicItems],
-    ['Spells', counts.spells],
-    ['Portraits', counts.portraits],
-  ];
+const PART_LABEL: Record<keyof AuroraParts, string> = {
+  characters: 'Player characters',
+  items: 'Items and magic items',
+  spells: 'Spells',
+  portraits: 'Portrait library',
+};
+
+const PART_KEYS: (keyof AuroraParts)[] = ['characters', 'items', 'spells', 'portraits'];
+function fromBooks(count: number, books: string[]): string {
+  return `${count} from ${books.length} ${books.length === 1 ? 'book' : 'books'}`;
 }
 
-function Counts({ counts }: { counts: Omit<AuroraReport, 'removed'> }) {
-  return (
-    <dl className="import-counts">
-      {countLines(counts).map(([label, n]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd>{n}</dd>
-        </div>
-      ))}
-    </dl>
-  );
+function partDetail(part: keyof AuroraParts, plan: AuroraPlan): string {
+  const items = [...plan.items, ...plan.magicItems];
+  const details: Record<keyof AuroraParts, () => string> = {
+    characters: () =>
+      `${plan.characters.length}, with only the portraits they use` +
+      (plan.characters.length > 0
+        ? `: ${plan.characters
+            .map(
+              (c) =>
+                `${c.creature.name} (level ${c.creature.level}, AC ${c.creature.armorClass}, ` +
+                `HP ${c.creature.hitPoints.average})`,
+            )
+            .join(' · ')}`
+        : ''),
+    items: () => `${fromBooks(items.length, auroraBooks(items))} (${plan.magicItems.length} magic)`,
+    spells: () => fromBooks(plan.spells.length, auroraBooks(plan.spells)),
+    portraits: () => `${plan.portraits.length} race portraits from portraits/`,
+  };
+  return details[part]();
+}
+
+/** The counts of the parts this import wrote; portraits also count when characters brought theirs. */
+function countLines(report: AuroraReport): [string, number][] {
+  const lines: [boolean, string, number][] = [
+    [report.parts.characters, 'Characters', report.characters],
+    [report.parts.items, 'Items', report.items],
+    [report.parts.items, 'Magic items', report.magicItems],
+    [report.parts.spells, 'Spells', report.spells],
+    [report.parts.portraits || report.portraits > 0, 'Portraits', report.portraits],
+  ];
+  return lines.filter(([shown]) => shown).map(([, label, n]) => [label, n]);
 }
 
 /** Characters, items, magic items, spells and portraits from Aurora Builder into the pack "Aurora Builder". */
 export function AuroraImportDialog({ onClose }: { onClose: () => void }) {
+  const [parts, setParts] = useState<AuroraParts>(DEFAULT_AURORA_PARTS);
   const reportError = useAppStore((s) => s.reportError);
   const notify = useAppStore((s) => s.notify);
   const repository = useAppStore((s) => s.repository);
@@ -92,13 +118,15 @@ export function AuroraImportDialog({ onClose }: { onClose: () => void }) {
   const start = async (plan: AuroraPlan) => {
     setStage({ step: 'import', done: 0, total: 1 });
     try {
-      const report = await runAuroraImport(plan, PICKED_FOLDER, repository, (done, total) =>
+      const report = await runAuroraImport(plan, parts, PICKED_FOLDER, repository, (done, total) =>
         setStage({ step: 'import', done, total }),
       );
       await useLibraryStore.getState().refreshAll();
       setStage({ step: 'done', report });
       notify(
-        `Imported ${report.characters} characters, ${report.items + report.magicItems} items and ${report.spells} spells`,
+        `Aurora Builder: imported ${countLines(report)
+          .map(([label, n]) => `${n} ${label.toLowerCase()}`)
+          .join(', ')}`,
       );
     } catch (error) {
       setStage({ step: 'plan', plan });
@@ -123,6 +151,7 @@ export function AuroraImportDialog({ onClose }: { onClose: () => void }) {
             icon="upload"
             label={`Import into pack "${AURORA_PACK.name}"`}
             variant="primary"
+            disabled={!Object.values(parts).some(Boolean)}
             onClick={() => void start(plan)}
           />
         ) : (
@@ -159,26 +188,21 @@ export function AuroraImportDialog({ onClose }: { onClose: () => void }) {
         {plan && (
           <>
             <p className="muted small">{plan.folder}</p>
-            <Counts
-              counts={{
-                characters: plan.characters.length,
-                items: plan.items.length,
-                magicItems: plan.magicItems.length,
-                spells: plan.spells.length,
-                portraits: plan.portraits.length,
-              }}
-            />
-            {plan.characters.length > 0 && (
-              <p className="small">
-                {plan.characters
-                  .map(
-                    (c) =>
-                      `${c.creature.name} (level ${c.creature.level}, AC ${c.creature.armorClass}, ` +
-                      `HP ${c.creature.hitPoints.average})`,
-                  )
-                  .join(' · ')}
-              </p>
-            )}
+            {PART_KEYS.map((part) => (
+              <label key={part} className="row">
+                <input
+                  type="checkbox"
+                  checked={parts[part]}
+                  onChange={(e) => setParts((p) => ({ ...p, [part]: e.target.checked }))}
+                />
+                <span>
+                  <strong>{PART_LABEL[part]}</strong>: {partDetail(part, plan)}
+                </span>
+              </label>
+            ))}
+            <p className="muted small">
+              Unticked parts keep what an earlier import put into the pack; ticked parts replace it.
+            </p>
             {plan.problems.length > 0 && (
               <details>
                 <summary>{plan.problems.length} files could not be read</summary>
@@ -208,7 +232,14 @@ export function AuroraImportDialog({ onClose }: { onClose: () => void }) {
         {stage.step === 'done' && (
           <>
             <p>Imported into the pack &quot;{AURORA_PACK.name}&quot;:</p>
-            <Counts counts={stage.report} />
+            <dl className="import-counts">
+              {countLines(stage.report).map(([label, n]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{n}</dd>
+                </div>
+              ))}
+            </dl>
             {stage.report.removed > 0 && (
               <p className="muted small">Removed {stage.report.removed} files the earlier import had.</p>
             )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AURORA_PACK, planAuroraImport, runAuroraImport, type AuroraSource } from './auroraImport';
+import { AURORA_PACK, planAuroraImport, runAuroraImport, type AuroraParts, type AuroraSource } from './auroraImport';
 import { MemoryStorage } from './memoryStorage';
 import { Repository } from './repository';
 import { childEntries } from './storage';
@@ -72,6 +72,8 @@ function firstImport(): Map<string, string | Uint8Array> {
 }
 
 const PACK = `packs/${AURORA_PACK.id}`;
+const ALL: AuroraParts = { characters: true, items: true, spells: true, portraits: true };
+const CHARACTERS_ONLY: AuroraParts = { characters: true, items: false, spells: false, portraits: false };
 
 describe('Aurora Builder import', () => {
   it('previews counts and imports everything into the pack "Aurora Builder"', async () => {
@@ -88,8 +90,8 @@ describe('Aurora Builder import', () => {
     const storage = new MemoryStorage();
     const repository = new Repository(storage);
     const progress: number[] = [];
-    const report = await runAuroraImport(plan, source, repository, (done) => progress.push(done));
-    expect(report).toEqual({ characters: 1, items: 2, magicItems: 1, spells: 1, portraits: 2, removed: 0 });
+    const report = await runAuroraImport(plan, ALL, source, repository, (done) => progress.push(done));
+    expect(report).toEqual({ parts: ALL, characters: 1, items: 2, magicItems: 1, spells: 1, portraits: 2, removed: 0 });
     expect(progress.at(-1)).toBe(2 + 3 + 1 + 1);
 
     const files = storage.files.data;
@@ -112,7 +114,7 @@ describe('Aurora Builder import', () => {
     const storage = new MemoryStorage();
     const repository = new Repository(storage);
     const first = auroraFolder(firstImport());
-    await runAuroraImport(await planAuroraImport(first, FOLDER), first, repository, () => undefined);
+    await runAuroraImport(await planAuroraImport(first, FOLDER), ALL, first, repository, () => undefined);
 
     const files = firstImport();
     files.set(`${FOLDER}/custom/core/test.xml`, elementsFile(false));
@@ -120,7 +122,8 @@ describe('Aurora Builder import', () => {
     files.delete(`${FOLDER}/portraits/selana.png`);
     files.delete(`${FOLDER}/portraits/elf (druid).jpg`);
     const second = auroraFolder(files);
-    const report = await runAuroraImport(await planAuroraImport(second, FOLDER), second, repository, () => undefined);
+    const plan = await planAuroraImport(second, FOLDER);
+    const report = await runAuroraImport(plan, ALL, second, repository, () => undefined);
 
     expect(report.removed).toBe(2);
     const data = storage.files.data;
@@ -132,6 +135,63 @@ describe('Aurora Builder import', () => {
     const { entries } = await repository.list('creature');
     expect(entries.map((e) => [e.doc.level, e.doc.hitPoints.average])).toEqual([[2, 12 + 8]]);
     expect((await repository.list('item')).entries.map((e) => e.doc.name)).toEqual(['Ring of Luck', 'Rope']);
+  });
+
+  it('imports characters alone with only their portraits and keeps earlier items and spells', async () => {
+    const storage = new MemoryStorage();
+    const repository = new Repository(storage);
+    const first = auroraFolder(firstImport());
+    const firstPlan = await planAuroraImport(first, FOLDER);
+    await runAuroraImport(firstPlan, { ...ALL, characters: false, portraits: false }, first, repository, () => {});
+    expect(storage.files.data.has(`${PACK}/creatures/selana.txt`)).toBe(false);
+
+    const files = firstImport();
+    files.set(`${FOLDER}/custom/core/test.xml`, elementsFile(false));
+    const second = auroraFolder(files);
+    const plan = await planAuroraImport(second, FOLDER);
+    const report = await runAuroraImport(plan, CHARACTERS_ONLY, second, repository, () => undefined);
+
+    expect(report).toEqual({
+      parts: CHARACTERS_ONLY,
+      characters: 1,
+      items: 0,
+      magicItems: 0,
+      spells: 0,
+      portraits: 1,
+      removed: 0,
+    });
+    const data = storage.files.data;
+    expect(data.get(`${PACK}/portraits/selana.png`)).toEqual(PNG);
+    expect(data.has(`${PACK}/portraits/elf _druid_.jpg`)).toBe(false);
+    // The lantern left the books, but items were not part of this import.
+    expect(data.has(`${PACK}/items/t-item-lantern.md`)).toBe(true);
+    expect(data.has(`${PACK}/spells/t-spell-zap.md`)).toBe(true);
+    expect((await repository.list('creature')).entries.map((e) => e.doc.name)).toEqual(['Selana']);
+  });
+
+  it('writes no items or spells when only characters are ticked; ticking items cleans stale ones', async () => {
+    const storage = new MemoryStorage();
+    const repository = new Repository(storage);
+    const source = auroraFolder(firstImport());
+    await runAuroraImport(await planAuroraImport(source, FOLDER), CHARACTERS_ONLY, source, repository, () => {});
+    expect((await repository.list('item')).entries).toEqual([]);
+    expect((await repository.list('spell')).entries).toEqual([]);
+
+    await runAuroraImport(await planAuroraImport(source, FOLDER), ALL, source, repository, () => undefined);
+    const files = firstImport();
+    files.set(`${FOLDER}/custom/core/test.xml`, elementsFile(false));
+    const second = auroraFolder(files);
+    const itemsOnly = { ...CHARACTERS_ONLY, characters: false, items: true };
+    const report = await runAuroraImport(
+      await planAuroraImport(second, FOLDER),
+      itemsOnly,
+      second,
+      repository,
+      () => {},
+    );
+    expect(report.removed).toBe(1);
+    expect(storage.files.data.has(`${PACK}/items/t-item-lantern.md`)).toBe(false);
+    expect(storage.files.data.has(`${PACK}/portraits/elf _druid_.jpg`)).toBe(true);
   });
 
   it('refuses folders without Aurora Builder data', async () => {

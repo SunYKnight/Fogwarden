@@ -66,7 +66,20 @@ export interface AuroraPlan {
   problems: AuroraProblem[];
 }
 
+/** What to import; the element files are read regardless because characters are computed from them. */
+export interface AuroraParts {
+  characters: boolean;
+  /** Items and magic items. */
+  items: boolean;
+  spells: boolean;
+  /** Every picture in `portraits/`; without it characters bring only the portraits they use. */
+  portraits: boolean;
+}
+
+export const DEFAULT_AURORA_PARTS: AuroraParts = { characters: true, items: false, spells: false, portraits: false };
+
 export interface AuroraReport {
+  parts: AuroraParts;
   characters: number;
   items: number;
   magicItems: number;
@@ -74,6 +87,11 @@ export interface AuroraReport {
   portraits: number;
   /** Files of an earlier import that this one no longer has. */
   removed: number;
+}
+
+/** The distinct, sorted source books of `docs` (Aurora's `source` attribute). */
+export function auroraBooks(docs: readonly { source: string }[]): string[] {
+  return [...new Set(docs.map((d) => d.source).filter((s) => s !== ''))].sort();
 }
 
 function errorMessage(error: unknown): string {
@@ -144,12 +162,13 @@ async function removeStale(repository: Repository, dir: string, keep: (name: str
 }
 
 /**
- * Writes the plan into the pack "Aurora Builder": portraits, items, spells, then characters (their portrait
- * from the folder by file name, else the picture embedded in the character file); then removes what an earlier
- * import left that this one did not write.
+ * Writes the ticked parts of the plan into the pack "Aurora Builder": portraits, items, spells, then characters
+ * (their portrait from the folder by file name, else the picture embedded in the character file); then removes
+ * what an earlier import left in the imported parts that this one did not write. Skipped parts stay untouched.
  */
 export async function runAuroraImport(
   plan: AuroraPlan,
+  parts: AuroraParts,
   source: AuroraSource,
   repository: Repository,
   onProgress: (done: number, total: number) => void,
@@ -157,15 +176,19 @@ export async function runAuroraImport(
   await repository.ensurePack(AURORA_PACK);
   const root = `${PACKS_DIR}/${AURORA_PACK.id}`;
   const portraitDir = `${root}/${PORTRAITS_DIR}`;
-  const items = [...plan.items, ...plan.magicItems];
-  const total = plan.portraits.length + items.length + plan.spells.length + plan.characters.length;
+  const characters = parts.characters ? plan.characters : [];
+  const items = parts.items ? [...plan.items, ...plan.magicItems] : [];
+  const spells = parts.spells ? plan.spells : [];
+  const used = new Set(characters.map((c) => c.portraitFile?.toLowerCase()));
+  const portraitNames = parts.portraits ? plan.portraits : plan.portraits.filter((n) => used.has(n.toLowerCase()));
+  const total = portraitNames.length + items.length + spells.length + characters.length;
   let done = 0;
   const step = () => {
     done += 1;
     onProgress(done, total);
   };
   const portraits = new Map<string, AssetRef>();
-  for (const name of plan.portraits) {
+  for (const name of portraitNames) {
     const ref: AssetRef = { area: 'data', path: `${portraitDir}/${portraitFileName(name)}` };
     await repository.storage.writeBytes(ref.path, await source.readBytes(`${plan.folder}/portraits/${name}`));
     portraits.set(name.toLowerCase(), ref);
@@ -175,12 +198,12 @@ export async function runAuroraImport(
     await repository.save('item', item, AURORA_PACK.id);
     step();
   }
-  for (const spell of plan.spells) {
+  for (const spell of spells) {
     await repository.save('spell', spell, AURORA_PACK.id);
     step();
   }
   const kept = new Set([...portraits.values()].map((r) => r.path.slice(portraitDir.length + 1)));
-  for (const { creature, portraitFile, portraitPng } of plan.characters) {
+  for (const { creature, portraitFile, portraitPng } of characters) {
     let image = portraitFile ? (portraits.get(portraitFile.toLowerCase()) ?? null) : null;
     if (!image && portraitPng) {
       image = { area: 'data', path: `${portraitDir}/${creature.id}.png` };
@@ -192,22 +215,27 @@ export async function runAuroraImport(
   }
   const ids = (docs: { id: string }[]) => new Set(docs.map((d) => d.id));
   const itemIds = ids(items);
-  const spellIds = ids(plan.spells);
-  const characterIds = ids(plan.characters.map((c) => c.creature));
+  const spellIds = ids(spells);
+  const characterIds = ids(characters.map((c) => c.creature));
   const idOf = (name: string, suffix: string) => (name.endsWith(suffix) ? name.slice(0, -suffix.length) : '');
-  const removed = await Promise.all([
-    removeStale(repository, portraitDir, (name) => kept.has(name)),
-    removeStale(repository, `${root}/${KIND_LAYOUTS.item.dir}`, (name) => itemIds.has(idOf(name, '.md'))),
-    removeStale(repository, `${root}/${KIND_LAYOUTS.spell.dir}`, (name) => spellIds.has(idOf(name, '.md'))),
+  const cleanups: [boolean, string, (name: string) => boolean][] = [
+    // Only the full library knows which portraits are no longer wanted.
+    [parts.portraits, portraitDir, (name) => kept.has(name)],
+    [parts.items, `${root}/${KIND_LAYOUTS.item.dir}`, (name) => itemIds.has(idOf(name, '.md'))],
+    [parts.spells, `${root}/${KIND_LAYOUTS.spell.dir}`, (name) => spellIds.has(idOf(name, '.md'))],
     // Character pictures are `<id>.<ext>` beside `<id>.txt`.
-    removeStale(repository, `${root}/${KIND_LAYOUTS.creature.dir}`, (name) => characterIds.has(name.split('.')[0]!)),
-  ]);
+    [parts.characters, `${root}/${KIND_LAYOUTS.creature.dir}`, (name) => characterIds.has(name.split('.')[0]!)],
+  ];
+  const removed = await Promise.all(
+    cleanups.filter(([ticked]) => ticked).map(([, dir, keep]) => removeStale(repository, dir, keep)),
+  );
   return {
-    characters: plan.characters.length,
-    items: plan.items.length,
-    magicItems: plan.magicItems.length,
-    spells: plan.spells.length,
-    portraits: plan.portraits.length,
+    parts,
+    characters: characters.length,
+    items: parts.items ? plan.items.length : 0,
+    magicItems: parts.items ? plan.magicItems.length : 0,
+    spells: spells.length,
+    portraits: portraitNames.length,
     removed: removed.reduce((a, b) => a + b, 0),
   };
 }
