@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { formatCreatureFile } from '@/core/import/creatureFile';
-import { createCreature, createEncounter, createMap, type Creature } from '@/core/model';
+import {
+  createCreature,
+  createEncounter,
+  createMap,
+  createMarkerTemplate,
+  defaultPackSettings,
+  type Creature,
+} from '@/core/model';
 import { MemoryStorage } from './memoryStorage';
 import { exportManifest, exportPack, installPack, PackExistsError, readPackZip, removePack } from './packArchive';
 import { MY_CONTENT, packSource } from './packs';
@@ -35,7 +42,7 @@ describe('content pack precedence', () => {
     addPack(storage, 'data', 'mm', [creature('goblin', 'MM Goblin'), creature('orc', 'MM Orc')]);
     await repository.save('creature', creature('orc', 'My Orc'));
 
-    repository.packSettings = { order: ['srd', 'mm'], disabled: [] };
+    repository.packSettings = { ...defaultPackSettings(), order: ['srd', 'mm'] };
     expect(await winners(repository)).toEqual({ goblin: 'srd', wolf: 'srd', orc: MY_CONTENT });
     const listing = await repository.list('creature');
     expect(listing.shadowed).toEqual([
@@ -45,7 +52,7 @@ describe('content pack precedence', () => {
     expect(listing.entries.find((e) => e.ref.id === 'orc')!.overrides).toEqual(['mm']);
     expect((await repository.load('creature', { area: 'content', id: 'goblin' })).name).toBe('Goblin');
 
-    repository.packSettings = { order: ['mm', 'srd'], disabled: [] };
+    repository.packSettings = { ...defaultPackSettings(), order: ['mm', 'srd'] };
     expect(await winners(repository)).toEqual({ goblin: 'mm', wolf: 'srd', orc: MY_CONTENT });
     expect((await repository.load('creature', { area: 'content', id: 'goblin' })).name).toBe('MM Goblin');
   });
@@ -56,7 +63,7 @@ describe('content pack precedence', () => {
     addPack(storage, 'data', 'mm', [creature('goblin', 'MM Goblin')]);
     addPack(storage, 'data', 'zz', [creature('goblin', 'ZZ Goblin')]);
     expect((await repository.installedPacks()).map((p) => p.source.pack)).toEqual([MY_CONTENT, 'mm', 'zz', 'srd']);
-    repository.packSettings = { order: ['zz'], disabled: [] };
+    repository.packSettings = { ...defaultPackSettings(), order: ['zz'] };
     expect((await repository.installedPacks()).map((p) => p.source.pack)).toEqual([MY_CONTENT, 'zz', 'mm', 'srd']);
   });
 });
@@ -66,10 +73,10 @@ describe('disabled content packs', () => {
     const { storage, repository } = setup();
     addPack(storage, 'content', 'srd', [creature('goblin', 'Goblin'), creature('wolf', 'Wolf')]);
     addPack(storage, 'data', 'mm', [creature('goblin', 'MM Goblin')]);
-    repository.packSettings = { order: [], disabled: ['srd'] };
+    repository.packSettings = { ...defaultPackSettings(), disabled: ['srd'] };
 
     expect(await winners(repository)).toEqual({ goblin: 'mm' });
-    expect((await repository.list('creature')).unavailable).toEqual([{ id: 'wolf', pack: 'srd' }]);
+    expect((await repository.list('creature')).unavailable).toEqual([{ id: 'wolf', pack: 'srd', hidden: false }]);
     await expect(repository.load('creature', { area: 'content', id: 'wolf' })).rejects.toThrow(/disabled pack "srd"/);
     const { packs } = await repository.listPacks();
     expect(packs.map((p) => [p.source.pack, p.enabled, p.counts.creature])).toEqual([
@@ -78,7 +85,7 @@ describe('disabled content packs', () => {
       ['srd', false, 2],
     ]);
 
-    repository.packSettings = { order: [], disabled: [] };
+    repository.packSettings = defaultPackSettings();
     expect(await winners(repository)).toEqual({ goblin: 'mm', wolf: 'srd' });
   });
 
@@ -87,11 +94,31 @@ describe('disabled content packs', () => {
     addPack(storage, 'data', 'maps', []);
     const map = createMap({ name: 'Cave', image: null, squaresX: 4, squaresY: 3, pxPerSquare: 70 });
     await repository.storeMap(map, 'maps');
-    repository.packSettings = { order: [], disabled: ['maps'] };
+    repository.packSettings = { ...defaultPackSettings(), disabled: ['maps'] };
     const encounter = createEncounter('Ambush', 'c1', { area: 'data', id: map.id });
     expect(await repository.encounterFogSize(encounter)).not.toBeNull();
     await expect(repository.load('map', { area: 'data', id: map.id })).rejects.toThrow(/disabled pack "maps"/);
     expect(storage.files.data.has(`packs/maps/maps/${map.id}/map.json`)).toBe(true);
+  });
+});
+
+describe('kinds a pack hides', () => {
+  it('leave out only that kind of that pack and name it when an encounter asks for one', async () => {
+    const { storage, repository } = setup();
+    addPack(storage, 'content', 'srd', [creature('goblin', 'Goblin'), creature('wolf', 'Wolf')]);
+    addPack(storage, 'data', 'mm', [creature('goblin', 'MM Goblin')]);
+    const cone = await repository.save('marker', createMarkerTemplate('Cone'), 'mm');
+    repository.packSettings = { ...defaultPackSettings(), order: ['mm', 'srd'], hiddenKinds: { mm: ['creature'] } };
+
+    expect(await winners(repository)).toEqual({ goblin: 'srd', wolf: 'srd' });
+    expect((await repository.list('marker')).entries.map((e) => [e.ref.id, e.pack])).toEqual([[cone.id, 'mm']]);
+
+    repository.packSettings = { ...defaultPackSettings(), hiddenKinds: { srd: ['creature'] } };
+    expect(await winners(repository)).toEqual({ goblin: 'mm' });
+    expect((await repository.list('creature')).unavailable).toEqual([{ id: 'wolf', pack: 'srd', hidden: true }]);
+    await expect(repository.load('creature', { area: 'content', id: 'wolf' })).rejects.toThrow(
+      /pack "srd", which hides its creature documents/,
+    );
   });
 });
 

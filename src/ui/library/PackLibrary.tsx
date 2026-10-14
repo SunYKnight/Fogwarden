@@ -1,7 +1,7 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { useRef, useState, type KeyboardEvent } from 'react';
-import type { PackSettings } from '@/core/model';
+import type { LibraryKind, PackSettings } from '@/core/model';
 import type { ZipFile } from '@/core/zip';
 import {
   exportManifest,
@@ -14,7 +14,7 @@ import {
   removePack,
   type PackFiles,
 } from '@/data/packArchive';
-import type { LibraryKind, PackInfo } from '@/data/repository';
+import { LIBRARY_KINDS, type PackInfo } from '@/data/repository';
 import { listFolder, readFileBytes, writeFileBytes } from '@/data/tauriStorage';
 import { useAppStore } from '@/state/appStore';
 import { packName, useLibraryStore } from '@/state/libraryStore';
@@ -32,10 +32,14 @@ const COUNT_LABELS: Record<LibraryKind | 'model' | 'portrait', [string, string]>
   portrait: ['portrait', 'portraits'],
 };
 
+function countLabel(kind: keyof typeof COUNT_LABELS, count: number): string {
+  return `${count} ${COUNT_LABELS[kind][count === 1 ? 0 : 1]}`;
+}
+
 export function countText(counts: PackInfo['counts']): string {
   const parts = (Object.keys(COUNT_LABELS) as (keyof typeof COUNT_LABELS)[])
     .filter((kind) => counts[kind] > 0)
-    .map((kind) => `${counts[kind]} ${COUNT_LABELS[kind][counts[kind] === 1 ? 0 : 1]}`);
+    .map((kind) => countLabel(kind, counts[kind]));
   return parts.length > 0 ? parts.join(' · ') : 'Empty';
 }
 
@@ -143,10 +147,15 @@ async function remove(pack: PackInfo): Promise<void> {
   if (ok) {
     const id = pack.source.pack;
     await removePack(useAppStore.getState().repository, id);
-    await changePackSettings((packs) => ({
-      order: packs.order.filter((p) => p !== id),
-      disabled: packs.disabled.filter((p) => p !== id),
-    }));
+    await changePackSettings((packs) => {
+      const { [id]: _removed, ...hiddenKinds } = packs.hiddenKinds;
+      return {
+        ...packs,
+        order: packs.order.filter((p) => p !== id),
+        disabled: packs.disabled.filter((p) => p !== id),
+        hiddenKinds,
+      };
+    });
     useAppStore.getState().notify(`Removed the pack "${name}"`);
   }
 }
@@ -159,6 +168,14 @@ export async function setPackEnabled(pack: PackInfo, enabled: boolean): Promise<
   }));
   const what = enabled ? 'its entries are back' : 'its entries are hidden';
   useAppStore.getState().notify(`${enabled ? 'Enabled' : 'Disabled'} "${pack.manifest.name}": ${what}`, 'info');
+}
+
+async function setKindShown(pack: PackInfo, kind: LibraryKind, shown: boolean): Promise<void> {
+  const id = pack.source.pack;
+  await changePackSettings((packs) => {
+    const others = (packs.hiddenKinds[id] ?? []).filter((k) => k !== kind);
+    return { ...packs, hiddenKinds: { ...packs.hiddenKinds, [id]: shown ? others : [...others, kind] } };
+  });
 }
 
 async function move(id: string, to: number): Promise<void> {
@@ -212,18 +229,79 @@ export function PackActions() {
 function Overridden({ pack }: { pack: PackInfo }) {
   const listings = useLibraryStore((s) => s.listings);
   const packs = useLibraryStore((s) => s.packs);
-  const byWinner = new Map<string, number>();
+  const hideDuplicates = useAppStore((s) => s.settings?.packs.hideDuplicates ?? false);
+  const overridden = new Map<string, number>();
+  const duplicated = new Map<string, number>();
   for (const listing of Object.values(listings)) {
     for (const s of listing.shadowed.filter((x) => x.pack === pack.source.pack)) {
-      byWinner.set(s.by, (byWinner.get(s.by) ?? 0) + 1);
+      overridden.set(s.by, (overridden.get(s.by) ?? 0) + 1);
+    }
+    for (const d of hideDuplicates ? listing.duplicates.filter((x) => x.pack === pack.source.pack) : []) {
+      duplicated.set(d.by, (duplicated.get(d.by) ?? 0) + 1);
     }
   }
-  const parts = [...byWinner].map(([by, n]) => `${n} overridden by ${packName(packs, by)}`);
+  const parts = [
+    ...[...overridden].map(([by, n]) => `${n} overridden by ${packName(packs, by)}`),
+    ...[...duplicated].map(([by, n]) => `${n} hidden as duplicates of ${packName(packs, by)}`),
+  ];
   return parts.length > 0 ? (
-    <span className="muted small" title="Entries with the same id in a pack higher up win">
+    <span
+      className="muted small"
+      title="Entries with the same id in a pack higher up win; while Hide duplicates is on, so do the same names"
+    >
       <Icon name="info" size={12} /> {parts.join(' · ')}
     </span>
   ) : null;
+}
+
+/** Tick boxes of the kinds a pack holds; an unticked kind is left out as if the pack were disabled. */
+function KindToggles({ pack, busy, run }: Pick<RowProps, 'pack' | 'busy' | 'run'>) {
+  const hidden = useAppStore((s) => s.settings?.packs.hiddenKinds[pack.source.pack]) ?? [];
+  const { counts } = pack;
+  const kinds = LIBRARY_KINDS.filter((kind) => counts[kind] > 0);
+  const files = (['model', 'portrait'] as const).filter((kind) => counts[kind] > 0);
+  return (
+    <div className="row wrap small">
+      {kinds.map((kind) => (
+        <label key={kind} className="row" title="Untick to hide them everywhere; encounters keep their combatants">
+          <input
+            type="checkbox"
+            checked={!hidden.includes(kind)}
+            disabled={busy || !pack.enabled}
+            onChange={(e) => run(() => setKindShown(pack, kind, e.target.checked))}
+          />
+          {countLabel(kind, counts[kind])}
+        </label>
+      ))}
+      {files.length > 0 && <span>{files.map((kind) => countLabel(kind, counts[kind])).join(' · ')}</span>}
+      {kinds.length + files.length === 0 && <span>Empty</span>}
+    </div>
+  );
+}
+
+/** Switch of the name duplicate rule with what it hides per kind right now. */
+function DuplicatesSwitch({ busy, run }: Pick<RowProps, 'busy' | 'run'>) {
+  const hide = useAppStore((s) => s.settings?.packs.hideDuplicates ?? true);
+  const listings = useLibraryStore((s) => s.listings);
+  const counts = LIBRARY_KINDS.filter((kind) => listings[kind].duplicates.length > 0).map((kind) =>
+    countLabel(kind, listings[kind].duplicates.length),
+  );
+  const summary = counts.length === 0 ? 'no duplicates now' : `${hide ? 'hides' : 'would hide'} ${counts.join(', ')}`;
+  return (
+    <label className="row">
+      <input
+        type="checkbox"
+        role="switch"
+        checked={hide}
+        disabled={busy}
+        onChange={(e) => run(() => changePackSettings((packs) => ({ ...packs, hideDuplicates: e.target.checked })))}
+      />
+      <span>
+        <strong>Hide duplicates</strong>: when packs hold entries with the same name, show only the one from the pack
+        higher up <span className="muted">({summary})</span>
+      </span>
+    </label>
+  );
 }
 
 interface RowProps {
@@ -272,7 +350,11 @@ function PackRow({ pack, index, busy, run, onDragStart, onDrop }: RowProps) {
           )}
         </div>
         {manifest.description && <span className="muted small pack-description">{manifest.description}</span>}
-        <span className="small">{countText(pack.counts)}</span>
+        {mine ? (
+          <span className="small">{countText(pack.counts)}</span>
+        ) : (
+          <KindToggles pack={pack} busy={busy} run={run} />
+        )}
         <Overridden pack={pack} />
       </div>
       {mine ? (
@@ -316,8 +398,9 @@ export function PackLibrary() {
     <div className="pack-library">
       <p className="hint-bar" role="note">
         When two packs hold an entry with the same id, the one higher up wins; My content always wins. Disabled packs
-        disappear from the Compendium, the Maps page and the Add dialog. Drag to change the order.
+        and unticked kinds disappear from the Compendium, the Maps page and the Add dialog. Drag to change the order.
       </p>
+      <DuplicatesSwitch busy={busy} run={run} />
       {problems.length > 0 && (
         <div className="panel" style={{ borderColor: 'var(--danger)' }}>
           <h3>Pack problems</h3>

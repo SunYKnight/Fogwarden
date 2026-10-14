@@ -65,7 +65,7 @@ export function PlayerLibrary() {
   }, [repository, reportError]);
 
   const characters = useMemo(
-    () => listing.entries.filter((e) => e.doc.kind === 'player').sort((a, b) => a.doc.name.localeCompare(b.doc.name)),
+    () => listing.listed.filter((e) => e.doc.kind === 'player').sort((a, b) => a.doc.name.localeCompare(b.doc.name)),
     [listing],
   );
   const selected = characters.find((e) => e.ref.id === selectedId) ?? null;

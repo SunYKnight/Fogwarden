@@ -1,6 +1,6 @@
 import { isTauri } from '@tauri-apps/api/core';
 import type { ComponentType } from 'react';
-import type { LibraryKind } from '@/data/repository';
+import type { LibraryKind } from '@/core/model';
 import { useAppStore, type CompendiumTab } from '@/state/appStore';
 import { LoadProblems } from '../components/LoadProblems';
 import { Button, PageHeader, Tabs, type TabSpec } from '../kit';

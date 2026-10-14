@@ -32,7 +32,7 @@ function PaletteDialog({ settings }: { settings: Settings }) {
   const encounter = useEncounterStore((s) => s.encounter);
   const playerWindowOpen = usePlayerWindowStore((s) => s.open);
   const lanRunning = useLanStore((s) => s.info !== null);
-  const creatures = useLibraryStore((s) => s.listings.creature.entries);
+  const creatures = useLibraryStore((s) => s.listings.creature.listed);
   const maps = useLibraryStore((s) => s.listings.map.entries);
   const [campaigns, setCampaigns] = useState<CampaignEncounters[]>([]);
   const [query, setQuery] = useState('');

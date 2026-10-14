@@ -28,7 +28,7 @@ const ADD_TABS: TabSpec<AddTab>[] = [
 const close = () => useEncounterUi.setState({ addDialogOpen: false });
 
 function FromLibrary() {
-  const entries = useLibraryStore((s) => s.listings.creature.entries);
+  const entries = useLibraryStore((s) => s.listings.creature.listed);
   const combatants = useEncounterStore((s) => s.encounter)?.combatants ?? [];
   const update = useEncounterStore((s) => s.update);
   const reportError = useAppStore((s) => s.reportError);
@@ -172,7 +172,7 @@ function PlayerCharacterForm() {
 
 /** Player characters of the library (Aurora imports, own ones) to pick, or one typed in by hand. */
 function PlayerCharacters() {
-  const all = useLibraryStore((s) => s.listings.creature.entries);
+  const all = useLibraryStore((s) => s.listings.creature.listed);
   const combatants = useEncounterStore((s) => s.encounter)?.combatants ?? [];
   const update = useEncounterStore((s) => s.update);
   const notify = useAppStore((s) => s.notify);

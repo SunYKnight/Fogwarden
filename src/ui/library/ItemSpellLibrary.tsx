@@ -160,19 +160,19 @@ export function ItemLibrary() {
   const listing = useLibraryStore((s) => s.listings.item);
   const [filter, setFilter] = useState(NO_ITEM_FILTER);
   const needle = filter.text.toLowerCase();
-  const entries = listing.entries.filter(
+  const entries = listing.listed.filter(
     ({ doc }) =>
       doc.name.toLowerCase().includes(needle) &&
       (filter.type === '' || itemKind(doc) === filter.type) &&
       (filter.rarity === '' || (doc.rarity || MUNDANE) === filter.rarity) &&
       (filter.source === '' || doc.source === filter.source),
   );
-  const docs = listing.entries.map((e) => e.doc);
+  const docs = listing.listed.map((e) => e.doc);
   return (
     <ReferenceSplit<'item'>
       icon="shield"
       noun="item"
-      total={listing.entries.length}
+      total={listing.listed.length}
       entries={entries}
       search={{ label: 'Search items', value: filter.text, onChange: (text) => setFilter({ ...filter, text }) }}
       chips={[
@@ -227,7 +227,7 @@ export function SpellLibrary() {
   const listing = useLibraryStore((s) => s.listings.spell);
   const [filter, setFilter] = useState(NO_SPELL_FILTER);
   const needle = filter.text.toLowerCase();
-  const entries = listing.entries.filter(
+  const entries = listing.listed.filter(
     ({ doc }) =>
       doc.name.toLowerCase().includes(needle) &&
       (filter.level === '' || String(doc.level) === filter.level) &&
@@ -235,12 +235,12 @@ export function SpellLibrary() {
       (filter.className === '' || doc.classes.includes(filter.className)) &&
       (filter.source === '' || doc.source === filter.source),
   );
-  const docs = listing.entries.map((e) => e.doc);
+  const docs = listing.listed.map((e) => e.doc);
   return (
     <ReferenceSplit<'spell'>
       icon="book"
       noun="spell"
-      total={listing.entries.length}
+      total={listing.listed.length}
       entries={entries}
       search={{ label: 'Search spells', value: filter.text, onChange: (text) => setFilter({ ...filter, text }) }}
       chips={[

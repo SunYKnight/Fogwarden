@@ -11,6 +11,7 @@ import {
   encounterFileSchema,
   encounterSchema,
   gridSchema,
+  libraryKindSchema,
   mapFileSchema,
   mapSchema,
   markerTemplateSchema,
@@ -24,6 +25,7 @@ import {
   type Encounter,
   type EncounterFile,
   type Fog,
+  type LibraryKind,
   type MarkerTemplate,
   type PackSettings,
   type Settings,
@@ -48,6 +50,7 @@ import {
   PACK_ID,
   packManifestSchema,
   PACKS_DIR,
+  packShowsKind,
   packSource,
   writableSource,
   type InstalledPack,
@@ -56,8 +59,7 @@ import {
 } from './packs';
 import type { DirEntry, Storage } from './storage';
 
-export type LibraryKind = 'creature' | 'marker' | 'map' | 'table' | 'item' | 'spell';
-export const LIBRARY_KINDS: LibraryKind[] = ['creature', 'marker', 'map', 'table', 'item', 'spell'];
+export const LIBRARY_KINDS: LibraryKind[] = libraryKindSchema.options;
 
 export interface LibraryDocs {
   creature: Creature;
@@ -138,8 +140,17 @@ export interface LibraryListing<K extends LibraryKind> {
   problems: LoadProblem[];
   /** Documents of enabled packs hidden by one with the same id from pack `by`. */
   shadowed: { id: string; pack: string; by: string }[];
-  /** Documents only disabled packs hold, by the first such pack; encounters may still refer to them. */
-  unavailable: { id: string; pack: string }[];
+  /**
+   * Documents only held-back packs have, by the first such pack: disabled, or enabled and hiding the kind
+   * (`hidden`). Encounters may still refer to them.
+   */
+  unavailable: { id: string; pack: string; hidden: boolean }[];
+}
+
+/** Installed pack holding back its documents of a kind: disabled, or enabled and hiding the kind (`hidden`). */
+interface HeldSource {
+  source: LibrarySource;
+  hidden: boolean;
 }
 
 export interface PackInfo extends InstalledPack {
@@ -348,6 +359,19 @@ export class Repository {
     return (await this.installedPacks()).filter((p) => p.enabled).map((p) => p.source);
   }
 
+  /**
+   * Sources of documents of `kind`, highest precedence first: `shown` (My content and the enabled packs
+   * showing the kind) and `held` (disabled packs, and enabled ones hiding the kind under Settings > Content).
+   */
+  private async kindSources(kind: LibraryKind): Promise<{ shown: LibrarySource[]; held: HeldSource[] }> {
+    const installed = await this.installedPacks();
+    const shows = installed.map((p) => packShowsKind(p.source.pack, kind, this.packSettings));
+    return {
+      shown: installed.filter((_p, i) => shows[i]).map((p) => p.source),
+      held: installed.filter((_p, i) => !shows[i]).map((p) => ({ source: p.source, hidden: p.enabled })),
+    };
+  }
+
   /** Every file below `dir`, as paths relative to the area root, sorted. */
   async listFiles(area: StorageArea, dir: string): Promise<string[]> {
     const entries = await this.storage.list(area, dir);
@@ -505,7 +529,7 @@ export class Repository {
   }
 
   private async creaturePictures(id: string): Promise<Pictures> {
-    const sources = await this.librarySources();
+    const sources = (await this.kindSources('creature')).shown;
     const folders = await this.kindFolders('creature', sources);
     return picturesOf(
       id,
@@ -617,32 +641,38 @@ export class Repository {
     return Promise.all(sources.map((s) => this.storage.list(s.area, libraryDir(kind, s))));
   }
 
-  /** Why `id` cannot be loaded: it is only in a disabled pack, or nowhere. */
+  /** Why `id` cannot be loaded: it is only in a disabled pack or one hiding `kind`, or nowhere. */
   private async missing(kind: LibraryKind, id: string): Promise<DataError> {
-    const disabled = (await this.installedPacks()).filter((p) => !p.enabled).map((p) => p.source);
-    const folders = await this.kindFolders(kind, disabled);
-    const holder = disabled[folders.findIndex((entries) => docIds(kind, entries).includes(id))];
-    const message = holder
-      ? `"${id}" is in the disabled pack "${holder.pack}"; enable it under Settings > Content`
-      : `No ${kind} "${id}" in My content or an enabled pack`;
-    const source = holder ?? MY_CONTENT_SOURCE;
+    const { held } = await this.kindSources(kind);
+    const folders = await this.kindFolders(
+      kind,
+      held.map((h) => h.source),
+    );
+    const holder = held[folders.findIndex((entries) => docIds(kind, entries).includes(id))];
+    const message = !holder
+      ? `No ${kind} "${id}" in My content or an enabled pack`
+      : holder.hidden
+        ? `"${id}" is in the pack "${holder.source.pack}", which hides its ${kind} documents; show them under ` +
+          'Settings > Content'
+        : `"${id}" is in the disabled pack "${holder.source.pack}"; enable it under Settings > Content`;
+    const source = holder?.source ?? MY_CONTENT_SOURCE;
     return new DataError(message, source.area, libraryDocPath(kind, source, id));
   }
 
-  /** Pack that provides document `id` now (first by precedence), null when no enabled source has it. */
+  /** Pack that provides document `id` now (first by precedence), null when no source showing `kind` has it. */
   async sourceOf(kind: LibraryKind, id: string): Promise<LibrarySource | null> {
-    const sources = await this.librarySources();
+    const sources = (await this.kindSources(kind)).shown;
     const folders = await this.kindFolders(kind, sources);
     return sources[folders.findIndex((entries) => docIds(kind, entries).includes(id))] ?? null;
   }
 
   /**
-   * The document with `ref.id` from the first source holding it: My content, then the enabled packs in
-   * order. `ref.area` only records where it was when referenced.
+   * The document with `ref.id` from the first source holding it: My content, then the enabled packs showing
+   * `kind` in order. `ref.area` only records where it was when referenced.
    */
   load<K extends LibraryKind>(kind: K, ref: DocRef): Promise<LibraryDocs[K]>;
   async load(kind: LibraryKind, ref: DocRef): Promise<LibraryDocs[LibraryKind]> {
-    const sources = await this.librarySources();
+    const sources = (await this.kindSources(kind)).shown;
     const folders = await this.kindFolders(kind, sources);
     const index = folders.findIndex((entries) => docIds(kind, entries).includes(ref.id));
     if (index === -1) {
@@ -653,16 +683,17 @@ export class Repository {
   }
 
   /**
-   * Documents of My content and the enabled packs; of several with the same id the one from the source of
-   * highest precedence wins and the others are listed as shadowed.
+   * Documents of My content and the enabled packs showing `kind`; of several with the same id the one from
+   * the source of highest precedence wins and the others are listed as shadowed.
    */
   async list<K extends LibraryKind>(kind: K): Promise<LibraryListing<K>> {
-    const installed = await this.installedPacks();
-    const sources = installed.filter((p) => p.enabled).map((p) => p.source);
-    const disabled = installed.filter((p) => !p.enabled).map((p) => p.source);
-    const [folders, disabledFolders] = await Promise.all([
+    const { shown: sources, held } = await this.kindSources(kind);
+    const [folders, heldFolders] = await Promise.all([
       this.kindFolders(kind, sources),
-      this.kindFolders(kind, disabled),
+      this.kindFolders(
+        kind,
+        held.map((h) => h.source),
+      ),
     ]);
     const winners = new Map<string, LibrarySource>();
     const listing: LibraryListing<K> = { entries: [], problems: [], shadowed: [], unavailable: [] };
@@ -676,10 +707,10 @@ export class Repository {
         }
       }
     });
-    disabled.forEach((source, i) => {
-      for (const id of docIds(kind, disabledFolders[i]!)) {
+    held.forEach(({ source, hidden }, i) => {
+      for (const id of docIds(kind, heldFolders[i]!)) {
         if (!winners.has(id) && !listing.unavailable.some((u) => u.id === id)) {
-          listing.unavailable.push({ id, pack: source.pack });
+          listing.unavailable.push({ id, pack: source.pack, hidden });
         }
       }
     });

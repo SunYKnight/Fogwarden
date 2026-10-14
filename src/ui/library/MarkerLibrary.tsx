@@ -212,7 +212,7 @@ export function MarkerLibrary() {
   const [text, setText] = useState('');
   const selected = listing.entries.find((e) => e.ref.id === selectedId);
   const needle = text.toLowerCase();
-  const entries = listing.entries.filter((e) => e.doc.name.toLowerCase().includes(needle));
+  const entries = listing.listed.filter((e) => e.doc.name.toLowerCase().includes(needle));
 
   const remove = async ({ ref, doc, overrides }: Entry) => {
     const original = overrides[0] && packName(useLibraryStore.getState().packs, overrides[0]);
@@ -279,7 +279,7 @@ export function MarkerLibrary() {
         {entries.length === 0 && (
           <EmptyState
             icon="area"
-            title={listing.entries.length === 0 ? 'No area templates yet.' : 'No templates match.'}
+            title={listing.listed.length === 0 ? 'No area templates yet.' : 'No templates match.'}
             action={<Button icon="plus" label="New template" onClick={() => createTemplate().catch(reportError)} />}
           />
         )}

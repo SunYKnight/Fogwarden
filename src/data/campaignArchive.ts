@@ -9,20 +9,14 @@ import {
   type AssetRef,
   type DocRef,
   type EncounterFile,
+  type LibraryKind,
 } from '@/core/model';
 import { readZip, writeZip, type ZipFile } from '@/core/zip';
 import { version as APP_VERSION } from '../../package.json';
 import { migrate } from './migrations';
 import { sameBytes } from './packArchive';
 import { mapAssetRefs, MY_CONTENT, MY_CONTENT_SOURCE, remapJsonAssets, type LibrarySource } from './packs';
-import {
-  campaignPath,
-  KIND_LAYOUTS,
-  libraryDir,
-  libraryDocPath,
-  type LibraryKind,
-  type Repository,
-} from './repository';
+import { campaignPath, KIND_LAYOUTS, libraryDir, libraryDocPath, type Repository } from './repository';
 import type { Storage } from './storage';
 
 /**

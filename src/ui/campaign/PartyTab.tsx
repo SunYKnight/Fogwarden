@@ -5,7 +5,7 @@ import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { TextField } from '../components/fields';
 import { CreatureThumb } from '../creatureTypes/CreatureThumb';
-import { useCreature, useDisabledPackOf } from '../encounter/creatureLookup';
+import { useCreature, useHeldPackOf } from '../encounter/creatureLookup';
 import { Button, Dialog, EmptyState, Section } from '../kit';
 import { openAuroraImport } from '../library/compendiumUi';
 import { characterSummary } from '../library/PlayerLibrary';
@@ -38,9 +38,9 @@ interface MemberRowProps {
 
 function MemberRow({ member, busy, onChange, onRemove }: MemberRowProps) {
   const creature = useCreature(member.creature);
-  const disabledPack = useDisabledPackOf(member.creature);
-  const missing = disabledPack
-    ? `Its pack "${disabledPack}" is disabled.`
+  const heldPack = useHeldPackOf(member.creature);
+  const missing = heldPack
+    ? `Its pack "${heldPack.name}" ${heldPack.hidden ? 'hides its creatures' : 'is disabled'}.`
     : 'This character is no longer in the compendium.';
   return (
     <div className="encounter-row">
@@ -63,7 +63,7 @@ function AddMembersDialog(props: {
   onClose: () => void;
 }) {
   const { party, busy, onAdd, onClose } = props;
-  const entries = useLibraryStore((s) => s.listings.creature.entries);
+  const entries = useLibraryStore((s) => s.listings.creature.listed);
   const inParty = new Set(party.map((m) => m.creature.id));
   const candidates = entries
     .filter((e) => e.doc.kind === 'player' && !inParty.has(e.ref.id))

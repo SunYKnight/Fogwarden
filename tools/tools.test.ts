@@ -6,7 +6,7 @@ import { formatCreatureFile } from '../src/core/import/creatureFile';
 import { srdCreature } from '../src/core/import/dnd5eApi';
 import { FIXTURE_MONSTERS } from '../src/core/import/fixtures/dnd5eApiMonsters';
 import { imageSize } from '../src/core/imageSize';
-import { campaignSchema, defaultSettings, encounterSchema } from '../src/core/model';
+import { campaignSchema, defaultPackSettings, defaultSettings, encounterSchema } from '../src/core/model';
 import { HeightField } from '../src/core/terrain/heightfield';
 import { CampaignFiles, CAST, JOURNAL, QUESTS } from '../src/data/campaignFiles';
 import { DND5E_API_PACK } from '../src/data/dnd5eApiImport';
@@ -173,7 +173,8 @@ describe('sample campaign', () => {
 
   it('asks to enable the Sample map pack when it is hidden', async () => {
     const hidden = new Repository(new NodeStorage(mkdtempSync(join(scratch, 'hidden-')), CONTENT_ROOT));
-    await hidden.saveSettings({ ...defaultSettings(), packs: { order: [], disabled: ['sample-map'] } });
+    const packs = { ...defaultPackSettings(), disabled: ['sample-map'] };
+    await hidden.saveSettings({ ...defaultSettings(), packs });
     await expect(ensureSampleCampaign(hidden)).rejects.toThrow('"Sample map"; enable it under Settings > Content');
     expect(await hidden.storage.exists('data', campaignPath(SAMPLE_CAMPAIGN_ID))).toBe(false);
   });

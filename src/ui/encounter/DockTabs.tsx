@@ -14,6 +14,7 @@ import {
   setHidden,
 } from './combatantCommands';
 import { CarriedLightField, DeathSaves, EffectsSection, ResourcesSection } from './CombatantRules';
+import type { HeldPack } from './creatureLookup';
 import { startPlacing, useEncounterUi } from './encounterUiStore';
 
 const ROLL_MODE_LABEL: Record<RollMode, string> = {
@@ -172,13 +173,13 @@ function CombatStats({ c }: { c: Combatant }) {
 interface StatsProps {
   c: Combatant;
   creature: Creature | null;
-  /** Pack name when the stat block is missing because its pack is disabled. */
-  disabledPack: string | null;
+  /** Pack holding the stat block back: disabled, or hiding its creatures. */
+  heldPack: HeldPack | null;
   result: string | null;
   attack: Attack;
 }
 
-export function StatsTab({ c, creature, disabledPack, result, attack }: StatsProps) {
+export function StatsTab({ c, creature, heldPack, result, attack }: StatsProps) {
   return (
     <div className="col">
       <TextField
@@ -206,10 +207,13 @@ export function StatsTab({ c, creature, disabledPack, result, attack }: StatsPro
           <StatBlock creature={creature} onAttack={attack} />
         </Section>
       )}
-      {disabledPack && (
+      {heldPack && (
         <div className="hint-bar" role="note">
-          No stat block: this creature is in the disabled pack &quot;{disabledPack}&quot;. Enable it under Settings &gt;
-          Content.
+          {heldPack.hidden
+            ? `No stat block: the pack "${heldPack.name}" holding this creature hides its creatures. Show them under ` +
+              'Settings > Content.'
+            : `No stat block: this creature is in the disabled pack "${heldPack.name}". Enable it under Settings > ` +
+              'Content.'}
           <Button
             label="Open Settings > Content"
             variant="ghost"

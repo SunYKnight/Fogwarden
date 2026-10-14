@@ -227,7 +227,7 @@ export function CreatureLibrary() {
   const actions = useCreatureActions(setSelectedId);
   const { edit, menuItems } = actions;
   // Player characters have their own tab.
-  const creatures = useMemo(() => listing.entries.filter((e) => e.doc.kind !== 'player'), [listing]);
+  const creatures = useMemo(() => listing.listed.filter((e) => e.doc.kind !== 'player'), [listing]);
 
   const sources = useMemo(() => [...new Set(creatures.map((e) => e.doc.source))].sort(), [creatures]);
   const entries = useMemo(

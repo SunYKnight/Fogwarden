@@ -108,6 +108,8 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     // v11: graphics quality; GPU detection needs a browser, so the Settings
     // page only suggests a preset instead of choosing one here.
     (doc) => ({ ...doc, graphics: defaultGraphicsSettings() }),
+    // v12: per-kind pack visibility and hidden name duplicates (on).
+    (doc) => ({ ...doc, packs: { ...defaultPackSettings(), ...(doc.packs as Record<string, unknown>) } }),
   ],
 };
 

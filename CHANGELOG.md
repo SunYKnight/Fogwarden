@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Settings › Content: every pack row has a tick box per kind it holds (creatures, area templates, maps, tables,
+  items, spells). Unticking a kind hides it everywhere a disabled pack is hidden (Compendium, Add dialog, Maps
+  page, command palette); encounters keep their combatants and say which pack hides the stat block. New switch
+  **Hide duplicates** (on by default): one creature, area template, item or spell per name, from the pack highest
+  in the list (names compared without case, accents or punctuation; My content never hidden; player characters
+  only compared with each other). The switch shows how many entries it hides, each pack row how many of its entries
+  are duplicates of which pack; drag Aurora above the D&D 5e API to keep the book versions. Hidden duplicates still
+  resolve by id in encounters and loot. Settings schema v12 adds `hiddenKinds` and `hideDuplicates`.
+- Aurora Builder import: tick boxes for Player characters, Items and magic items, Spells and the Portrait library;
+  only Player characters is ticked by default. Item and spell boxes show the count and how many books they come
+  from. Characters bring only the portraits they use unless the portrait library is ticked. Unticked parts keep
+  what an earlier import wrote; only ticked parts replace and clean up their earlier files.
 - **Import from the D&D 5e API**: the app no longer ships monsters; Compendium › Creatures › Import ▾ › Everything
   from the D&D 5e API… (also Items and Spells, their empty states, the empty Creatures list and Add combatants)
   downloads the System Reference Document 5.1 from dnd5eapi.co into the pack "D&D 5e API (SRD 5.1)" in the data

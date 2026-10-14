@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AssetRef, PackSettings, StorageArea } from '@/core/model';
+import type { AssetRef, LibraryKind, PackSettings, StorageArea } from '@/core/model';
 
 /**
  * Content packs: folders `packs/<id>/` with a `pack.json` and the usual library folders (`creatures/`,
@@ -71,6 +71,11 @@ export function orderPacks<T extends InstalledPack>(installed: T[], settings: Pa
 
 export function isPackEnabled(id: string, settings: PackSettings): boolean {
   return id === MY_CONTENT || !settings.disabled.includes(id);
+}
+
+/** Whether pack `id` contributes its documents of `kind`: enabled and not hiding that kind. */
+export function packShowsKind(id: string, kind: LibraryKind, settings: PackSettings): boolean {
+  return isPackEnabled(id, settings) && (id === MY_CONTENT || !settings.hiddenKinds[id]?.includes(kind));
 }
 
 /** Copy of `value` with every asset reference (`{area, path}` and nothing else) replaced by `map(ref)`. */

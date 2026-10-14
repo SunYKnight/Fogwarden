@@ -17,7 +17,7 @@ const RARITY_ORDER = ['common', 'uncommon', 'rare', 'very rare', 'legendary', 'a
 function LootPicker({ onAdd }: { onAdd: (line: string) => void }) {
   const reportError = useAppStore((s) => s.reportError);
   const tables = useRandomTables();
-  const items = useLibraryStore((s) => s.listings.item.entries);
+  const items = useLibraryStore((s) => s.listings.item.listed);
   const [text, setText] = useState('');
   const [tableId, setTableId] = useState('');
   const [rarity, setRarity] = useState('');

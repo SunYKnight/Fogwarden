@@ -1,6 +1,6 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { useState } from 'react';
-import type { LibraryKind } from '@/data/repository';
+import type { LibraryKind } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import { LoadProblems } from '../components/LoadProblems';
 import { Button, Icon, PageHeader } from '../kit';

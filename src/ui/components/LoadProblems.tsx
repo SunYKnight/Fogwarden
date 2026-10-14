@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { LibraryKind } from '@/data/repository';
+import type { LibraryKind } from '@/core/model';
 import { useLibraryStore } from '@/state/libraryStore';
 
 /** Library files of the given kinds that could not be read, so broken files never disappear silently. */

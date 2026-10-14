@@ -236,7 +236,11 @@ removes imported packs and imports new ones (**Import pack…** for a `.zip`, **
   the same id; drag a pack to change the order. The Packs tab says what is overridden by whom.
 - Switched-off packs disappear from the Compendium, the Maps page and the Add dialog. Running encounters keep their
   combatants (hit points, armor class, conditions); a creature's stat block and a map from a switched-off pack show
-  a notice naming the pack until you switch it on again.
+  a notice naming the pack until you switch it on again. Untick a kind on a pack (e.g. its spells) to hide just that
+  kind the same way.
+- **Hide duplicates** (on by default) keeps one creature, area template, item or spell per name across packs: the
+  one from the pack higher up (My content always wins). With both the D&D 5e API and Aurora installed, drag Aurora
+  above the API to keep the book versions of shared items and spells.
 - Shipped packs (SRD 5.1 area templates, CC0 models, sample map) are read-only; editing one of their entries creates
   your copy. Imported packs live in your data folder under `packs/<id>/`.
 
@@ -253,15 +257,18 @@ its own checkbox; importing again overwrites the pack.
 **Settings > Content > Import from Aurora Builder…** (desktop app; also **Compendium > Players**, the campaign's
 **Party** tab and **Add combatants > Player character > From Aurora…**) reads Aurora's documents folder
 (`Documents/5e Character Builder`: `custom/`, `portraits/`, `*.dnd5e`), shows what it found and writes the pack
-"Aurora Builder" into your data folder:
+(`Documents/5e Character Builder`: `custom/`, `portraits/`, `*.dnd5e`), shows what it found and writes the parts you
+tick into the pack "Aurora Builder" in your data folder (only Player characters is ticked by default; unticked parts
+keep what an earlier import put into the pack):
 
-- characters as player characters (`creatures/<file name>.txt` with `kind: player` and `level`): AC, hit points,
-  speed, ability scores, saves, skills, passive Perception, darkvision, attacks, spell slots and the portrait,
-  computed from the build the way Aurora computes its sheet. The Player character tab of the Add combatants dialog
-  lists them.
-- items and magic items (`items/<id>.md`) and spells (`spells/<id>.md`) for the Compendium tabs Items and Spells
-  and for loot at the end of combat;
-- the portraits folder (`portraits/`) as the picture library (**Library…** next to a creature's image or token).
+- **Player characters** (`creatures/<file name>.txt` with `kind: player` and `level`): AC, hit points, speed,
+  ability scores, saves, skills, passive Perception, darkvision, attacks, spell slots and the portrait, computed from
+  the build the way Aurora computes its sheet, with only the portraits they use. Compendium > Players and the Player
+  character tab of the Add combatants dialog list them.
+- **Items and magic items** (`items/<id>.md`) and **Spells** (`spells/<id>.md`) for the Compendium tabs Items and
+  Spells and for loot at the end of combat; the boxes say how many books they come from;
+- the **Portrait library** (`portraits/`, all race portraits) as the picture library (**Library…** next to a
+  creature's image or token).
 
 Import again after a level-up: the import replaces the pack (ids come from Aurora's element ids and the character
 file names). The pack holds book content: it stays on your computer; export and share it only where the books allow.

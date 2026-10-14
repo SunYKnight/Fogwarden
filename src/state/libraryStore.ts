@@ -1,15 +1,28 @@
 import { create } from 'zustand';
-import { resolveTokenAsset, type AssetRef, type Combatant } from '@/core/model';
+import { slug } from '@/core/import/ids';
+import { resolveTokenAsset, type AssetRef, type Combatant, type LibraryKind } from '@/core/model';
 import {
   LIBRARY_KINDS,
-  type LibraryKind,
+  type LibraryDocs,
+  type LibraryEntry,
   type LibraryListing,
   type LoadProblem,
   type PackInfo,
 } from '@/data/repository';
 import { useAppStore } from './appStore';
 
-type Listings = { [K in LibraryKind]: LibraryListing<K> };
+/** A repository listing plus what the lists show of it. */
+export interface ShownListing<K extends LibraryKind> extends LibraryListing<K> {
+  /**
+   * `entries` without the name duplicates while Settings > Content hides them; lists show these, lookups by
+   * id use `entries`, so encounters and loot still find a hidden duplicate.
+   */
+  listed: LibraryEntry<K>[];
+  /** Entries named like one from pack `by` higher up; known even while they are shown. */
+  duplicates: { id: string; pack: string; by: string }[];
+}
+
+type Listings = { [K in LibraryKind]: ShownListing<K> };
 
 interface LibraryState {
   listings: Listings;
@@ -23,11 +36,56 @@ interface LibraryState {
   refreshAll(): Promise<void>;
 }
 
-const empty = <K extends LibraryKind>(): LibraryListing<K> => ({
+/** Kinds the SRD and the books print alike, so packs repeat them; maps and tables keep every entry. */
+const DEDUPLICATED: Record<LibraryKind, boolean> = {
+  creature: true,
+  marker: true,
+  map: false,
+  table: false,
+  item: true,
+  spell: true,
+};
+
+/**
+ * `listing` with its name duplicates: entries whose name (case, diacritics and punctuation aside) an entry
+ * from a pack earlier in `order` (pack ids, My content first) has too. Entries of one pack never hide each
+ * other, and player characters only meet player characters. `hide` drops the duplicates from `listed`.
+ */
+export function withDuplicates<K extends LibraryKind>(
+  kind: K,
+  listing: LibraryListing<K>,
+  order: string[],
+  hide: boolean,
+): ShownListing<K> {
+  const ranks = new Map(order.map((pack, i) => [pack, i]));
+  const rank = (entry: LibraryEntry<K>) => ranks.get(entry.pack) ?? order.length;
+  const keyOf = (entry: LibraryEntry<K>) => {
+    const doc: LibraryDocs[LibraryKind] = entry.doc;
+    return `${'kind' in doc && doc.kind === 'player' ? 'player:' : ''}${slug(doc.name)}`;
+  };
+  const best = new Map<string, LibraryEntry<K>>();
+  for (const entry of DEDUPLICATED[kind] ? listing.entries : []) {
+    const held = best.get(keyOf(entry));
+    if (!held || rank(entry) < rank(held)) {
+      best.set(keyOf(entry), entry);
+    }
+  }
+  const duplicates = listing.entries.flatMap((entry) => {
+    const top = best.get(keyOf(entry));
+    return top && rank(top) < rank(entry) ? [{ id: entry.ref.id, pack: entry.pack, by: top.pack }] : [];
+  });
+  const hidden = new Set(duplicates.map((d) => d.id));
+  const listed = hide ? listing.entries.filter((e) => !hidden.has(e.ref.id)) : listing.entries;
+  return { ...listing, listed, duplicates };
+}
+
+const empty = <K extends LibraryKind>(): ShownListing<K> => ({
   entries: [],
   problems: [],
   shadowed: [],
   unavailable: [],
+  listed: [],
+  duplicates: [],
 });
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
@@ -46,8 +104,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   refresh: async (kind) => {
     set((s) => ({ loading: { ...s.loading, [kind]: true } }));
     try {
-      const listing = await useAppStore.getState().repository.list(kind);
-      set((s) => ({ listings: { ...s.listings, [kind]: listing } }));
+      const { repository } = useAppStore.getState();
+      const [listing, sources] = await Promise.all([repository.list(kind), repository.librarySources()]);
+      const order = sources.map((s) => s.pack);
+      const shown = withDuplicates(kind, listing, order, repository.packSettings.hideDuplicates);
+      set((s) => ({ listings: { ...s.listings, [kind]: shown } }));
     } finally {
       set((s) => ({ loading: { ...s.loading, [kind]: false } }));
     }

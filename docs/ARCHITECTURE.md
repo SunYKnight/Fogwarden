@@ -235,7 +235,14 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
   root's `library/` is "My content" (`MY_CONTENT`), always on and first. `src/data/packs.ts`: `LibrarySource {pack,
 area, root}`, `MY_CONTENT_SOURCE`, `packSource`, `writableSource`, `orderPacks`, `mapAssetRefs`/`remapJsonAssets`.
 - Precedence: My content, then `settings.packs.order` (settings v7), then packs the order does not name (imported
-  before shipped, by id); `settings.packs.disabled` hides packs. `repository.installedPacks()` (all, with
+  before shipped, by id); `settings.packs.disabled` hides packs and `settings.packs.hiddenKinds` (v12) single kinds
+  of a pack: `packShowsKind(id, kind, settings)` (`data/packs.ts`); `Repository.kindSources(kind)` splits packs into
+  `shown` and `held`, and `list`, `load`, `sourceOf` and creature pictures use `shown`; `listing.unavailable[]`
+  carries `hidden`, and the inspector/Party tab name the holding pack (`useHeldPackOf`). Name duplicates are only a
+  list concern: `libraryStore.withDuplicates()` adds `listed` (entries minus same-name entries of lower packs while
+  `settings.packs.hideDuplicates`; `slug` names; My content never hidden; player characters only against player
+  characters) and `duplicates[] {id, pack, by}`; lists read `listed`, lookups by id keep reading `entries`.
+  `repository.installedPacks()` (all, with
   `enabled`), `librarySources()` (enabled, in order), `listPacks()` (manifest, counts per kind and 3D models,
   problems such as a user folder with a built-in pack's id). The repository takes the pack settings from
   `loadSettings`/`saveSettings`.
@@ -324,9 +331,11 @@ area, root}`, `MY_CONTENT_SOURCE`, `packSource`, `writableSource`, `orderPacks`,
   kind `player` with `level`, attacks as actions, spellcasting as a trait with slots, the portrait file name and
   the embedded portrait. Checked against Aurora's own sheets of four characters (AC, HP, speed, scores, saves,
   skills, passive Perception equal). `planAuroraImport(source, folder)` reads everything without writing
-  (problems per unreadable file); `runAuroraImport(plan, source, repository, onProgress)` writes the pack
-  `aurora-builder` (`AURORA_PACK`, license "see source books"): portraits, items, spells, characters (portrait
-  from the folder by file name, else the embedded one), then deletes the pack's files the import did not write.
+  (problems per unreadable file); `runAuroraImport(plan, parts, source, repository, onProgress)` writes the ticked
+  `AuroraParts` {characters, items, spells, portraits} into the pack `aurora-builder` (`AURORA_PACK`, license "see
+  source books"): portraits (all with `portraits`, else only those the imported characters reference), items,
+  spells, characters (portrait from the folder by file name, else the embedded one), then deletes the files of the
+  ticked parts the import did not write; unticked parts keep their files. `auroraBooks(docs)` lists source books.
   UI: `AuroraImportDialog` (Compendium > Packs, Compendium > Players, campaign Party tab, Add combatants > Player
   character > From Aurora…; folder dialog starting in `Documents/5e Character Builder`, counts preview, progress,
   report).

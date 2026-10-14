@@ -17,15 +17,20 @@ export function useCreature(ref: DocRef | null): Creature | null {
   return find(entries, ref);
 }
 
+/** Pack holding a library creature back: disabled, or enabled and hiding its creatures (`hidden`). */
+export interface HeldPack {
+  name: string;
+  hidden: boolean;
+}
+
 /**
- * Name of the disabled pack that holds a combatant's creature, null when it is available or gone. The
- * combatant keeps running from its own copy of HP, AC and conditions; only the stat block is missing.
+ * Pack that holds back a combatant's creature, null when it is available or gone. The combatant keeps
+ * running from its own copy of HP, AC and conditions; only the stat block is missing.
  */
-export function useDisabledPackOf(ref: DocRef | null): string | null {
-  return useLibraryStore((s) => {
-    const pack = ref && s.listings.creature.unavailable.find((u) => u.id === ref.id)?.pack;
-    return pack ? packName(s.packs, pack) : null;
-  });
+export function useHeldPackOf(ref: DocRef | null): HeldPack | null {
+  const held = useLibraryStore((s) => (ref && s.listings.creature.unavailable.find((u) => u.id === ref.id)) ?? null);
+  const packs = useLibraryStore((s) => s.packs);
+  return held && { name: packName(packs, held.pack), hidden: held.hidden };
 }
 
 /** Type icon of a token without picture; ad-hoc combatants have no creature type and keep their initials. */

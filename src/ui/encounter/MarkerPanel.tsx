@@ -8,7 +8,7 @@ import { startAreaPlacement, useEncounterUi } from './encounterUiStore';
 
 /** Area templates as buttons; picking one waits for its origin click on the map. */
 export function AreaTemplatePicker({ onPick }: { onPick?: () => void }) {
-  const templates = useLibraryStore((s) => s.listings.marker.entries);
+  const templates = useLibraryStore((s) => s.listings.marker.listed);
   const placement = useEncounterUi((s) => s.placement);
   return templates.length > 0 ? (
     <div className="area-templates">

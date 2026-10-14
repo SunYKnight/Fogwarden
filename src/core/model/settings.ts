@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const SETTINGS_SCHEMA_VERSION = 11;
+export const SETTINGS_SCHEMA_VERSION = 12;
 
 /** View of all player characters together; any other view is one player character's combatant id. */
 export const PARTY_VIEW = 'party';
@@ -75,16 +75,27 @@ export function defaultPlayerLinks(): PlayerLinks {
   return { secret: '', rotations: {} };
 }
 
+/** Kinds of library documents; My content and every pack keep each kind in its own folder. */
+export const libraryKindSchema = z.enum(['creature', 'marker', 'map', 'table', 'item', 'spell']);
+export type LibraryKind = z.infer<typeof libraryKindSchema>;
+
 export const packSettingsSchema = z.object({
   /** Pack ids from highest to lowest precedence; installed packs missing here follow, user packs first. */
   order: z.array(z.string()),
   /** Pack ids whose documents are hidden; every other installed pack is enabled. */
   disabled: z.array(z.string()),
+  /** Kinds an enabled pack hides, by pack id; for those kinds the pack counts as disabled. */
+  hiddenKinds: z.record(z.string(), z.array(libraryKindSchema)),
+  /**
+   * Lists show one creature, area template, item or spell per name: the one from the pack highest up.
+   * References by id still find the others.
+   */
+  hideDuplicates: z.boolean(),
 });
 export type PackSettings = z.infer<typeof packSettingsSchema>;
 
 export function defaultPackSettings(): PackSettings {
-  return { order: [], disabled: [] };
+  return { order: [], disabled: [], hiddenKinds: {}, hideDuplicates: true };
 }
 
 export const audioSettingsSchema = z.object({

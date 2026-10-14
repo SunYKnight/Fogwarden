@@ -4,12 +4,14 @@ import {
   createCampaign,
   createEncounter,
   defaultGraphicsSettings,
+  defaultPackSettings,
   defaultPlayerLinks,
   defaultRemoteSettings,
   defaultSettings,
   encounterSchema,
   PARTY_VIEW,
   settingsSchema,
+  SETTINGS_SCHEMA_VERSION,
 } from '@/core/model';
 import { createPc } from '@/state/encounterActions';
 import { migrate, MigrationError } from './migrations';
@@ -83,7 +85,7 @@ describe('settings migration', () => {
   it('enables every content pack in v6 settings and keeps the rest', () => {
     const { packs: _unused, ...v6 } = { ...defaultSettings(), diagonalRule: '5-10-5' as const };
     const migrated = settingsSchema.parse(migrate('settings', { ...v6, version: 6 }));
-    expect(migrated.packs).toEqual({ order: [], disabled: [] });
+    expect(migrated.packs).toEqual(defaultPackSettings());
     expect(migrated.diagonalRule).toBe('5-10-5');
   });
 
@@ -95,7 +97,7 @@ describe('settings migration', () => {
       dismissed: true,
       done: { dataFolder: true, mapFromImage: false, sampleEncounter: true },
     });
-    expect(settingsSchema.parse(migrated).version).toBe(11);
+    expect(settingsSchema.parse(migrated).version).toBe(SETTINGS_SCHEMA_VERSION);
   });
 
   it('adds the default graphics quality to v10 settings and keeps the rest', () => {
@@ -103,6 +105,12 @@ describe('settings migration', () => {
     const migrated = settingsSchema.parse(migrate('settings', { ...v10, version: 10 }));
     expect(migrated.graphics).toEqual(defaultGraphicsSettings());
     expect(migrated.tokenStandees).toBe(false);
+  });
+
+  it('shows every kind and hides name duplicates in v11 settings, keeping order and disabled packs', () => {
+    const v11 = { ...defaultSettings(), version: 11, packs: { order: ['mm', 'srd'], disabled: ['srd'] } };
+    const migrated = settingsSchema.parse(migrate('settings', v11));
+    expect(migrated.packs).toEqual({ order: ['mm', 'srd'], disabled: ['srd'], hiddenKinds: {}, hideDuplicates: true });
   });
 });
 

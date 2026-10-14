@@ -6,7 +6,7 @@ import { currentCombatant, movedThisTurnFt } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { Button, Popover, Tabs, type TabSpec } from '../kit';
 import { changeHp, rollAction, rollInitiativeFor, stepTurn, toggleCondition } from './combatantCommands';
-import { useCreature, useDisabledPackOf } from './creatureLookup';
+import { useCreature, useHeldPackOf } from './creatureLookup';
 import { ActionsTab, EffectsTab, NotesTab, StatsTab, TokenTab } from './DockTabs';
 import { useEncounterUi, type DockTab, type HpChange } from './encounterUiStore';
 import { HpBar } from './HpBar';
@@ -156,7 +156,7 @@ function CreatureView({ c, hasMap, isCurrent, amount, setAmount, result, setResu
   const encounter = useEncounterStore((s) => s.encounter);
   const grid = useEncounterStore((s) => s.map?.grid);
   const creature = useCreature(c.creature);
-  const disabledPack = useDisabledPackOf(c.creature);
+  const heldPack = useHeldPackOf(c.creature);
   const moved = isCurrent && encounter && grid ? movedThisTurnFt(encounter, grid, rule) : null;
 
   // Library dice formulas may not parse; the damage waits for the target.
@@ -195,7 +195,7 @@ function CreatureView({ c, hasMap, isCurrent, amount, setAmount, result, setResu
           {tab === 'effects' && <EffectsTab c={c} />}
           {tab === 'token' && <TokenTab c={c} hasMap={hasMap} />}
           {tab === 'stats' && (
-            <StatsTab c={c} creature={creature} disabledPack={disabledPack} result={result} attack={attack} />
+            <StatsTab c={c} creature={creature} heldPack={heldPack} result={result} attack={attack} />
           )}
           {tab === 'notes' && <NotesTab c={c} />}
         </div>
