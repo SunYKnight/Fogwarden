@@ -58,6 +58,23 @@ interface CampaignSummary {
   lastPlayed: string | null;
 }
 
+/** Asks, then deletes the campaign folder and forgets its open encounter; true when deleted. */
+async function deleteCampaign(target: Campaign): Promise<boolean> {
+  const ok = await confirmDialog({
+    title: 'Delete campaign',
+    message: `"${target.name}" and all its encounters will be deleted.`,
+    confirmLabel: 'Delete campaign',
+    danger: true,
+  });
+  if (ok) {
+    const { repository, forgetEncounter, notify } = useAppStore.getState();
+    await repository.storage.remove(`campaigns/${target.id}`);
+    await forgetEncounter({ campaignId: target.id });
+    notify(`Deleted "${target.name}"`);
+  }
+  return ok;
+}
+
 /** All campaigns as cards with encounter count and last activity. */
 export function CampaignList() {
   const repository = useAppStore((s) => s.repository);
@@ -66,6 +83,8 @@ export function CampaignList() {
   const [summaries, setSummaries] = useState<CampaignSummary[] | null>(null);
   const [problems, setProblems] = useState<LoadProblem[]>([]);
   const creating = useNewCampaignStore((s) => s.open);
+  // Bumped after a deletion so the cards are listed again.
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -81,7 +100,7 @@ export function CampaignList() {
       );
     };
     load().catch(reportError);
-  }, [repository, reportError]);
+  }, [repository, reportError, reload]);
 
   const create = async (name: string) => {
     const id = await repository.newCampaignId(name);
@@ -113,6 +132,15 @@ export function CampaignList() {
                     label: 'Export…',
                     icon: 'download',
                     run: () => exportCampaignToZip(campaign.id).catch(reportError),
+                  },
+                  {
+                    label: 'Delete…',
+                    icon: 'trash',
+                    danger: true,
+                    run: () =>
+                      deleteCampaign(campaign)
+                        .then((deleted) => (deleted ? setReload((n) => n + 1) : undefined))
+                        .catch(reportError),
                   },
                 ]);
               }}
@@ -247,17 +275,7 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
   };
 
   const remove = async (target: Campaign) => {
-    const ok = await confirmDialog({
-      title: 'Delete campaign',
-      message: `"${target.name}" and all its encounters will be deleted.`,
-      confirmLabel: 'Delete campaign',
-      danger: true,
-    });
-    if (ok) {
-      await repository.storage.remove(`campaigns/${target.id}`);
-      await useAppStore.getState().forgetEncounter({ campaignId: target.id });
-      navigate(CAMPAIGNS);
-    }
+    if (await deleteCampaign(target)) navigate(CAMPAIGNS);
   };
 
   const encounters = listing?.encounters ?? [];
