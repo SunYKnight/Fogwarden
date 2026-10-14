@@ -24,3 +24,12 @@ export function SplitButton({ icon, label, variant = 'default', onClick, menuLab
     </div>
   );
 }
+
+/** A button that only opens a menu, for a group of actions with no usual one. */
+export function MenuButton({ icon, label, items }: { icon: IconName; label: string; items: MenuItem[] }) {
+  const openMenu = (e: MouseEvent<HTMLButtonElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    openContextMenu(box.left, box.bottom + 4, items);
+  };
+  return <Button icon={icon} label={`${label} ▾`} aria-haspopup="menu" onClick={openMenu} />;
+}

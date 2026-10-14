@@ -3,13 +3,13 @@ import type { ComponentType } from 'react';
 import type { LibraryKind } from '@/data/repository';
 import { useAppStore, type CompendiumTab } from '@/state/appStore';
 import { LoadProblems } from '../components/LoadProblems';
-import { PageHeader, Tabs, type TabSpec } from '../kit';
+import { Button, PageHeader, Tabs, type TabSpec } from '../kit';
 import { attachPortraitsFromApi, attachPortraitsFromFolder } from '../library/AttachPortraitsDialog';
-import { openCreatureImport } from '../library/compendiumUi';
+import { openAuroraImport, openCreatureImport } from '../library/compendiumUi';
 import { CreatureLibrary } from '../library/CreatureLibrary';
 import { ItemLibrary, ReferenceActions, SpellLibrary } from '../library/ItemSpellLibrary';
 import { MarkerActions, MarkerLibrary } from '../library/MarkerLibrary';
-import { SplitButton } from '../library/SplitButton';
+import { MenuButton } from '../library/SplitButton';
 import { TableActions, TableLibrary } from '../library/TableLibrary';
 
 interface CompendiumTabSpec extends TabSpec<CompendiumTab> {
@@ -23,28 +23,40 @@ interface CompendiumTabSpec extends TabSpec<CompendiumTab> {
 function CreatureActions() {
   const navigate = useAppStore((s) => s.navigate);
   const reportError = useAppStore((s) => s.reportError);
+  const desktop = isTauri();
   return (
-    <SplitButton
-      icon="plus"
-      label="New creature"
-      variant="primary"
-      onClick={() => navigate({ page: 'creature-editor', ref: null })}
-      menuLabel="Other ways to add creatures"
-      items={[
-        { label: 'Import from text', icon: 'upload', run: () => openCreatureImport('') },
-        {
-          label: isTauri() ? 'Attach portraits from folder…' : 'Attach portraits from folder… (desktop app)',
-          icon: 'image',
-          disabled: !isTauri(),
-          run: () => attachPortraitsFromFolder().catch(reportError),
-        },
-        {
-          label: 'Download pictures from the D&D 5e API…',
-          icon: 'download',
-          run: () => attachPortraitsFromApi().catch(reportError),
-        },
-      ]}
-    />
+    <>
+      <Button
+        icon="plus"
+        label="New creature"
+        variant="primary"
+        onClick={() => navigate({ page: 'creature-editor', ref: null })}
+      />
+      <MenuButton
+        icon="upload"
+        label="Import"
+        items={[
+          { label: 'Stat block from text…', icon: 'upload', run: () => openCreatureImport('') },
+          {
+            label: desktop ? 'Characters from Aurora Builder…' : 'Characters from Aurora Builder… (desktop app)',
+            icon: 'users',
+            disabled: !desktop,
+            run: openAuroraImport,
+          },
+          {
+            label: 'Pictures from the D&D 5e API…',
+            icon: 'download',
+            run: () => attachPortraitsFromApi().catch(reportError),
+          },
+          {
+            label: desktop ? 'Pictures from a folder…' : 'Pictures from a folder… (desktop app)',
+            icon: 'image',
+            disabled: !desktop,
+            run: () => attachPortraitsFromFolder().catch(reportError),
+          },
+        ]}
+      />
+    </>
   );
 }
 

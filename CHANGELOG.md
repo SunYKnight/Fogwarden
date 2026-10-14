@@ -3,10 +3,12 @@
 ## Unreleased
 
 - Creature pictures from the free D&D 5e API (dnd5eapi.co), which has one painted picture per SRD 5.1 monster:
-  Compendium › New creature ▾ › Download pictures from the D&D 5e API…, the hint "N SRD monsters have no picture"
+  Compendium › Creatures › Import ▾ › Pictures from the D&D 5e API…, the hint "N SRD monsters have no picture"
   above the creature list, or the new first step "Download monster pictures" on Home. The dialog lists the
   matches, can replace existing pictures, shows progress, shrinks each picture to a 768 px JPEG and saves it in My
-  content (about 580 MB download, 45 MB stored for all 334). "Attach portraits from folder" uses the same dialog.
+  content (about 580 MB download, 45 MB stored for all 334). "Pictures from a folder" uses the same dialog.
+- Compendium › Creatures: New creature is a plain button; next to it **Import ▾** gathers Stat block from text,
+  Characters from Aurora Builder, Pictures from the D&D 5e API and Pictures from a folder.
 - Campaigns can be **exported and imported** as one `.zip` (`<campaign id>.fogwarden-campaign.zip`): Export… on
   the campaign page (also right-click a campaign card, or Search › Export campaign…), Import campaign… on the
   Campaigns page (also Search, and Home's Import… or a drop on Home). The archive holds the whole campaign folder

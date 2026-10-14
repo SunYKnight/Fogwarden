@@ -243,8 +243,8 @@ Screens follow the DM's order: set up once → prepare a session → at the tabl
 - **Map editor:** the canvas uses the full width unless something is selected; step help is an ⓘ popover (shown
   once per step), layers a button on the canvas, light rings only in step 4 or for the selected light; Map settings
   has Map · Grid · Lighting & ground tabs; Export is in the header's ⋯ menu.
-- **Compendium:** one split button per tab (New creature ▾ with the imports), filters behind a Filters button with
-  removable chips.
+- **Compendium:** the primary New … button per tab with the imports beside it (Creatures: Import ▾ with stat block,
+  Aurora characters and pictures), filters behind a Filters button with removable chips.
 - **Play** follows the combat state (Set up · Combat · Wrap up). Turn buttons (Previous / Next turn, before combat
   Roll initiative / Start combat) sit at the top of the initiative list. One **creature dock** under the map shows
   the selected creature (during combat otherwise the current one): HP, AC, Damage / Heal / Temp and conditions on

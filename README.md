@@ -315,7 +315,9 @@ battlemap exports its first frame.
 
 Tokens show the creature picture: a disc in the top view, an upright standee in the 3D view (Settings > Rules
 switches standees off for you and your players). To give the shipped SRD creatures pictures, use **Compendium >
-New creature ▾ > Attach portraits from folder…** and pick a folder of PNG/JPEG/WebP files named after the creatures
+Creatures > Import ▾ > Pictures from the D&D 5e API…** (painted pictures for all SRD monsters, downloaded and saved
+in your data folder) or **Import ▾ > Pictures from a folder…** and pick a folder of PNG/JPEG/WebP files named after
+the creatures
 (`goblin.jpg`, `Adult Red Dragon.png`, `homebrew--werewolf.jpg`; case, accents, punctuation and `source--` prefixes
 don't matter). The preview lists matched and unmatched files before anything is copied into your data folder under
 the creatures' ids; existing pictures are only replaced when you tick the box. One picture per creature also works
