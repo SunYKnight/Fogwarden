@@ -15,7 +15,7 @@ import {
 import { buildStructures, FULL_WALL, type SourcePortal, type SourceWall, type WallProfile } from './mapStructures';
 
 /** File extensions of the Universal VTT format (Dungeondraft, Dungeon Alchemist, DungeonFog, Arkenforge). */
-export const UVTT_EXTENSIONS = ['dd2vtt', 'df2vtt', 'uvtt'] as const;
+const UVTT_EXTENSIONS = ['dd2vtt', 'df2vtt', 'uvtt'] as const;
 
 const FEET_PER_SQUARE = 5;
 // Same height as the light tool puts a flame above the ground.
@@ -26,7 +26,7 @@ const LIGHT_HEIGHT_FT = 5;
  * than a room wall but above medium eye height (5 ft) blocks sight the same way and shows the
  * object is no room wall.
  */
-export const SIGHT_OBJECT: WallProfile = {
+const SIGHT_OBJECT: WallProfile = {
   heightFt: 6,
   thicknessFt: 0.5,
   blocksSight: true,

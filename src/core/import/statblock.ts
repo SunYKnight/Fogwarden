@@ -121,7 +121,10 @@ function toLines(text: string, exact: boolean): Line[] {
   });
 }
 
-/** Removes the source footer; the paragraph glued to it is the flavour text. */
+/**
+ * Removes the source footer. The paragraph above it is flavour text only when a blank line sets it apart
+ * and it holds no entry or section header; otherwise it is the end of the last entry.
+ */
 function splitFooter(lines: Line[]): { body: Line[]; flavor: string; source: string } {
   const kept = lines.filter((l) => !BREADCRUMB.test(l.text));
   const footer = kept.findIndex((l) => FOOTER.test(l.text));
@@ -129,16 +132,21 @@ function splitFooter(lines: Line[]): { body: Line[]; flavor: string; source: str
   while (start > 0 && kept[start - 1]!.text !== '') {
     start -= 1;
   }
+  const paragraph = kept.slice(Math.max(start, 0), Math.max(footer, 0));
+  const isFlavor =
+    start > 0 && paragraph.every((l) => sectionHeader(l.text) === undefined && parseEntries(l.text) === null);
   return footer === -1
     ? { body: kept, flavor: '', source: '' }
     : {
-        body: kept.slice(0, start),
-        flavor: kept
-          .slice(start, footer)
-          .map((l) => l.text)
-          .join(' '),
+        body: kept.slice(0, isFlavor ? start : footer),
+        flavor: isFlavor ? paragraph.map((l) => l.text).join(' ') : '',
         source: kept[footer]!.text.replace(/^Source:\s*/i, ''),
       };
+}
+
+function sectionHeader(text: string): Section | undefined {
+  const key = text.toLowerCase();
+  return Object.hasOwn(SECTION_HEADERS, key) ? SECTION_HEADERS[key] : undefined;
 }
 
 function parseTypeLine(line: Line): Pick<Creature, 'size' | 'type' | 'subtype' | 'tags'> & { alignment: string } {
@@ -269,12 +277,26 @@ function parseSenses(text: string, line: Line): { senses: Creature['senses']; pa
 }
 
 function parseChallenge(text: string, line: Line): { challenge: number; xp: number } {
-  const match = /^(\d+)(?:\/(\d+))?\s*(?:\(\s*([\d,]+))?/.exec(text);
+  const match = /^(\d+(?:\.\d+)?)(?:\/(\d+))?(?=\s|\(|$)\s*(?:\(\s*([\d,]+))?/.exec(text);
   if (!match) {
     fail('Expected a challenge rating', line);
   }
+  if (match[2] !== undefined && Number(match[2]) === 0) {
+    fail(`Invalid challenge rating "${match[0].trim()}"`, line);
+  }
   const challenge = Number(match[1]) / (match[2] ? Number(match[2]) : 1);
-  return { challenge, xp: match[3] ? Number(match[3].replace(/,/g, '')) : xpForCr(challenge) };
+  return { challenge, xp: match[3] ? Number(match[3].replace(/,/g, '')) : xpOrFail(challenge, line) };
+}
+
+function xpOrFail(challenge: number, line: Line): number {
+  try {
+    return xpForCr(challenge);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      fail(`No XP value for challenge rating ${challenge}; add it as "(… XP)"`, line);
+    }
+    throw error;
+  }
 }
 
 interface Header {
@@ -403,7 +425,7 @@ function readHeader(lines: Line[], start: number, header: Header): number {
 }
 
 /** Title-case words with short connectors; parenthetical parts ("(Recharge 5-6)") are ignored. */
-export function isNameLike(text: string): boolean {
+function isNameLike(text: string): boolean {
   const words = text
     .replace(/\([^)]*\)/g, ' ')
     .split(/\s+/)
@@ -517,26 +539,29 @@ function isLegendaryIntro(text: string, name: string | undefined): boolean {
   return /legendary action/i.test(text) || name === undefined || !isNameLike(name);
 }
 
+// Each reader fills its own structuredClone.
+const EMPTY_SECTIONS: Sections = {
+  traits: [],
+  actions: [],
+  bonusActions: [],
+  reactions: [],
+  legendary: [],
+  legendaryDescription: '',
+};
+
 function readSections(lines: Line[]): Sections {
-  const sections: Sections = {
-    traits: [],
-    actions: [],
-    bonusActions: [],
-    reactions: [],
-    legendary: [],
-    legendaryDescription: '',
-  };
+  const sections = structuredClone(EMPTY_SECTIONS);
   let current: Section = 'traits';
   let last: Trait | null = null;
   for (const line of lines) {
-    const header = SECTION_HEADERS[line.text.toLowerCase()];
+    const header = sectionHeader(line.text);
     const entries = header ? null : parseEntries(line.text);
     const legendaryIntro = current === 'legendary' && sections.legendary.length === 0 && last === null;
     if (header) {
       current = header;
       last = null;
     } else if (legendaryIntro && isLegendaryIntro(line.text, entries?.[0]!.name)) {
-      sections.legendaryDescription = line.text;
+      sections.legendaryDescription = `${sections.legendaryDescription} ${line.text}`.trim();
     } else if (entries) {
       sections[current].push(...entries.map((entry) => ({ entry, line })));
       last = entries[entries.length - 1]!;
@@ -580,20 +605,13 @@ const ATTACK_LINE = /^\[(.*)\]$/;
  * "[Melee Weapon Attack: ...]" line after an action holds attack data its description does not show.
  */
 function readExactSections(lines: Line[]): Sections {
-  const sections: Sections = {
-    traits: [],
-    actions: [],
-    bonusActions: [],
-    reactions: [],
-    legendary: [],
-    legendaryDescription: '',
-  };
+  const sections = structuredClone(EMPTY_SECTIONS);
   let current: Section = 'traits';
   let open: Trait | null = null;
   let intro: Trait | null = null;
   let blanks = 0;
   for (const line of lines) {
-    const header = line.indented ? undefined : SECTION_HEADERS[line.text.toLowerCase()];
+    const header = line.indented ? undefined : sectionHeader(line.text);
     const entries = sections[current];
     const last = entries[entries.length - 1];
     const attack = ATTACK_LINE.exec(line.text);
@@ -644,7 +662,7 @@ function toAction({ entry, line, attack }: SectionEntry): CreatureAction {
 }
 
 /** Splits the "(Costs N Actions)" suffix off a legendary action name. */
-export function legendaryAction(entry: Trait): LegendaryAction {
+function legendaryAction(entry: Trait): LegendaryAction {
   const cost = /\s*\(Costs (\d+) Actions?\)/i.exec(entry.name);
   return {
     name: cost ? entry.name.replace(cost[0], '').trim() : entry.name,

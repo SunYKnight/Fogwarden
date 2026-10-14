@@ -36,6 +36,56 @@ export function base64ToFloat32(base64: string): Float32Array {
   return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
 }
 
+const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) {
+    c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  }
+  return c >>> 0;
+});
+
+/** CRC-32 as ZIP and PNG use it. */
+export function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc = CRC_TABLE[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/**
+ * Inflates `bytes`, stopping as soon as the output passes `maxBytes`, so a crafted stream that expands
+ * a thousandfold fails before it fills memory.
+ */
+export async function inflate(
+  bytes: Uint8Array<ArrayBuffer>,
+  format: CompressionFormat,
+  maxBytes: number,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream(format)).getReader();
+  const parts: Uint8Array[] = [];
+  let total = 0;
+  let done = false;
+  while (!done) {
+    const next = await reader.read();
+    done = next.done;
+    if (next.value) {
+      total += next.value.length;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new RangeError(`Compressed data inflates past ${maxBytes} bytes`);
+      }
+      parts.push(next.value);
+    }
+  }
+  const out = new Uint8Array(total);
+  parts.reduce((offset, part) => {
+    out.set(part, offset);
+    return offset + part.length;
+  }, 0);
+  return out;
+}
+
 /** Fixed-size bit array stored as bytes, used for fog of war cells. */
 export class BitSet {
   readonly size: number;

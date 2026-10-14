@@ -4,7 +4,7 @@ import { idSchema, type AssetRef, type StorageArea } from '../model';
 export const SOUND_LIBRARY_SCHEMA_VERSION = 1;
 
 /** A playlist; `tracks` are file names relative to the `sounds` folder holding the file. */
-export const moodSchema = z.object({
+const moodSchema = z.object({
   id: idSchema,
   name: z.string(),
   tracks: z.array(z.string().min(1)),
@@ -12,7 +12,7 @@ export const moodSchema = z.object({
 export type Mood = z.infer<typeof moodSchema>;
 
 /** Sound board button; `file` is relative to the `sounds` folder, `volume` 0..1 of the master volume. */
-export const soundEffectSchema = z.object({
+const soundEffectSchema = z.object({
   id: idSchema,
   name: z.string(),
   file: z.string().min(1),

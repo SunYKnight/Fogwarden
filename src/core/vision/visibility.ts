@@ -8,7 +8,7 @@ import { cellRange, FOG_VISIBLE, fogSize, type FogSize } from './fog';
 import { RayGrid, type Blocker, type Bounds } from './rayGrid';
 
 /** Eye height above the token's elevation by creature size. */
-export const EYE_HEIGHT_FT: Record<CreatureSize, number> = {
+const EYE_HEIGHT_FT: Record<CreatureSize, number> = {
   tiny: 1,
   small: 2.5,
   medium: 5,
@@ -61,7 +61,7 @@ type BlockFlag = 'blocksSight' | 'blocksLight';
  * Wall spans that stop sight or light. An opening only spans sill..sill+height of its wall, so the wall
  * parts below the sill and above the opening are added from the wall's own flags.
  */
-export function visionBlockers(
+function visionBlockers(
   map: Pick<BattleMap, 'walls' | 'openings'>,
   terrain: HeightField,
   openingStates: Record<string, OpeningState>,
@@ -91,9 +91,9 @@ export function visionBlockers(
   return result;
 }
 
-/** Floor height under a point: an elevated room floor, else the terrain. */
+/** Floor height under a point: the last elevated room floor, as in `groundHeights`, else the terrain. */
 function groundAt(map: VisionMap, terrain: HeightField, p: Vec2): number {
-  const room = map.rooms.find((r) => r.floorFt !== null && pointInPolygon(p, r.polygon));
+  const room = map.rooms.findLast((r) => r.floorFt !== null && pointInPolygon(p, r.polygon));
   return room?.floorFt ?? terrain.sample(p.x, p.y);
 }
 
@@ -182,7 +182,8 @@ function lightLevels(
   for (let i = 0; i < levels.length; i++) {
     levels[i] = covering[i]! >= 0 ? covering[i]! : LEVEL[map.ambientLight];
   }
-  for (const light of lights) {
+  // A light without reach brightens nothing, not even its own cell.
+  for (const light of lights.filter((l) => l.brightFt + l.dimFt > 0)) {
     const reach = light.brightFt + light.dimFt;
     const { col0, col1, row0, row1 } = cellRange(
       size,

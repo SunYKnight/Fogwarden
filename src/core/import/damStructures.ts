@@ -76,12 +76,17 @@ export function fitWallTopScale(runs: DamSpan[], sources: StructureSources, cent
     const apparent = runs.map((r) => ({ a: scaled(r.a, centre, scale), b: scaled(r.b, centre, scale) }));
     return points.reduce((sum, p) => sum + Math.min(distanceToRuns(p, apparent), FIT_CAP_FT), 0);
   };
-  const steps = Math.round((SCALE_MAX - SCALE_MIN) / SCALE_STEP);
-  const candidates = Array.from({ length: steps + 1 }, (_, i) => SCALE_MIN + i * SCALE_STEP);
-  const coarse = candidates.reduce((best, s) => (cost(s) < cost(best) ? s : best), 1);
-  // Tenth steps refine the coarse best to under a hundredth of a foot.
-  const fine = Array.from({ length: 21 }, (_, i) => coarse + (i - 10) * (SCALE_STEP / 10));
-  return points.length > 0 && runs.length > 0 ? fine.reduce((best, s) => (cost(s) < cost(best) ? s : best)) : 1;
+  // Each scale costs a full point-to-run scan, so it is measured once.
+  const cheapest = (scales: number[]) =>
+    scales.map((scale) => ({ scale, cost: cost(scale) })).reduce((best, c) => (c.cost < best.cost ? c : best)).scale;
+  let fit = 1;
+  if (points.length > 0 && runs.length > 0) {
+    const steps = Math.round((SCALE_MAX - SCALE_MIN) / SCALE_STEP);
+    const coarse = cheapest([1, ...Array.from({ length: steps + 1 }, (_, i) => SCALE_MIN + i * SCALE_STEP)]);
+    // Tenth steps refine the coarse best to under a hundredth of a foot.
+    fit = cheapest(Array.from({ length: 21 }, (_, i) => coarse + (i - 10) * (SCALE_STEP / 10)));
+  }
+  return fit;
 }
 
 function pillarSquare(p: Vec2): Vec2[] {

@@ -10,6 +10,7 @@ import {
 } from './common';
 import { conditionSchema, sensesSchema, sizeSchema } from './creature';
 import { areaMarkerSchema } from './marker';
+import { openingStateSchema } from './map';
 
 export const ENCOUNTER_SCHEMA_VERSION = 7;
 export const CAMPAIGN_SCHEMA_VERSION = 3;
@@ -170,7 +171,7 @@ export const encounterSchema = z.object({
   combatants: z.array(combatantSchema),
   markers: z.array(areaMarkerSchema),
   /** Door states changed during play, keyed by opening id; the map document stays untouched. */
-  openingStates: z.record(idSchema, z.enum(['open', 'closed', 'locked'])),
+  openingStates: z.record(idSchema, openingStateSchema),
   fog: fogSchema,
   log: z.array(logEntrySchema),
   notes: z.string(),

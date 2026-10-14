@@ -12,6 +12,12 @@ describe('creatureTypeIcon', () => {
     expect(creatureTypeIcon('FIEND', '(demon)')).toBe('fiend');
   });
 
+  it('prefers the type over a subtype naming another type', () => {
+    expect(creatureTypeIcon('humanoid', '(dragonborn)')).toBe('humanoid');
+    expect(creatureTypeIcon('Humanoid (dragonborn)')).toBe('humanoid');
+    expect(creatureIconOf({ type: 'humanoid', subtype: 'dragon', tags: [] })).toBe('humanoid');
+  });
+
   it('shows swarms as a swarm whatever their members are', () => {
     expect(creatureTypeIcon('swarm of Tiny beasts')).toBe('swarm');
     expect(creatureTypeIcon('beast', 'swarm')).toBe('swarm');

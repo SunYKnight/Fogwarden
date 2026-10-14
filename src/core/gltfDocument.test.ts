@@ -25,6 +25,15 @@ describe('gltfSize', () => {
     // with its child one unit up in its own space, y 0..4.
     expect(gltfSize(fernSet())).toEqual({ x: 4.5, y: 4, z: 2 });
   });
+
+  it('refuses out-of-range indices and node cycles', () => {
+    expect(() => gltfSize({ ...fernSet(), meshes: [{ primitives: [{ attributes: { POSITION: 4 } }] }] })).toThrow(
+      /accessor index/,
+    );
+    expect(() => gltfSize({ ...fernSet(), scenes: [{ nodes: [7] }] })).toThrow(/node index/);
+    const cyclic = fernSet().nodes!.map((n, i) => (i === 2 ? { ...n, children: [1] } : n));
+    expect(() => gltfSize({ ...fernSet(), nodes: cyclic })).toThrow(/own ancestor/);
+  });
 });
 
 describe('splitGltfVariants', () => {
@@ -37,5 +46,12 @@ describe('splitGltfVariants', () => {
     expect(b.buffers).toEqual(fernSet().buffers);
     // The original keeps its layout.
     expect(gltfSize(variants[0]!.document)).toEqual({ x: 1, y: 1, z: 1 });
+  });
+
+  it('drops the offset of a root placed by matrix', () => {
+    const matrix = [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 3, 0, 0, 1];
+    const nodes = fernSet().nodes!.map((n, i) => (i === 1 ? { name: 'b', mesh: 0, matrix } : n));
+    const b = splitGltfVariants({ ...fernSet(), nodes })[1]!.document;
+    expect(b.nodes![1]!.matrix).toEqual([2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1]);
   });
 });

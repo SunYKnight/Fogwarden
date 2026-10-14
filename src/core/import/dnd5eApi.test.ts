@@ -192,6 +192,16 @@ describe('srdCreature', () => {
     const actions = [{ ...LICH.actions[0]!, attack_bonus: 13 }];
     expect(() => srdCreature(dnd5eMonsterSchema.parse({ ...LICH, actions }))).toThrow(/attack bonus/);
   });
+
+  it('notes spell and condition armor classes and refuses a monster without a base one', () => {
+    const mageArmor = { type: 'spell', value: 15, spell: { name: 'Mage Armor' } };
+    const lich = srdCreature(dnd5eMonsterSchema.parse({ ...LICH, armor_class: [...LICH.armor_class, mageArmor] }));
+    expect(lich.armorNote).toBe('natural armor, 15 with mage armor');
+    expect(() => dnd5eMonsterSchema.parse({ ...LICH, armor_class: [{ type: 'spell', value: 15 }] })).toThrow();
+    expect(() => srdCreature(dnd5eMonsterSchema.parse({ ...LICH, armor_class: [mageArmor] }))).toThrow(
+      /no natural, armor or dex/,
+    );
+  });
 });
 
 describe('srdSpell', () => {

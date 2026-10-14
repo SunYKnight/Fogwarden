@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closestPointOnSegment, polygonArea, polygonWinding, signedPolygonArea } from './polygon';
+import { closestPointOnSegment, polygonArea, signedPolygonArea } from './polygon';
 
 const clockwise = [
   { x: 0, y: 0 },
@@ -12,8 +12,6 @@ describe('polygon helpers', () => {
   it('computes area and winding as seen from above with north up', () => {
     expect(signedPolygonArea(clockwise)).toBe(12);
     expect(polygonArea([...clockwise].reverse())).toBe(12);
-    expect(polygonWinding(clockwise)).toBe('clockwise');
-    expect(polygonWinding([...clockwise].reverse())).toBe('counterclockwise');
   });
 
   it('projects a point onto a segment and clamps to its ends', () => {

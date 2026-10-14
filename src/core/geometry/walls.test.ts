@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Opening, Wall } from '../model/map';
-import { pointInPolygon, segmentIntersection, wallSegments } from './walls';
+import { pointInPolygon, wallSegments } from './walls';
 
 const wall: Wall = {
   id: 'w',
@@ -104,10 +104,5 @@ describe('polygon helpers', () => {
   it('finds points inside and outside a polygon', () => {
     expect(pointInPolygon({ x: 5, y: 5 }, square)).toBe(true);
     expect(pointInPolygon({ x: 15, y: 5 }, square)).toBe(false);
-  });
-
-  it('intersects crossing segments and ignores parallel ones', () => {
-    expect(segmentIntersection({ x: 0, y: 5 }, { x: 10, y: 5 }, { x: 4, y: 0 }, { x: 4, y: 10 })).toBeCloseTo(0.4);
-    expect(segmentIntersection({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 1 }, { x: 10, y: 1 })).toBeNull();
   });
 });

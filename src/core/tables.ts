@@ -1,5 +1,5 @@
 import { FileFormatError, formatFrontMatter, parseFrontMatter, readTimestamp } from './frontMatter';
-import { parseDice, rollDice } from './rules/dice';
+import { DiceError, parseDice, rollDice } from './rules/dice';
 
 /**
  * Random tables are plain text files (`tables/<id>.txt`): an optional header (`name`, `dice`, `createdAt`,
@@ -129,8 +129,19 @@ export function parseTableFile(text: string, id: string): RandomTable {
   const header = parseFrontMatter(text, HEADER_KEYS);
   const dice = header.values.dice || null;
   const diceLine = header.lines.dice ?? 1;
-  if (dice !== null && !/^\d*d\d+/i.test(dice)) {
-    throw new FileFormatError(`"dice" must be dice like 1d100 or 2d6`, diceLine);
+  if (dice !== null) {
+    let reason: string;
+    try {
+      reason = parseDice(dice).terms.length === 0 ? 'no dice' : '';
+    } catch (error) {
+      if (!(error instanceof DiceError)) {
+        throw error;
+      }
+      reason = error.message;
+    }
+    if (reason !== '') {
+      throw new FileFormatError(`"dice" must be dice like 1d100 or 2d6 (${reason})`, diceLine);
+    }
   }
   const lines = header.body
     .split('\n')

@@ -18,19 +18,20 @@ export interface Brush {
   falloff: Falloff;
 }
 
+const FALLOFF: Record<Falloff, (t: number) => number> = {
+  constant: () => 1,
+  linear: (t) => t,
+  smooth: (t) => t * t * (3 - 2 * t),
+};
+
 /** Brush influence 0..1 at a distance from the brush center; 0 at and beyond the radius. */
 export function falloffWeight(distanceFt: number, radiusFt: number, falloff: Falloff): number {
   const t = radiusFt > 0 ? 1 - distanceFt / radiusFt : 0;
-  let weight = 0;
-  if (t > 0) {
-    const weights: Record<Falloff, number> = { constant: 1, linear: t, smooth: t * t * (3 - 2 * t) };
-    weight = weights[falloff];
-  }
-  return weight;
+  return t > 0 ? FALLOFF[falloff](t) : 0;
 }
 
 /** Samples inside a map plane box, clamped to the field; null when the box misses the field. */
-export function rectForBox(field: HeightField, min: Vec2, max: Vec2): SampleRect | null {
+function rectForBox(field: HeightField, min: Vec2, max: Vec2): SampleRect | null {
   const s = field.spacingFt;
   const rect = {
     c0: Math.max(0, Math.ceil(min.x / s)),
@@ -153,7 +154,11 @@ export function rampBrush(
     { x: Math.min(from.x, to.x) - r, y: Math.min(from.y, to.y) - r },
     { x: Math.max(from.x, to.x) + r, y: Math.max(from.y, to.y) + r },
   );
-  let touched: SampleRect | null = null;
+  // Bounds kept in locals: a rect per touched sample would allocate in the hot loop.
+  let c0 = Infinity;
+  let r0 = Infinity;
+  let c1 = -Infinity;
+  let r1 = -Infinity;
   if (box && lengthSq > 0) {
     const s = field.spacingFt;
     for (let row = box.r0; row <= box.r1; row++) {
@@ -167,12 +172,15 @@ export function rampBrush(
           const i = field.index(col, row);
           const h = field.data[i]!;
           field.data[i] = h + (fromFt + (toFt - fromFt) * t - h) * weight;
-          touched = unionRect(touched, { c0: col, r0: row, c1: col, r1: row });
+          c0 = Math.min(c0, col);
+          r0 = Math.min(r0, row);
+          c1 = Math.max(c1, col);
+          r1 = Math.max(r1, row);
         }
       }
     }
   }
-  return touched;
+  return c0 <= c1 ? { c0, r0, c1, r1 } : null;
 }
 
 /**
@@ -211,7 +219,7 @@ function smoothLattice(x: number, y: number, seed: number): number {
 }
 
 /** Deterministic fractal value noise in [-1, 1] with features about 1 unit large. */
-export function valueNoise(x: number, y: number, seed: number): number {
+function valueNoise(x: number, y: number, seed: number): number {
   let sum = 0;
   let amplitude = 1;
   let total = 0;

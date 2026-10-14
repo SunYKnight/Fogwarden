@@ -63,7 +63,7 @@ export function formatJournalFile(entry: JournalEntry): string {
 }
 
 /** Local calendar day, as the file name and header show it. */
-export function localDate(at: Date): string {
+function localDate(at: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 }

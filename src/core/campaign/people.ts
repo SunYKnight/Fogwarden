@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { FileFormatError, formatFrontMatter, parseFrontMatter, readTimestamp, splitList } from '../frontMatter';
 import type { Encounter } from '../model/encounter';
 
@@ -26,8 +27,8 @@ export interface CastEntry {
 
 export function parseCastFile(text: string, id: string): CastEntry {
   const header = parseFrontMatter(text, HEADER_KEYS);
-  const kind = (header.values.kind || 'person').toLowerCase();
-  if (!KINDS.some((k) => k === kind)) {
+  const kind = z.enum(KINDS).safeParse((header.values.kind || 'person').toLowerCase());
+  if (!kind.success) {
     throw new FileFormatError('"kind" must be person or place', header.lines.kind!);
   }
   const picture = header.values.picture || null;
@@ -37,7 +38,7 @@ export function parseCastFile(text: string, id: string): CastEntry {
   return {
     id,
     name: header.values.name || id,
-    kind: kind as CastKind,
+    kind: kind.data,
     picture,
     tags: splitList(header.values.tags),
     encounters: splitList(header.values.encounters),

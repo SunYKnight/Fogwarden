@@ -64,5 +64,6 @@ describe('calendar arithmetic', () => {
 
   it('rejects month lines without a length', () => {
     expect(() => parseMonthLines('Hammer: 30\nAlturiak')).toThrow('Line 2');
+    expect(() => parseMonthLines('Hammer: 30\n\nAlturiak: 5000')).toThrow('Line 3');
   });
 });

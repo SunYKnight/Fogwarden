@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MINUTES_PER_DAY } from '../atmosphere/timeOfDay';
 import { idSchema } from '../model/common';
 
 /**
@@ -8,9 +9,12 @@ import { idSchema } from '../model/common';
 
 export const CALENDAR_SCHEMA_VERSION = 1;
 
-const MINUTES_PER_DAY = 24 * 60;
+const MAX_MONTH_DAYS = 1000;
 
-export const calendarMonthSchema = z.object({ name: z.string().min(1), days: z.number().int().min(1).max(1000) });
+export const calendarMonthSchema = z.object({
+  name: z.string().min(1),
+  days: z.number().int().min(1).max(MAX_MONTH_DAYS),
+});
 export type CalendarMonth = z.infer<typeof calendarMonthSchema>;
 
 /** `month` and `day` count from 1. */
@@ -108,7 +112,7 @@ export function toMinutes(months: CalendarMonth[], date: CalendarDate): number {
   return day * MINUTES_PER_DAY + date.hour * 60 + date.minute;
 }
 
-export function fromMinutes(months: CalendarMonth[], total: number): CalendarDate {
+function fromMinutes(months: CalendarMonth[], total: number): CalendarDate {
   const perYear = daysPerYear(months);
   const days = Math.floor(total / MINUTES_PER_DAY);
   const minuteOfDay = total - days * MINUTES_PER_DAY;
@@ -169,17 +173,15 @@ export function formatMonthLines(months: CalendarMonth[]): string {
 }
 
 export function parseMonthLines(text: string): CalendarMonth[] {
-  const months = text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line !== '')
-    .map((line, i) => {
-      const match = /^(.+?)\s*:\s*(\d+)$/.exec(line);
-      if (!match || Number(match[2]) < 1) {
-        throw new Error(`Line ${i + 1}: expected "Month name: days", e.g. "Hammer: 30"`);
-      }
-      return { name: match[1]!, days: Number(match[2]) };
-    });
+  const months = text.split('\n').flatMap((raw, i) => {
+    const line = raw.trim();
+    const match = /^(.+?)\s*:\s*(\d+)$/.exec(line);
+    const days = Number(match?.[2]);
+    if (line !== '' && (!match || days < 1 || days > MAX_MONTH_DAYS)) {
+      throw new Error(`Line ${i + 1}: expected "Month name: days" with 1-${MAX_MONTH_DAYS} days, e.g. "Hammer: 30"`);
+    }
+    return match ? [{ name: match[1]!, days }] : [];
+  });
   if (months.length === 0) {
     throw new Error('A calendar needs at least one month');
   }

@@ -5,14 +5,16 @@
 
 const DELIMITER = '---';
 const HEADER_LINE = /^([A-Za-z][\w-]*)\s*:(.*)$/;
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 export class FileFormatError extends Error {
   constructor(
     message: string,
     /** 1-based line number in the file. */
     readonly line: number,
+    options?: ErrorOptions,
   ) {
-    super(`Line ${line}: ${message}`);
+    super(`Line ${line}: ${message}`, options);
     this.name = 'FileFormatError';
   }
 }
@@ -60,11 +62,15 @@ export function parseFrontMatter<K extends string>(text: string, keys: readonly 
   return { values, lines: keyLines, body, bodyLine: bodyStart + 1 };
 }
 
-/** Header entries with an empty value are left out; the file ends with one newline. */
+/** Header entries with an empty value are left out; the file ends with the body plus one newline. */
 export function formatFrontMatter(header: [string, string][], body: string): string {
   const lines = header.filter(([, value]) => value !== '').map(([key, value]) => `${key}: ${value}`);
-  const text = body.endsWith('\n') ? body : `${body}\n`;
-  return `${[DELIMITER, ...lines, DELIMITER].join('\n')}\n${text}`;
+  const multiLine = header.find(([, value]) => /[\r\n]/.test(value));
+  if (multiLine) {
+    throw new Error(`Header "${multiLine[0]}" must fit on one line`);
+  }
+  // parseFrontMatter strips exactly this one newline again.
+  return `${[DELIMITER, ...lines, DELIMITER].join('\n')}\n${body}\n`;
 }
 
 /** Comma separated header list, e.g. `tags: noble, waterdeep`. */
@@ -78,7 +84,7 @@ export function splitList(value: string | undefined): string[] {
 /** Header value that must be an ISO time stamp; null when the key is missing. */
 export function readTimestamp<K extends string>(header: FrontMatter<K>, key: K): string | null {
   const value = header.values[key];
-  if (value !== undefined && Number.isNaN(Date.parse(value))) {
+  if (value !== undefined && (!ISO_TIMESTAMP.test(value) || Number.isNaN(Date.parse(value)))) {
     throw new FileFormatError(`"${key}" must be a date and time like 2026-10-12T19:30:00.000Z`, header.lines[key]!);
   }
   return value ?? null;

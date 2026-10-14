@@ -12,7 +12,7 @@ export interface XmlElement {
 
 export type XmlNode = XmlElement | string;
 
-export class XmlError extends Error {
+class XmlError extends Error {
   constructor(message: string, offset: number) {
     super(`${message} at character ${offset}`);
     this.name = 'XmlError';
@@ -24,14 +24,15 @@ const ENTITY = /&(#x[0-9a-f]+|#\d+|[a-z]+);/gi;
 const TAG = /<(\/?)([A-Za-z_][\w.:-]*)((?:\s+[\w.:-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/y;
 const ATTRIBUTE = /([\w.:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
-export function decodeEntities(text: string): string {
+function decodeEntities(text: string): string {
   return text.replace(ENTITY, (whole, ref: string) => {
     const lower = ref.toLowerCase();
     let decoded = NAMED_ENTITIES[lower] ?? whole;
-    if (lower.startsWith('#x')) {
-      decoded = String.fromCodePoint(parseInt(lower.slice(2), 16));
-    } else if (lower.startsWith('#')) {
-      decoded = String.fromCodePoint(parseInt(lower.slice(1), 10));
+    if (lower.startsWith('#')) {
+      const hex = lower.startsWith('#x');
+      const codePoint = parseInt(lower.slice(hex ? 2 : 1), hex ? 16 : 10);
+      // A reference past Unicode stays as written, like an unknown entity.
+      decoded = codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : whole;
     }
     return decoded;
   });

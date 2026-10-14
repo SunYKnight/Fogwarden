@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { base64ToFloat32, BitSet, bytesToBase64, float32ToBase64 } from './binary';
+import { base64ToFloat32, BitSet, bytesToBase64, crc32, float32ToBase64, inflate } from './binary';
+
+async function deflated(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(
+    await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer(),
+  );
+}
+
+describe('crc32', () => {
+  it('matches the standard check value', () => {
+    expect(crc32(new TextEncoder().encode('123456789'))).toBe(0xcbf43926);
+  });
+});
+
+describe('inflate', () => {
+  it('inflates within the limit and stops a stream that expands past it', async () => {
+    const zeros = new Uint8Array(1 << 16);
+    const packed = await deflated(zeros);
+    const inflated = await inflate(packed, 'deflate-raw', zeros.length);
+    expect(inflated.length === zeros.length && inflated.every((b) => b === 0)).toBe(true);
+    await expect(inflate(packed, 'deflate-raw', 1000)).rejects.toThrow('inflates past 1000 bytes');
+  });
+});
 
 describe('BitSet', () => {
   it('keeps neighbouring bits independent across byte boundaries', () => {

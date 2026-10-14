@@ -38,7 +38,7 @@ export type AssetRef = z.infer<typeof assetRefSchema>;
 export const docRefSchema = z.object({ area: storageAreaSchema, id: idSchema });
 export type DocRef = z.infer<typeof docRefSchema>;
 
-export const timestampSchema = z.string().datetime();
+export const timestampSchema = z.iso.datetime();
 
 export function nowIso(): string {
   return new Date().toISOString();

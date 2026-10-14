@@ -274,4 +274,30 @@ describe('parseStatBlock layout variants', () => {
     expect(() => parseStatBlock(HAND_TYPED.replace('Skills Arcana', 'Skills Arcanna'))).toThrow(StatBlockError);
     expect(() => parseStatBlock(HAND_TYPED.replace('lawful evil', 'mostly lawful'))).toThrow('Unknown alignment');
   });
+
+  it('keeps the last entries when the source footer follows them without a blank line', () => {
+    const wisp = parseStatBlock(VARIANTS.replace('\n\nA wisp is a test creature.', ''));
+    expect(wisp.reactions.map((r) => r.name)).toEqual(['Parry']);
+    expect(wisp.traits.map((t) => t.name)).toEqual(['Fey Ancestry', 'Sunlight Sensitivity']);
+    expect(wisp).toMatchObject({ notes: '', source: 'Unit Test' });
+  });
+
+  it('joins a legendary intro wrapped over two lines', () => {
+    const legendary =
+      '\nLegendary Actions\nThe wisp can take 3 legendary actions, choosing from the options\n' +
+      'below. Only one option can be used at a time.\nDart. The wisp moves.';
+    const wisp = parseStatBlock(VARIANTS.replace('\n\nA wisp is a test creature.', `${legendary}\n\nA wisp.`));
+    expect(wisp.legendaryDescription).toBe(
+      'The wisp can take 3 legendary actions, choosing from the options below. Only one option can be used at a time.',
+    );
+    expect(wisp.legendaryActions.map((a) => a.name)).toEqual(['Dart']);
+  });
+
+  it('reads decimal challenge ratings and names the line of bad ones', () => {
+    const cr = (text: string) => parseStatBlock(VARIANTS.replace('Challenge 1/2 (100 XP)', `Challenge ${text}`));
+    expect(cr('0.5')).toMatchObject({ challenge: 0.5, xp: 100 });
+    expect(() => cr('1/3')).toThrow(StatBlockError);
+    expect(() => cr('1/3')).toThrow('No XP value');
+    expect(() => cr('1/0 (0 XP)')).toThrow('Invalid challenge rating');
+  });
 });

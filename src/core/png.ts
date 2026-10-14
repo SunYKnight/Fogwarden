@@ -1,3 +1,5 @@
+import { crc32, inflate } from './binary';
+
 /**
  * Dependency-free PNG codec for the app's own images (heightmaps, fog masks, generated maps). It runs in the
  * browser, the Tauri webview and node alike: deflate comes from the web-standard compression streams.
@@ -52,22 +54,6 @@ const ADAM7: readonly Pass[] = [
   { x0: 1, y0: 0, dx: 2, dy: 2 },
   { x0: 0, y0: 1, dx: 1, dy: 2 },
 ];
-
-const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
-  let c = n;
-  for (let k = 0; k < 8; k++) {
-    c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  }
-  return c >>> 0;
-});
-
-function crc32(bytes: Uint8Array): number {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc = CRC_TABLE[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
 
 /** Runs `bytes` through a compression stream; 'deflate' is the zlib format PNG requires. */
 async function transform(
@@ -371,15 +357,21 @@ function passSize(pass: Pass, header: Header): { width: number; height: number }
   };
 }
 
+/** Bytes of filtered scanlines, filter byte included, that all passes of the image hold. */
+function rawSize(header: Header, channels: number): number {
+  const bitsPerPixel = channels * header.bitDepth;
+  return (header.interlaced ? ADAM7 : NON_INTERLACED).reduce((sum, pass) => {
+    const size = passSize(pass, header);
+    return sum + (size.width === 0 ? 0 : (rowBytes(size.width, bitsPerPixel) + 1) * size.height);
+  }, 0);
+}
+
 /** Restores the filtered scanlines of all passes into samples, `channels` per pixel. */
 function unpackScanlines(raw: Uint8Array, header: Header, channels: number): Uint16Array {
   const passes = header.interlaced ? ADAM7 : NON_INTERLACED;
   const bitsPerPixel = channels * header.bitDepth;
   const bpp = filterDistance(bitsPerPixel);
-  const expected = passes.reduce((sum, pass) => {
-    const size = passSize(pass, header);
-    return sum + (size.width === 0 ? 0 : (rowBytes(size.width, bitsPerPixel) + 1) * size.height);
-  }, 0);
+  const expected = rawSize(header, channels);
   if (raw.length !== expected) {
     throw new PngError(`PNG image data has ${raw.length} bytes, expected ${expected}`);
   }
@@ -438,10 +430,11 @@ export async function decodePng(bytes: Uint8Array): Promise<PngImage> {
   if (idat.length === 0) {
     throw new PngError('PNG file has no image data');
   }
-  const raw = await transform(concat(idat), new DecompressionStream('deflate')).catch((error: unknown) => {
+  const stored = CHANNELS_OF_COLOR_TYPE[header.colorType]!;
+  // One byte over the expected size is enough to report a mismatch.
+  const raw = await inflate(concat(idat), 'deflate', rawSize(header, stored) + 1).catch((error: unknown) => {
     throw new PngError('PNG image data is corrupt', { cause: error });
   });
-  const stored = CHANNELS_OF_COLOR_TYPE[header.colorType]!;
   const samples = unpackScanlines(raw, header, stored);
   const image =
     header.colorType === COLOR_PALETTE

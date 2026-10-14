@@ -374,7 +374,8 @@ function readEntries(lines: string[], start: number, end: number): HeaderEntry[]
     } else if (!match) {
       headerError('Expected "key: value" in the header', line, i);
     } else {
-      const key = KEY_BY_LOWER[match[1]!.toLowerCase()];
+      const lower = match[1]!.toLowerCase();
+      const key = Object.hasOwn(KEY_BY_LOWER, lower) ? KEY_BY_LOWER[lower] : undefined;
       if (key === undefined) {
         headerError(`Unknown header key "${match[1]}"`, line, i);
       }

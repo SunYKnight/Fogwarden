@@ -10,6 +10,7 @@ import {
   markerTemplateSchema,
   type Creature,
   type DamageType,
+  SPEEDS,
   type MarkerTemplate,
 } from '../model';
 import { abilityModifier, formatCr, formatModifier } from '../rules/abilities';
@@ -20,7 +21,7 @@ import { parseStatBlock } from './statblock';
  * Documents of the D&D 5e API (https://www.dnd5eapi.co/api/2014, the data of 5e-bits/5e-database, SRD 5.1
  * text under CC-BY-4.0): monsters, spells with their areas, magic items and equipment. Monsters are rendered as
  * stat block text and read back with the app's stat block parser; structured values cross-check the result.
- * Every id is `srd-<API index>`, the ids the shipped SRD pack has always used.
+ * Every id is `srd-<API index>`, matching the shipped SRD pack's ids.
  */
 
 export const SRD_SOURCE = 'SRD 5.1';
@@ -43,14 +44,16 @@ export const dnd5eMonsterSchema = z.object({
   subtype: z.string().optional(),
   alignment: z.string(),
   armor_class: z.array(
-    z.object({
-      type: z.enum(['natural', 'armor', 'dex', 'spell', 'condition']),
-      value: z.number(),
-      armor: z.array(named).optional(),
-      desc: z.string().optional(),
-      spell: named.optional(),
-      condition: named.optional(),
-    }),
+    z.discriminatedUnion('type', [
+      z.object({
+        type: z.enum(['natural', 'armor', 'dex']),
+        value: z.number(),
+        armor: z.array(named).optional(),
+        desc: z.string().optional(),
+      }),
+      z.object({ type: z.literal('spell'), value: z.number(), spell: named }),
+      z.object({ type: z.literal('condition'), value: z.number(), condition: named }),
+    ]),
   ),
   hit_points: z.number(),
   hit_points_roll: z.string(),
@@ -180,7 +183,10 @@ function entryLine(entry: Entry): string {
 }
 
 function armorClass(m: Dnd5eMonster): string {
-  const base = m.armor_class.filter((a) => a.type === 'natural' || a.type === 'armor' || a.type === 'dex');
+  const base = m.armor_class.flatMap((a) => (a.type === 'spell' || a.type === 'condition' ? [] : [a]));
+  if (base.length === 0) {
+    throw new Error(`${m.name}: no natural, armor or dex armor class`);
+  }
   const value = Math.max(...base.map((a) => a.value));
   const notes = [
     ...base.flatMap((a) => [
@@ -188,18 +194,16 @@ function armorClass(m: Dnd5eMonster): string {
       ...(a.armor ?? []).map((x) => x.name.toLowerCase()),
       ...(a.desc ? [a.desc] : []),
     ]),
-    ...m.armor_class
-      .filter((a) => a.type === 'spell' || a.type === 'condition')
-      .map(
-        (a) =>
-          `${a.value} ${a.spell ? `with ${a.spell.name.toLowerCase()}` : `while ${a.condition!.name.toLowerCase()}`}`,
-      ),
+    ...m.armor_class.flatMap((a) => {
+      const condition = a.type === 'condition' ? [`${a.value} while ${a.condition.name.toLowerCase()}`] : [];
+      return a.type === 'spell' ? [`${a.value} with ${a.spell.name.toLowerCase()}`] : condition;
+    }),
   ];
   return `${value}${notes.length > 0 ? ` (${notes.join(', ')})` : ''}`;
 }
 
 function speedLine(m: Dnd5eMonster): string {
-  const kinds = ['walk', 'burrow', 'climb', 'fly', 'swim'].filter((k) => typeof m.speed[k] === 'string');
+  const kinds = SPEEDS.filter((k) => typeof m.speed[k] === 'string');
   const parts = kinds.map(
     (k) => `${k === 'walk' ? '' : `${k} `}${m.speed[k]}${k === 'fly' && m.speed.hover ? ' (hover)' : ''}`,
   );
@@ -475,7 +479,7 @@ function equipmentType(item: Dnd5eEquipment): string {
     item.tool_category ??
     item.vehicle_category ??
     '';
-  return sub === '' || PLAIN_SUBCATEGORIES[sub] ? category : `${category} (${sub.toLowerCase()})`;
+  return sub === '' || Object.hasOwn(PLAIN_SUBCATEGORIES, sub) ? category : `${category} (${sub.toLowerCase()})`;
 }
 
 /** Weapon, armor and mount numbers as a first description line, in the Aurora import's form. */

@@ -23,7 +23,7 @@ export function slugId(...parts: string[]): string {
 /** Keeps ids short enough for nested paths under Windows' 260 character limit. */
 const MAX_ID_LENGTH = 60;
 /** Device names Windows refuses as file names, even with an extension. */
-const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
+export const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 
 /**
  * Id for a new document named `name` ("Goblin copy" → "goblin-copy"): its slug cut to 60 characters, `fallback`

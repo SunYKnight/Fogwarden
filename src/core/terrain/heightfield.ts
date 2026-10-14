@@ -34,7 +34,7 @@ export class HeightField {
   static fromMap(map: BattleMap): HeightField {
     const { cols, rows, spacingFt } = HeightField.dimensions(map.grid, map.terrain.samplesPerSquare);
     const data = map.terrain.heights.length === 0 ? undefined : base64ToFloat32(map.terrain.heights);
-    return new HeightField(cols, rows, spacingFt, data && new Float32Array(data));
+    return new HeightField(cols, rows, spacingFt, data);
   }
 
   get widthFt(): number {

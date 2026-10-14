@@ -7,14 +7,19 @@ export type CreatureIconKey = (typeof CREATURE_ICON_KEYS)[number];
 // Most creatures in the compendium are people; an unknown type reads as one.
 const DEFAULT_ICON: CreatureIconKey = 'humanoid';
 
+const TYPE_PATTERNS = CREATURE_TYPES.map((t) => ({ type: t, pattern: new RegExp(`\\b${t}\\b`) }));
+
 /**
  * Icon for a creature type such as "beast" or "Humanoid (goblinoid)". `typeText` holds the rest of the type
- * line (subtype, tags); a swarm of tiny creatures gets the swarm icon whatever its members are.
+ * line (subtype, tags); a swarm of tiny creatures gets the swarm icon whatever its members are. The type
+ * wins over the subtype, so "humanoid (dragonborn)" stays a humanoid.
  */
 export function creatureTypeIcon(type: string, typeText = ''): CreatureIconKey {
-  const text = `${type} ${typeText}`.toLowerCase();
-  const named = CREATURE_TYPES.find((t) => new RegExp(`\\b${t}`).test(text));
-  return /\bswarm\b/.test(text) ? 'swarm' : (named ?? DEFAULT_ICON);
+  const lowerType = type.toLowerCase();
+  const lowerRest = typeText.toLowerCase();
+  const named =
+    TYPE_PATTERNS.find((t) => t.pattern.test(lowerType)) ?? TYPE_PATTERNS.find((t) => t.pattern.test(lowerRest));
+  return /\bswarm\b/.test(`${lowerType} ${lowerRest}`) ? 'swarm' : (named?.type ?? DEFAULT_ICON);
 }
 
 /** Icon of a library creature; the importer marks swarms with the tag "swarm". */

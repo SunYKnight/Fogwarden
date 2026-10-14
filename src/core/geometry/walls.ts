@@ -1,5 +1,5 @@
 import type { Vec2 } from '../model/common';
-import type { BattleMap, Opening, OpeningState, Wall } from '../model/map';
+import type { BattleMap, Opening, OpeningKind, OpeningState, Wall } from '../model/map';
 import type { HeightField } from '../terrain/heightfield';
 
 /**
@@ -52,14 +52,21 @@ export function wallBaseAt(wall: Wall, p: Vec2, terrain: HeightField | null): nu
   return wall.baseFt ?? terrain?.sample(p.x, p.y) ?? 0;
 }
 
+const OPENING_PASSAGE: Record<OpeningKind, { seeThrough: boolean; walkThrough: boolean }> = {
+  door: { seeThrough: false, walkThrough: true },
+  window: { seeThrough: true, walkThrough: false },
+  portcullis: { seeThrough: true, walkThrough: true },
+  'arrow-slit': { seeThrough: true, walkThrough: false },
+};
+
 /** Whether an opening currently lets things through, by kind and state. */
 function openingBlocks(opening: Opening, state: OpeningState, secretAsWall: boolean) {
   const shut = state !== 'open';
   const hiddenSecret = secretAsWall && opening.secret && shut;
-  const seeThrough = opening.kind === 'window' || opening.kind === 'portcullis' || opening.kind === 'arrow-slit';
+  const { seeThrough, walkThrough } = OPENING_PASSAGE[opening.kind];
   return {
     blocksSight: hiddenSecret || (shut && !seeThrough),
-    blocksMovement: hiddenSecret || shut || opening.kind === 'window' || opening.kind === 'arrow-slit',
+    blocksMovement: hiddenSecret || shut || !walkThrough,
     blocksLight: hiddenSecret || (shut && !seeThrough),
   };
 }
@@ -149,16 +156,4 @@ export function pointInPolygon(point: Vec2, polygon: Vec2[]): boolean {
     if (crosses) inside = !inside;
   }
   return inside;
-}
-
-/** Intersection parameter t along p->q with segment a->b, or null when they do not cross. */
-export function segmentIntersection(p: Vec2, q: Vec2, a: Vec2, b: Vec2): number | null {
-  const rx = q.x - p.x;
-  const ry = q.y - p.y;
-  const sx = b.x - a.x;
-  const sy = b.y - a.y;
-  const denom = rx * sy - ry * sx;
-  const t = denom === 0 ? -1 : ((a.x - p.x) * sy - (a.y - p.y) * sx) / denom;
-  const u = denom === 0 ? -1 : ((a.x - p.x) * ry - (a.y - p.y) * rx) / denom;
-  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : null;
 }

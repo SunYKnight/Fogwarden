@@ -17,13 +17,6 @@ export function polygonArea(points: Vec2[]): number {
   return Math.abs(signedPolygonArea(points));
 }
 
-export type Winding = 'clockwise' | 'counterclockwise';
-
-/** Winding as seen from above with north up. */
-export function polygonWinding(points: Vec2[]): Winding {
-  return signedPolygonArea(points) >= 0 ? 'clockwise' : 'counterclockwise';
-}
-
 export interface SegmentProjection {
   /** Parameter of the closest point, 0 = `a`, 1 = `b`. */
   t: number;
@@ -120,7 +113,7 @@ export function cellOutline(cells: Vec2[]): Vec2[] {
       loops.push(loop);
     }
   });
-  // Outer outlines run counter-clockwise in these coordinates, holes clockwise.
+  // Outer outlines run clockwise in these coordinates, holes counter-clockwise.
   const outer = loops.filter((l) => signedPolygonArea(l) > 0).sort((a, b) => polygonArea(b) - polygonArea(a))[0];
   return outer ? cornersOnly(outer) : [];
 }
