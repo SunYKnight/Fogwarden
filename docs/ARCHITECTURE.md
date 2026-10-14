@@ -252,8 +252,8 @@ area, root}`, `MY_CONTENT_SOURCE`, `packSource`, `writableSource`, `orderPacks`,
   (`entry.pack`, `entry.overrides`: packs it hides), `shadowed` (`{id, pack, by}`) and `unavailable` (ids only a
   disabled pack holds). `load(kind, ref)` resolves `ref.id` by precedence (`ref.area` only records where it was);
   an id only a disabled pack holds throws naming that pack. Encounters keep working from their combatants' own
-  HP/AC/conditions; the inspector says which disabled pack holds the stat block (`useDisabledPackOf`), a map in a
-  disabled pack is reported on opening, and its grid still sizes the fog so saving never drops fog.
+  HP/AC/conditions; the inspector says which disabled or hiding pack holds the stat block (`useHeldPackOf`), a map
+  in a disabled pack is reported on opening, and its grid still sizes the fog so saving never drops fog.
 - Packs are read-only in the app: saving a pack's document writes My content (the user copy that overrides it).
   Imports may write into a user pack: `ensurePack(manifest)` then `save(kind, doc, packId)`,
   `importCreaturePicture(…, packId)`, `importMapAsset(…, packId)` (`import-statblocks.ts --pack <id>`).

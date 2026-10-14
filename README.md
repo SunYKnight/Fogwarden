@@ -256,7 +256,6 @@ its own checkbox; importing again overwrites the pack.
 
 **Settings > Content > Import from Aurora Builder…** (desktop app; also **Compendium > Players**, the campaign's
 **Party** tab and **Add combatants > Player character > From Aurora…**) reads Aurora's documents folder
-(`Documents/5e Character Builder`: `custom/`, `portraits/`, `*.dnd5e`), shows what it found and writes the pack
 (`Documents/5e Character Builder`: `custom/`, `portraits/`, `*.dnd5e`), shows what it found and writes the parts you
 tick into the pack "Aurora Builder" in your data folder (only Player characters is ticked by default; unticked parts
 keep what an earlier import put into the pack):
@@ -270,7 +269,7 @@ keep what an earlier import put into the pack):
 - the **Portrait library** (`portraits/`, all race portraits) as the picture library (**Library…** next to a
   creature's image or token).
 
-Import again after a level-up: the import replaces the pack (ids come from Aurora's element ids and the character
+Import again after a level-up: the import replaces the ticked parts (ids come from Aurora's element ids and the
 file names). The pack holds book content: it stays on your computer; export and share it only where the books allow.
 
 ## Battlemaps from map makers
