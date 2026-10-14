@@ -1,3 +1,4 @@
+import { errorMessage } from '@/core/errors';
 import type { AssetRef } from '@/core/model';
 import { readZip, writeZip, type ZipFile } from '@/core/zip';
 import {
@@ -11,6 +12,7 @@ import {
   type PackManifest,
 } from './packs';
 import type { Repository } from './repository';
+import { sameBytes } from './storage';
 
 /** Files of a pack, paths relative to the pack folder, `pack.json` among them. */
 export interface PackFiles {
@@ -29,10 +31,6 @@ export class PackExistsError extends Error {
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /** Asset references of a pack's JSON file remapped; null for other files and when nothing changed. */
 function remapFile(path: string, bytes: Uint8Array, map: (ref: AssetRef) => AssetRef): Uint8Array | null {
   let remapped: string | null = null;
@@ -44,10 +42,6 @@ function remapFile(path: string, bytes: Uint8Array, map: (ref: AssetRef) => Asse
     }
   }
   return remapped === null ? null : encoder.encode(remapped);
-}
-
-export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
-  return a.length === b.length && a.every((byte, i) => byte === b[i]);
 }
 
 /**
@@ -94,25 +88,23 @@ export async function installPack(repository: Repository, pack: PackFiles, repla
   if (!replace && (await storage.exists('data', `${root}/${PACK_FILE}`))) {
     throw new PackExistsError(pack.manifest);
   }
-  // Pack ids have no dots, so the staging folder never lists as a pack.
+  // Pack ids have no dots, so the staging folder never lists as a pack. It
+  // stays when the copy fails: then it is the only complete copy.
   const staging = `${root}.importing`;
   await storage.remove(staging);
   const intoDataRoot = (ref: AssetRef): AssetRef =>
     ref.path.startsWith(`${root}/`) ? { area: 'data', path: ref.path } : ref;
-  try {
-    for (const file of pack.files) {
-      const bytes = remapFile(file.path, file.bytes, intoDataRoot) ?? file.bytes;
-      const path = `${staging}/${file.path}`;
-      await storage.writeBytes(path, bytes);
-      if (!sameBytes(await storage.readBytes('data', path), bytes)) {
-        throw new Error(`${file.path} was not written intact`);
-      }
+  for (const file of pack.files) {
+    const bytes = remapFile(file.path, file.bytes, intoDataRoot) ?? file.bytes;
+    const path = `${staging}/${file.path}`;
+    await storage.writeBytes(path, bytes);
+    if (!sameBytes(await storage.readBytes('data', path), bytes)) {
+      throw new Error(`${file.path} was not written intact`);
     }
-    await storage.remove(root);
-    await storage.copy('data', staging, root);
-  } finally {
-    await storage.remove(staging);
   }
+  await storage.remove(root);
+  await storage.copy('data', staging, root);
+  await storage.remove(staging);
 }
 
 /** Removes an imported pack folder; built-in packs and My content cannot be removed. */

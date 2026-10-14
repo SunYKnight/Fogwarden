@@ -1,30 +1,43 @@
 import { useAppStore } from './appStore';
 import { useEditorStore } from './editorStore';
 import { useEncounterStore } from './encounterStore';
-import { useLibraryStore } from './libraryStore';
 
 const DELAY_MS = 800;
 
-/** Saves pending map edits now, e.g. before leaving the editor. */
-export async function flushMap(): Promise<void> {
+/**
+ * `save` as a function whose calls run one after another. Overlapping saves of
+ * one document could pair one save's terrain with the other's heightmap scale,
+ * or delete a fog mask the newer save just wrote.
+ */
+function serialized(save: () => Promise<void>): () => Promise<void> {
+  let queue: Promise<void> = Promise.resolve();
+  return () => {
+    const run = queue.then(save);
+    // The queue only orders saves; the caller still gets this save's error.
+    queue = run.catch(() => undefined);
+    return run;
+  };
+}
+
+/** Saves pending map edits now, e.g. before leaving the editor; resolves after earlier saves. */
+export const flushMap = serialized(async () => {
   const editor = useEditorStore.getState();
   const revision = editor.revision;
   if (editor.map && revision !== editor.savedRevision) {
     await useAppStore.getState().repository.save('map', editor.snapshot());
     useEditorStore.getState().markSaved(revision);
-    await useLibraryStore.getState().refresh('map');
   }
-}
+});
 
-/** Saves pending encounter changes now. */
-export async function flushEncounter(): Promise<void> {
+/** Saves pending encounter changes now; resolves after earlier saves. */
+export const flushEncounter = serialized(async () => {
   const state = useEncounterStore.getState();
   const revision = state.revision;
   if (state.encounter && revision !== state.savedRevision) {
     await useAppStore.getState().repository.saveEncounter(state.encounter);
     useEncounterStore.getState().markSaved(revision);
   }
-}
+});
 
 /**
  * Saves the open map and encounter a short while after the last change.

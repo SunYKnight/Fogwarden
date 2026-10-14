@@ -2,9 +2,10 @@ import { calendarSchema, type Calendar } from '@/core/campaign/calendar';
 import { formatJournalFile, parseJournalFile, type JournalEntry } from '@/core/campaign/journal';
 import { formatCastFile, parseCastFile, type CastEntry } from '@/core/campaign/people';
 import { formatQuestFile, parseQuestFile, type Quest } from '@/core/campaign/quests';
+import { errorMessage } from '@/core/errors';
 import { freeDocumentId } from '@/core/import/ids';
 import { nowIso, type AssetRef } from '@/core/model';
-import { DataError, type LoadProblem } from './repository';
+import { DataError, PICTURE_EXTENSIONS, type LoadProblem } from './repository';
 import type { Storage } from './storage';
 
 export interface CampaignDoc {
@@ -41,12 +42,6 @@ export const QUESTS: CampaignDocKind<Quest> = {
   parse: parseQuestFile,
   format: formatQuestFile,
 };
-
-const PICTURE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /** Journal, people and places, quests and calendar of one campaign, as readable files in its folder. */
 export class CampaignFiles {

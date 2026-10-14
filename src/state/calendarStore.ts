@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { advanceCalendar, withTimeOfDay, type Calendar } from '@/core/campaign/calendar';
+import { withTimeOfDay, type Calendar } from '@/core/campaign/calendar';
 import { CampaignFiles } from '@/data/campaignFiles';
 import type { Repository } from '@/data/repository';
 import { useAppStore } from './appStore';
@@ -39,12 +39,6 @@ function activeCalendar(): { campaignId: string; calendar: Calendar } {
 export async function setCalendarTimeOfDay(minute: number): Promise<void> {
   const { campaignId, calendar } = activeCalendar();
   await saveCampaignCalendar(campaignId, withTimeOfDay(calendar, minute));
-}
-
-/** Moves the running campaign's time forward by `minutes`. */
-export async function advanceActiveCalendar(minutes: number): Promise<void> {
-  const { campaignId, calendar } = activeCalendar();
-  await saveCampaignCalendar(campaignId, advanceCalendar(calendar, minutes));
 }
 
 /** Keeps the store on the calendar of the running encounter's campaign; returns the stop function. */

@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { errorMessage } from '@/core/errors';
 import type { AssetRef } from '@/core/model';
 import { MY_CONTENT_SOURCE, remapJsonAssets } from './packs';
-import { libraryDir, type LoadProblem, type Repository } from './repository';
+import { libraryDir, SETTINGS_PATH, type LoadProblem, type Repository } from './repository';
 
 /**
  * One-time move of a data root to content packs, while `settings.json` is older than v7 (or missing): asset
@@ -10,7 +11,6 @@ import { libraryDir, type LoadProblem, type Repository } from './repository';
  * any problem leaves the settings version, so the next start tries again.
  */
 
-const SETTINGS_PATH = 'settings.json';
 const PACKS_SETTINGS_VERSION = 7;
 
 /** Old content folder → its pack folder; shipped content was split into packs. */
@@ -20,10 +20,6 @@ const CONTENT_MOVES: [string, string][] = [
   ['maps/', 'packs/sample-map/maps/'],
   ['models/cc0/', 'packs/cc0-models/models/'],
 ];
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 async function needsMigration(repository: Repository): Promise<boolean> {
   const { storage } = repository;

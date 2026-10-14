@@ -1,3 +1,4 @@
+import { errorMessage } from '@/core/errors';
 import { formatCreatureFile } from '@/core/import/creatureFile';
 import {
   dnd5eEquipmentSchema,
@@ -185,8 +186,7 @@ async function importDocs(
         try {
           file = DOC_PARTS[part].toFile(json);
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          report.problems.push({ part, name: entry.name, message });
+          report.problems.push({ part, name: entry.name, message: errorMessage(error) });
         }
         if (file) {
           await repository.storage.writeText(file.path, file.text);

@@ -13,7 +13,7 @@ import type { Storage } from './storage';
  * file, its previous content is kept in `history/<YYYY-MM-DD>/<path>` (first version per file and day);
  * restores keep what they replace in `history/<YYYY-MM-DD> <HH-MM-SS> before restore/`.
  */
-export const HISTORY_DIR = 'history';
+const HISTORY_DIR = 'history';
 
 /** True for data area paths inside the history (any case: Windows paths ignore it). */
 export function isHistoryPath(path: string): boolean {

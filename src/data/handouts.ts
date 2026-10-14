@@ -1,6 +1,6 @@
 import { handoutKind, handoutsDir, type HandoutKind } from '@/core/handouts';
 import type { AssetRef } from '@/core/model';
-import type { Storage } from './storage';
+import { safeFileName, type Storage } from './storage';
 
 /** A file in a campaign's `handouts` folder that players can be shown. */
 export interface HandoutFile {
@@ -28,7 +28,7 @@ export async function importHandout(
   fileName: string,
   bytes: Uint8Array,
 ): Promise<HandoutFile> {
-  const safeName = fileName.replace(/[^\w.\- ]+/g, '_');
+  const safeName = safeFileName(fileName);
   const kind = handoutKind(safeName);
   if (!kind) {
     throw new Error(`${fileName} is no picture, video or text file`);

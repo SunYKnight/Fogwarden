@@ -30,6 +30,9 @@ const ZIP64_MARK = 0xffffffff;
 const VERSION = 20;
 // 1980-01-01 00:00 in DOS date/time: fixed so equal packs zip to equal bytes.
 const DOS_DATE = (0 << 9) | (1 << 5) | 1;
+// What one import may unpack: the archive and all its files must fit in the
+// window's memory at once.
+const MAX_UNPACKED_SIZE = 2 * 1024 ** 3;
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -51,16 +54,16 @@ export function crc32(bytes: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-async function transform(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
+async function transform(bytes: Uint8Array, stream: CompressionStream): Promise<Uint8Array> {
   const body = new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(stream);
   return new Uint8Array(await new Response(body).arrayBuffer());
 }
 
-/** Rejects names that would leave the folder they are unpacked into. */
+/** Rejects names that would leave the folder they are unpacked into, or name a Windows alternate data stream. */
 function safePath(name: string): string {
   const path = name.replace(/\\/g, '/');
   const parts = path.split('/');
-  if (path.startsWith('/') || /^[a-z]:/i.test(path) || parts.some((p) => p === '..' || p === '.')) {
+  if (path.startsWith('/') || path.includes(':') || parts.some((p) => p === '..' || p === '.')) {
     throw new ZipError(`Unsafe file name in the archive: ${name}`);
   }
   return path;
@@ -80,7 +83,20 @@ function findEndRecord(view: DataView): number {
   return at;
 }
 
-async function readEntry(bytes: Uint8Array, view: DataView, at: number): Promise<ZipFile | null> {
+/** A file entry of the central directory, checked against its local header. */
+interface Entry {
+  path: string;
+  method: number;
+  crc: number;
+  size: number;
+  /** Local header offset; the entry's bytes run from here to `end`. */
+  offset: number;
+  start: number;
+  end: number;
+}
+
+/** The central directory entry at `at`; null for a folder entry. */
+function readEntry(bytes: Uint8Array, view: DataView, at: number): Entry | null {
   if (view.getUint32(at, true) !== CENTRAL_HEADER) {
     throw new ZipError('Damaged ZIP archive: bad central directory');
   }
@@ -101,20 +117,57 @@ async function readEntry(bytes: Uint8Array, view: DataView, at: number): Promise
   if (method !== STORED && method !== DEFLATED) {
     throw new ZipError(`${name}: compression method ${method} is not supported (use deflate)`);
   }
-  let file: ZipFile | null = null;
+  let entry: Entry | null = null;
   if (!name.endsWith('/')) {
-    if (view.getUint32(offset, true) !== LOCAL_HEADER) {
+    if (offset + 30 > bytes.length || view.getUint32(offset, true) !== LOCAL_HEADER) {
       throw new ZipError(`${name}: damaged ZIP archive (bad local header)`);
     }
     const start = offset + 30 + view.getUint16(offset + 26, true) + view.getUint16(offset + 28, true);
-    const raw = bytes.subarray(start, start + compressedSize);
-    const data = method === STORED ? raw.slice() : await transform(raw, new DecompressionStream('deflate-raw'));
-    if (data.length !== size || crc32(data) !== crc) {
-      throw new ZipError(`${name}: damaged ZIP archive (checksum mismatch)`);
+    const end = start + compressedSize;
+    if (end > bytes.length) {
+      throw new ZipError(`${name}: damaged ZIP archive (data past its end)`);
     }
-    file = { path: safePath(name), bytes: data };
+    entry = { path: safePath(name), method, crc, size, offset, start, end };
   }
-  return file;
+  return entry;
+}
+
+/**
+ * Inflates `raw`, giving up once the output passes `size`: a few kilobytes can
+ * inflate to gigabytes, far more than an entry may claim.
+ */
+async function inflate(raw: Uint8Array, size: number, path: string): Promise<Uint8Array> {
+  const stream = new Blob([raw as Uint8Array<ArrayBuffer>]).stream();
+  const reader = stream.pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const data = new Uint8Array(size);
+  let length = 0;
+  let chunk = await reader.read();
+  while (!chunk.done) {
+    if (length + chunk.value.length > size) {
+      await reader.cancel();
+      throw new ZipError(`${path}: damaged ZIP archive (unpacks larger than stated)`);
+    }
+    data.set(chunk.value, length);
+    length += chunk.value.length;
+    chunk = await reader.read();
+  }
+  return data.subarray(0, length);
+}
+
+/**
+ * Refuses entries that share bytes, a way to unpack the same data many times
+ * over, and archives that unpack to more than `MAX_UNPACKED_SIZE`.
+ */
+function checkLayout(entries: Entry[]): void {
+  const sorted = entries.toSorted((a, b) => a.offset - b.offset);
+  const overlap = sorted.find((entry, i) => i > 0 && entry.offset < sorted[i - 1]!.end);
+  if (overlap) {
+    throw new ZipError(`${overlap.path}: damaged ZIP archive (entries overlap)`);
+  }
+  const total = entries.reduce((sum, entry) => sum + entry.size, 0);
+  if (total > MAX_UNPACKED_SIZE) {
+    throw new ZipError(`The archive unpacks to ${total} bytes, more than the ${MAX_UNPACKED_SIZE} this app reads`);
+  }
 }
 
 /** Files of a ZIP archive in central directory order; folder entries are left out. */
@@ -123,13 +176,23 @@ export async function readZip(bytes: Uint8Array): Promise<ZipFile[]> {
   const end = findEndRecord(view);
   const count = view.getUint16(end + 10, true);
   let at = view.getUint32(end + 16, true);
-  const files: ZipFile[] = [];
+  const entries: Entry[] = [];
   for (let i = 0; i < count; i++) {
-    const file = await readEntry(bytes, view, at);
-    if (file) {
-      files.push(file);
+    const entry = readEntry(bytes, view, at);
+    if (entry) {
+      entries.push(entry);
     }
     at += 46 + view.getUint16(at + 28, true) + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
+  }
+  checkLayout(entries);
+  const files: ZipFile[] = [];
+  for (const entry of entries) {
+    const raw = bytes.subarray(entry.start, entry.end);
+    const data = entry.method === STORED ? raw.slice() : await inflate(raw, entry.size, entry.path);
+    if (data.length !== entry.size || crc32(data) !== entry.crc) {
+      throw new ZipError(`${entry.path}: damaged ZIP archive (checksum mismatch)`);
+    }
+    files.push({ path: entry.path, bytes: data });
   }
   return files;
 }

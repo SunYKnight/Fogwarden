@@ -53,3 +53,13 @@ export function childEntries(dir: string, keys: Iterable<string>): DirEntry[] {
   }
   return [...entries].map(([name, isDir]) => ({ name, isDir })).sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/** Whether a file read back holds exactly the bytes written. */
+export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((byte, i) => byte === b[i]);
+}
+
+/** `name` as a file name: characters outside letters, digits, `.`, `-`, `_` and spaces become `_`. */
+export function safeFileName(name: string): string {
+  return name.replace(/[^\w.\- ]+/g, '_');
+}

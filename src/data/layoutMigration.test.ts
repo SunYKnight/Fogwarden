@@ -129,4 +129,18 @@ describe('migrateDataRoot', () => {
     const mapProblems = (await repository.list('map')).problems.map((p) => p.path);
     expect(mapProblems).toContain('library/maps/m2/map.json');
   });
+
+  it('redoes a map and campaign conversion cut short before the old JSON was replaced', async () => {
+    const { storage, field } = oldDataRoot();
+    const files = storage.files.data;
+    // A crash after the first writes: new files exist, the JSON is still v1.
+    files.set('library/maps/m1/terrain.png', new Uint8Array([0]));
+    files.set('campaigns/c1/notes.md', '');
+    const repository = new Repository(storage);
+
+    expect(await migrateDataRoot(repository)).toEqual([]);
+    expect(HeightField.fromMap(await repository.load('map', { area: 'data', id: 'm1' })).data).toEqual(field.data);
+    const { campaigns } = await repository.listCampaigns();
+    expect(campaigns.map((c) => [c.version, c.notes])).toEqual([[CAMPAIGN_SCHEMA_VERSION, '# Notes']]);
+  });
 });

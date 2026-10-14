@@ -6,13 +6,15 @@ import {
   type SoundLibraryFile,
   type SoundSource,
 } from '@/core/atmosphere/soundLibrary';
+import { errorMessage } from '@/core/errors';
 import type { StorageArea } from '@/core/model';
 import { MY_CONTENT, MY_CONTENT_SOURCE } from './packs';
 import { DataError, type Repository } from './repository';
+import { safeFileName } from './storage';
 
 const SOUNDS_DIR = 'sounds';
 /** The data root's sound folder: imported audio files and the user's `sounds.json`. */
-export const USER_SOUNDS_DIR = `${MY_CONTENT_SOURCE.root}/${SOUNDS_DIR}`;
+const USER_SOUNDS_DIR = `${MY_CONTENT_SOURCE.root}/${SOUNDS_DIR}`;
 const SOUNDS_FILE = 'sounds.json';
 
 async function readSoundFile(repository: Repository, area: StorageArea, dir: string): Promise<SoundLibraryFile> {
@@ -22,7 +24,7 @@ async function readSoundFile(repository: Repository, area: StorageArea, dir: str
   try {
     file = text === null ? file : soundLibraryFileSchema.parse(JSON.parse(text));
   } catch (error) {
-    throw new DataError(error instanceof Error ? error.message : String(error), area, path);
+    throw new DataError(errorMessage(error), area, path);
   }
   return file;
 }
@@ -52,7 +54,7 @@ export function saveMySounds(repository: Repository, file: SoundLibraryFile): Pr
 
 /** Copies an audio file into the user's sound folder under a free name; returns that name. */
 export async function importSoundFile(repository: Repository, file: File): Promise<string> {
-  const safe = file.name.replace(/[^\w.\- ]+/g, '_');
+  const safe = safeFileName(file.name);
   const dot = safe.lastIndexOf('.');
   const [stem, extension] = dot > 0 ? [safe.slice(0, dot), safe.slice(dot)] : [safe, ''];
   let name = safe;

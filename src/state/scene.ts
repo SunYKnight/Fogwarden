@@ -7,7 +7,7 @@ import { useCalendarStore } from './calendarStore';
 import { useEncounterStore } from './encounterStore';
 
 /** Time of day and weather of a scene; null without an encounter. */
-export function dmScene(atmosphere: Atmosphere | null, calendar: Calendar | null): PlayerScene | null {
+function dmScene(atmosphere: Atmosphere | null, calendar: Calendar | null): PlayerScene | null {
   return (
     atmosphere && {
       minute: sceneMinute(atmosphere, calendar ? minuteOfDay(calendar) : null),

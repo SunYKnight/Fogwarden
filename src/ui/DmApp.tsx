@@ -1,9 +1,12 @@
 import { isTauri } from '@tauri-apps/api/core';
+import { getCurrentWindow, type CloseRequestedEvent } from '@tauri-apps/api/window';
 import { useEffect, useState, type ReactNode } from 'react';
 import { PARTY_VIEW } from '@/core/model';
 import { startDmSound } from '@/sound/dmSound';
 import { useAppStore, type Route } from '@/state/appStore';
-import { startAutosave } from '@/state/autosave';
+import { flushEncounter, flushMap, startAutosave } from '@/state/autosave';
+import { useEditorStore } from '@/state/editorStore';
+import { useEncounterStore } from '@/state/encounterStore';
 import { startCalendarSync } from '@/state/calendarStore';
 import { startJournalRecorder } from '@/state/journalRecorder';
 import { useLanStore } from '@/state/lanStore';
@@ -45,7 +48,7 @@ function Page({ route }: { route: Route }) {
       page = <MapEditorPage mapRef={route.map} />;
       break;
     case 'compendium':
-      page = <CompendiumPage tab={route.tab} />;
+      page = <CompendiumPage tab={route.tab} entryId={route.entryId} />;
       break;
     case 'campaigns':
       page = <CampaignsPage campaignId={route.campaignId} />;
@@ -67,6 +70,34 @@ function Page({ route }: { route: Route }) {
       break;
   }
   return page;
+}
+
+// The window closes once this resolves; a declined leave guard or a failed
+// save keeps it open, so no edit is lost without the DM seeing why.
+async function confirmClose(event: CloseRequestedEvent): Promise<void> {
+  const { leaveGuard, reportError } = useAppStore.getState();
+  try {
+    const leave = leaveGuard ? await leaveGuard() : true;
+    if (leave) {
+      await Promise.all([flushMap(), flushEncounter()]);
+    } else {
+      event.preventDefault();
+    }
+  } catch (error) {
+    event.preventDefault();
+    reportError(error);
+  }
+}
+
+// A browser tab cannot be held open until a save ends: the browser asks
+// whether to leave while edits are unsaved, and the save starts meanwhile.
+function warnUnsaved(event: BeforeUnloadEvent): void {
+  const editor = useEditorStore.getState();
+  const encounter = useEncounterStore.getState();
+  if (editor.revision !== editor.savedRevision || encounter.revision !== encounter.savedRevision) {
+    event.preventDefault();
+    Promise.all([flushMap(), flushEncounter()]).catch(useAppStore.getState().reportError);
+  }
 }
 
 export function DmApp() {
@@ -108,12 +139,23 @@ export function DmApp() {
       .then(() => useLibraryStore.getState().refreshAll())
       .then(() => setReady(true), reportError);
     const stop = startAutosave();
-    const flush = () => void stop();
-    window.addEventListener('beforeunload', flush);
     return () => {
-      window.removeEventListener('beforeunload', flush);
       stop().catch(reportError);
     };
+  }, [reportError]);
+
+  useEffect(() => {
+    let stopListening: () => void;
+    if (isTauri()) {
+      const listening = getCurrentWindow().onCloseRequested(confirmClose);
+      stopListening = () => {
+        listening.then((unlisten) => unlisten(), reportError);
+      };
+    } else {
+      window.addEventListener('beforeunload', warnUnsaved);
+      stopListening = () => window.removeEventListener('beforeunload', warnUnsaved);
+    }
+    return stopListening;
   }, [reportError]);
 
   return (
@@ -129,12 +171,15 @@ export function DmApp() {
         )}
       </main>
       <ToastHost />
-      <ConfirmHost />
+      {/* A dialog that throws (e.g. a stat block preview) must not blank the window. */}
+      <ErrorBoundary resetKey={JSON.stringify(route)}>
+        <ConfirmHost />
+        <CompendiumDialogHost />
+        <NewMapWizardHost />
+        <CommandPalette />
+      </ErrorBoundary>
       <ContextMenuHost />
       <ShortcutHost />
-      <CompendiumDialogHost />
-      <NewMapWizardHost />
-      <CommandPalette />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
   type Campaign,
   type Creature,
 } from '@/core/model';
+import { errorMessage } from '@/core/errors';
 import { HeightField } from '@/core/terrain/heightfield';
 import { decodeHeightmap } from '@/core/terrain/heightmap';
 import { migrate } from './migrations';
@@ -25,6 +26,7 @@ import {
   type PictureKind,
   type Repository,
 } from './repository';
+import { sameBytes } from './storage';
 
 /**
  * One-time conversion of a data root written before the open file layout: creature JSON → stat block text
@@ -46,10 +48,6 @@ const portraitIndexSchema = z.object({
 
 type Pictures = Pick<Creature, PictureKind>;
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /** JSON with object keys sorted, so equal documents compare equal whatever their key order. */
 function canonical(value: unknown): string {
   return JSON.stringify(value, (_key, item: unknown) =>
@@ -63,10 +61,6 @@ function requireSame(actual: unknown, expected: unknown, what: string): void {
   if (canonical(actual) !== canonical(expected)) {
     throw new Error(`${what} reads back differently than the old document`);
   }
-}
-
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
-  return a.length === b.length && a.every((byte, i) => byte === b[i]);
 }
 
 class LayoutMigration {
@@ -259,16 +253,13 @@ export async function migrateDataRoot(repository: Repository): Promise<LoadProbl
   for (const [id, pictures] of Object.entries(index).filter(([id]) => !creatureIds.includes(id))) {
     await run.convert(`${CREATURES}/${id}`, () => run.portrait(id, pictures));
   }
-  // Folders of the current layout always hold terrain.png and notes.md.
+  // Every start reads each version: a conversion cut short before its last
+  // write (the v1 JSON) is redone, however many new files it wrote.
   for (const map of (await storage.list('data', 'library/maps')).filter((e) => e.isDir)) {
-    if (!(await storage.exists('data', `library/maps/${map.name}/terrain.png`))) {
-      await run.convert(`library/maps/${map.name}/map.json`, () => run.map(map.name));
-    }
+    await run.convert(`library/maps/${map.name}/map.json`, () => run.map(map.name));
   }
   for (const campaign of (await storage.list('data', 'campaigns')).filter((e) => e.isDir)) {
-    if (!(await storage.exists('data', campaignNotesPath(campaign.name)))) {
-      await run.convert(campaignPath(campaign.name), () => run.campaign(campaign.name));
-    }
+    await run.convert(campaignPath(campaign.name), () => run.campaign(campaign.name));
     const encounters = (await storage.list('data', `campaigns/${campaign.name}/encounters`)).filter(
       (e) => !e.isDir && e.name.endsWith('.json'),
     );

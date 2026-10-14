@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { errorMessage } from '@/core/errors';
+import { WINDOWS_RESERVED } from '@/core/import/ids';
 import {
   campaignFileSchema,
   encounterFileSchema,
@@ -14,17 +16,16 @@ import {
 import { readZip, writeZip, type ZipFile } from '@/core/zip';
 import { version as APP_VERSION } from '../../package.json';
 import { migrate } from './migrations';
-import { sameBytes } from './packArchive';
 import { mapAssetRefs, MY_CONTENT, MY_CONTENT_SOURCE, remapJsonAssets, type LibrarySource } from './packs';
 import { campaignPath, KIND_LAYOUTS, libraryDir, libraryDocPath, type Repository } from './repository';
-import type { Storage } from './storage';
+import { sameBytes, type Storage } from './storage';
 
 /**
  * Campaign archives: a `.zip` with this manifest at its top and the campaign's files under the paths they have
  * in the data root (`campaigns/<id>/…`), plus the My content documents and files the campaign refers to
  * (`library/…`). Pack content is only named in the manifest: the importer installs those packs.
  */
-export const CAMPAIGN_MANIFEST_FILE = 'fogwarden-campaign.json';
+const CAMPAIGN_MANIFEST_FILE = 'fogwarden-campaign.json';
 export const CAMPAIGN_ARCHIVE_EXTENSION = '.fogwarden-campaign.zip';
 const ARCHIVE_FORMAT = 1;
 /** Library kinds encounters refer to by id; maps last, so their files see where the others went. */
@@ -37,8 +38,15 @@ const ENCOUNTER_FILE = /^encounters\/[^/]+\/encounter\.json$/;
 const STAGING_DIR = 'campaigns.importing';
 const CAMPAIGN_FILE = 'campaign.json';
 
-/** Ids become folder and file names, so they must not climb out of their folder. */
-const fileIdSchema = idSchema.regex(/^[^./\\][^/\\]*$/, 'Ids are plain file names');
+/**
+ * Ids become folder and file names, so they must not climb out of their folder, and Windows must store them as
+ * written: no stream `:`, no trailing dot or space it drops, no device name it refuses.
+ */
+const fileIdSchema = idSchema
+  .regex(/^[^./\\][^/\\]*$/, 'Ids are plain file names')
+  .regex(/^[^<>:"|?*\p{Cc}]*$/u, 'Ids must not hold < > : " | ? * or control characters')
+  .regex(/[^. ]$/, 'Ids must not end in a dot or space')
+  .refine((id) => !WINDOWS_RESERVED.test(id.toLowerCase()), 'Ids must not be a Windows device name');
 
 const manifestSchema = z.object({
   format: z.literal(ARCHIVE_FORMAT),
@@ -83,10 +91,6 @@ export interface CampaignImport {
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /** Pretty-printed like every document. */
 function formatJson(doc: unknown): string {
@@ -422,22 +426,20 @@ export async function importCampaign(
     const relative = path.slice(fromRoot.length);
     staged.push({ path: relative, bytes: placedCampaignFile(relative, bytes, placement) });
   }
-  // Outside `campaigns/`, so no listing shows a half-written campaign.
+  // Outside `campaigns/`, so no listing shows a half-written campaign. It
+  // stays when the copy fails: then it is the only complete copy.
   const staging = `${STAGING_DIR}/${id}`;
   await storage.remove(STAGING_DIR);
-  try {
-    for (const file of staged) {
-      const path = `${staging}/${file.path}`;
-      await storage.writeBytes(path, file.bytes);
-      if (!sameBytes(await storage.readBytes('data', path), file.bytes)) {
-        throw new Error(`${file.path} was not written intact`);
-      }
+  for (const file of staged) {
+    const path = `${staging}/${file.path}`;
+    await storage.writeBytes(path, file.bytes);
+    if (!sameBytes(await storage.readBytes('data', path), file.bytes)) {
+      throw new Error(`${file.path} was not written intact`);
     }
-    await storage.remove(root);
-    await storage.copy('data', staging, root);
-  } finally {
-    await storage.remove(STAGING_DIR);
   }
+  await storage.remove(root);
+  await storage.copy('data', staging, root);
+  await storage.remove(STAGING_DIR);
   const installed = new Set(sources.map((s) => s.pack));
   return { id, name, missingPacks: manifest.packs.filter((p) => !installed.has(p.id)) };
 }

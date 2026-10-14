@@ -53,7 +53,7 @@ export class MemoryStorage implements Storage {
     return Promise.resolve();
   }
 
-  copy(area: StorageArea, from: string, to: string): Promise<void> {
+  async copy(area: StorageArea, from: string, to: string): Promise<void> {
     const matches = [...this.files[area]].filter(([k]) => k === from || k.startsWith(`${from}/`));
     if (matches.length === 0) {
       throw new StorageError('Nothing to copy', from);
@@ -61,7 +61,6 @@ export class MemoryStorage implements Storage {
     for (const [key, value] of matches) {
       this.files.data.set(to + key.slice(from.length), value);
     }
-    return Promise.resolve();
   }
 
   assetUrl(ref: AssetRef): Promise<string> {

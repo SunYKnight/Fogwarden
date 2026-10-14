@@ -12,13 +12,16 @@ function elementsFile(withLantern: boolean): string {
       <description><p>Light.</p></description><setters><set name="category">Adventuring Gear</set></setters>
     </element>`;
   return `<elements>
-    <element name="Fighter" type="Class" source="T" id="ID_T_CLASS_FIGHTER"><setters><set name="hd">d10</set></setters></element>
+    <element name="Fighter" type="Class" source="T" id="ID_T_CLASS_FIGHTER">
+      <setters><set name="hd">d10</set></setters>
+    </element>
     <element name="Rope" type="Item" source="T" id="ID_T_ITEM_ROPE">
       <description><p>Rope.</p></description><setters><set name="category">Adventuring Gear</set></setters>
     </element>
     ${withLantern ? lantern : ''}
     <element name="Ring of Luck" type="Magic Item" source="T" id="ID_T_MAGIC_ITEM_RING">
-      <description><p>Lucky.</p></description><setters><set name="type">Ring</set><set name="rarity">Rare</set></setters>
+      <description><p>Lucky.</p></description>
+      <setters><set name="type">Ring</set><set name="rarity">Rare</set></setters>
     </element>
     <element name="Zap" type="Spell" source="T" id="ID_T_SPELL_ZAP">
       <supports>Wizard</supports><description><p>Zap.</p></description>
@@ -30,14 +33,17 @@ function elementsFile(withLantern: boolean): string {
 function characterFile(level: number, portrait: string): string {
   return `<character>
     <display-properties><name>Selana</name><class>Fighter</class><level>${level}</level>
-      <portrait><local>${FOLDER.replace(/\//g, '\\')}\\portraits\\${portrait}</local><base64>iVBORw==</base64></portrait>
+      <portrait><local>${FOLDER.replace(/\//g, '\\')}\\portraits\\${portrait}</local>
+        <base64>iVBORw==</base64></portrait>
     </display-properties>
     <build>
       <abilities><strength>16</strength><dexterity>10</dexterity><constitution>14</constitution>
         <intelligence>10</intelligence><wisdom>10</wisdom><charisma>10</charisma></abilities>
       <elements>
         <element type="Option" id="ID_INTERNAL_OPTION_ALLOW_AVERAGE_HP" />
-        <element type="Level" name="1" id="ID_LEVEL_1"><element type="Class" registered="ID_T_CLASS_FIGHTER" /></element>
+        <element type="Level" name="1" id="ID_LEVEL_1">
+          <element type="Class" registered="ID_T_CLASS_FIGHTER" />
+        </element>
       </elements>
     </build>
   </character>`;

@@ -1,3 +1,4 @@
+import { errorMessage } from '@/core/errors';
 import {
   AURORA_ITEM_TYPES,
   AURORA_MAGIC_ITEM,
@@ -14,7 +15,7 @@ import type { AssetRef } from '@/core/model';
 import type { Spell } from '@/core/spells';
 import { PACKS_DIR, type PackManifest } from './packs';
 import { KIND_LAYOUTS, PORTRAITS_DIR, type Repository } from './repository';
-import type { DirEntry } from './storage';
+import { safeFileName, type DirEntry } from './storage';
 
 /**
  * Aurora Builder import: the builder's documents folder (`custom/**\/*.xml` element files, `*.dnd5e`
@@ -43,7 +44,7 @@ export const AURORA_PACK: PackManifest = {
 
 const PICTURE = /\.(png|jpe?g|webp)$/i;
 
-export class AuroraFolderError extends Error {
+class AuroraFolderError extends Error {
   constructor(folder: string) {
     super(`"${folder}" holds no Aurora Builder data: expected a custom folder, a portraits folder or .dnd5e files`);
     this.name = 'AuroraFolderError';
@@ -92,15 +93,6 @@ export interface AuroraReport {
 /** The distinct, sorted source books of `docs` (Aurora's `source` attribute). */
 export function auroraBooks(docs: readonly { source: string }[]): string[] {
   return [...new Set(docs.map((d) => d.source).filter((s) => s !== ''))].sort();
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-/** File name a portrait gets in the pack: characters outside letters, digits, `.`, `-`, `_` and spaces become `_`. */
-export function portraitFileName(name: string): string {
-  return name.replace(/[^\w.\- ]+/g, '_');
 }
 
 async function xmlFiles(source: AuroraSource, dir: string): Promise<string[]> {
@@ -189,7 +181,7 @@ export async function runAuroraImport(
   };
   const portraits = new Map<string, AssetRef>();
   for (const name of portraitNames) {
-    const ref: AssetRef = { area: 'data', path: `${portraitDir}/${portraitFileName(name)}` };
+    const ref: AssetRef = { area: 'data', path: `${portraitDir}/${safeFileName(name)}` };
     await repository.storage.writeBytes(ref.path, await source.readBytes(`${plan.folder}/portraits/${name}`));
     portraits.set(name.toLowerCase(), ref);
     step();

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { MapPoint } from '@/core/model';
 
 /** How long a ping's ring stays on the map. */
-export const PING_MS = 3000;
+const PING_MS = 3000;
 
 export interface Ping {
   id: number;

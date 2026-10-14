@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { create } from 'zustand';
+import { errorMessage } from '@/core/errors';
 import type { AssetRef } from '@/core/model';
 import { fetchRelaySession, pushRelayLinks, relayBaseUrl, RelayTransport, RelayUploader } from '@/sync/relayClient';
 import { linkTable, useViewLinksStore } from '@/sync/views';
@@ -20,10 +21,6 @@ interface RelayState {
   disconnect(): void;
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 async function readAsset(ref: AssetRef): Promise<Uint8Array<ArrayBuffer>> {
   const url = await useAppStore.getState().repository.storage.assetUrl(ref);
   const response = await fetch(url);
@@ -41,9 +38,14 @@ async function readFrontendFile(path: string): Promise<Uint8Array<ArrayBuffer>> 
 
 export const useRelayStore = create<RelayState>((set, get) => {
   let unsubscribers: (() => void)[] = [];
+  // Disconnect counts up, so a connect still uploading knows it was cancelled.
+  let attempt = 0;
+  // Pushes run one after another, each sending the table current when it
+  // starts, so an older table never lands after a newer one.
+  let pushes: Promise<void> = Promise.resolve();
 
   const reportError = (error: unknown) => {
-    set({ lastError: errorText(error) });
+    set({ lastError: errorMessage(error) });
     useAppStore.getState().reportError(error);
   };
 
@@ -55,6 +57,7 @@ export const useRelayStore = create<RelayState>((set, get) => {
     transport: null,
     connect: async (url, dmKey) => {
       get().disconnect();
+      const mine = attempt;
       set({ link: 'connecting', lastError: null });
       try {
         const baseUrl = relayBaseUrl(url);
@@ -62,27 +65,35 @@ export const useRelayStore = create<RelayState>((set, get) => {
         const uploader = new RelayUploader(baseUrl, dmKey, readAsset);
         await uploader.uploadBundle(readFrontendFile);
         await pushRelayLinks(baseUrl, dmKey, linkTable(useViewLinksStore.getState()));
-        const transport = new RelayTransport(baseUrl, dmKey, uploader, reportError);
-        unsubscribers = [
-          transport.watchConnection((open) => {
-            if (get().transport === transport) {
-              set({ link: open ? 'online' : 'reconnecting' });
-            }
-          }),
-          transport.watchStatus(({ players }) => set({ players })),
-          useViewLinksStore.subscribe((state, previous) => {
-            if (state.tokens !== previous.tokens || state.views !== previous.views) {
-              pushRelayLinks(baseUrl, dmKey, linkTable(state)).catch(reportError);
-            }
-          }),
-        ];
-        set({ transport, players: session.players, baseUrl });
+        if (mine === attempt) {
+          const transport = new RelayTransport(baseUrl, dmKey, uploader, reportError);
+          const pushLinks = () => {
+            pushes = pushes
+              .then(() => pushRelayLinks(baseUrl, dmKey, linkTable(useViewLinksStore.getState())))
+              .catch(reportError);
+          };
+          unsubscribers = [
+            transport.watchConnection((open) => {
+              if (get().transport === transport) {
+                set({ link: open ? 'online' : 'reconnecting' });
+              }
+            }),
+            transport.watchStatus(({ players }) => set({ players })),
+            useViewLinksStore.subscribe((state, previous) => {
+              if (state.tokens !== previous.tokens || state.linked !== previous.linked) pushLinks();
+            }),
+          ];
+          set({ transport, players: session.players, baseUrl });
+        }
       } catch (error) {
-        set({ link: 'off', lastError: errorText(error) });
+        if (mine === attempt) {
+          set({ link: 'off', lastError: errorMessage(error) });
+        }
         throw error;
       }
     },
     disconnect: () => {
+      attempt++;
       get().transport?.close();
       for (const unsubscribe of unsubscribers) {
         unsubscribe();

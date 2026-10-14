@@ -99,7 +99,9 @@ export function spawnCombatant(creature: Creature, ref: DocRef, options: SpawnOp
     senses: { ...creature.senses },
     visionSource: options.side === 'player',
     hiddenFromPlayers: false,
-    token: creature.token ?? creature.image,
+    // Pictures come from the creature, looked up live (`combatantToken`); a
+    // token here would override them and miss their later changes.
+    token: null,
     notes: '',
     ...freshCombatState(creature.level),
   };
@@ -198,15 +200,20 @@ export function moveCombatant(encounter: Encounter, from: number, to: number): v
   }
 }
 
-/** The next combatant in order takes over when the current one is removed. */
+/** The next combatant in order takes over when the current one is removed, after the last a new round's first. */
 export function removeCombatant(encounter: Encounter, id: string): void {
   const index = encounter.combatants.findIndex((c) => c.id === id);
   if (index >= 0) {
     const current = currentCombatant(encounter)?.id;
     encounter.combatants.splice(index, 1);
-    const shift = index < encounter.turnIndex ? 1 : 0;
-    const last = Math.max(0, encounter.combatants.length - 1);
-    encounter.turnIndex = Math.min(last, encounter.turnIndex - shift);
+    if (current === id && index === encounter.combatants.length && index > 0) {
+      encounter.round += 1;
+      encounter.turnIndex = 0;
+    } else {
+      const shift = index < encounter.turnIndex ? 1 : 0;
+      const last = Math.max(0, encounter.combatants.length - 1);
+      encounter.turnIndex = Math.min(last, encounter.turnIndex - shift);
+    }
     if (current === id) markTurnStart(encounter);
   }
 }

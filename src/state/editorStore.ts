@@ -27,7 +27,7 @@ interface EditorState {
   terrain: HeightField | null;
   /** Incremented on every terrain change so meshes rebuild without deep comparisons. */
   terrainVersion: number;
-  /** Incremented on every document change; autosave watches it. */
+  /** Incremented on every document change; autosave watches it. Never reset, like the encounter's. */
   revision: number;
   savedRevision: number;
   history: History;
@@ -83,6 +83,15 @@ interface EditorState {
 
 let strokeStart: Float32Array | null = null;
 
+// Sliders and colour pickers edit once per input event; repeats of an edit to
+// the same fields within this time join its undo step.
+const MERGE_MS = 1000;
+
+type PatchEntry = Extract<HistoryEntry, { kind: 'patches' }>;
+
+/** The newest `edit` step; `paths` lists the fields its last edit touched. */
+let lastEdit: { entry: PatchEntry; paths: string; at: number } | null = null;
+
 function allLayers(): Record<LayerId, boolean> {
   return Object.fromEntries(LAYERS.map((l) => [l, true])) as Record<LayerId, boolean>;
 }
@@ -116,12 +125,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   open: (map) => {
     get().history.clear();
-    set({
+    set((s) => ({
       map,
       terrain: HeightField.fromMap(map),
-      terrainVersion: get().terrainVersion + 1,
-      revision: 0,
-      savedRevision: 0,
+      terrainVersion: s.terrainVersion + 1,
+      savedRevision: s.revision,
       canUndo: false,
       canRedo: false,
       activeTool: 'select',
@@ -130,7 +138,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       pointer: null,
       settingsOpen: false,
       exportOpen: false,
-    });
+    }));
   },
 
   close: () => {
@@ -155,7 +163,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
     const [next, patches, inverse] = produceWithPatches(map, recipe);
     if (patches.length > 0) {
-      history.push({ kind: 'patches', label, patches, inverse });
+      const at = Date.now();
+      const paths = JSON.stringify(patches.map((p) => p.path));
+      const last = lastEdit;
+      const repeat =
+        last !== null &&
+        history.newest === last.entry &&
+        !history.canRedo &&
+        last.entry.label === label &&
+        last.paths === paths &&
+        at - last.at < MERGE_MS;
+      if (repeat) {
+        last.entry.patches.push(...patches);
+        last.entry.inverse.unshift(...inverse);
+        last.at = at;
+      } else {
+        const entry: PatchEntry = { kind: 'patches', label, patches, inverse };
+        history.push(entry);
+        lastEdit = { entry, paths, at };
+      }
       set((s) => ({ map: next, revision: s.revision + 1, canUndo: true, canRedo: false }));
     }
   },
@@ -226,7 +252,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     return { ...map, terrain: { ...map.terrain, heights: terrain.encode() } };
   },
 
-  markSaved: (revision) => set({ savedRevision: revision }),
+  markSaved: (revision) => set((s) => ({ savedRevision: Math.max(s.savedRevision, revision) })),
 }));
 
 function applyHistoryEntry(entry: HistoryEntry | undefined, direction: 'undo' | 'redo'): void {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMap } from '@/core/model';
 import { HeightField } from '@/core/terrain/heightfield';
 import { useEditorStore } from './editorStore';
@@ -49,6 +49,53 @@ describe('editor history', () => {
     useEditorStore.getState().undo();
     useEditorStore.getState().edit('Rename', (d) => void (d.name = 'b'));
     expect(useEditorStore.getState().canRedo).toBe(false);
+  });
+
+  describe('repeated edits', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    function setOpacity(opacity: number): void {
+      useEditorStore.getState().edit('Grid opacity', (d) => void (d.grid.opacity = opacity));
+    }
+
+    it('joins quick edits of the same field into one undo step', () => {
+      const before = useEditorStore.getState().map!.grid.opacity;
+      setOpacity(0.1);
+      vi.advanceTimersByTime(300);
+      setOpacity(0.2);
+      vi.advanceTimersByTime(300);
+      setOpacity(0.3);
+      useEditorStore.getState().undo();
+      expect(useEditorStore.getState().map!.grid.opacity).toBe(before);
+      expect(useEditorStore.getState().canUndo).toBe(false);
+      useEditorStore.getState().redo();
+      expect(useEditorStore.getState().map!.grid.opacity).toBe(0.3);
+    });
+
+    it('keeps separate steps after a pause, for other fields and after an undo', () => {
+      setOpacity(0.1);
+      vi.advanceTimersByTime(1500);
+      setOpacity(0.2);
+      useEditorStore.getState().edit('Grid opacity', (d) => void (d.name = 'renamed'));
+      useEditorStore.getState().undo();
+      setOpacity(0.4);
+      useEditorStore.getState().undo();
+      expect(useEditorStore.getState().map!.grid.opacity).toBe(0.2);
+      useEditorStore.getState().undo();
+      expect(useEditorStore.getState().map!.grid.opacity).toBe(0.1);
+    });
+  });
+
+  it('keeps counting revisions when another map opens', () => {
+    useEditorStore.getState().edit('Rename', (d) => void (d.name = 'a'));
+    const revision = useEditorStore.getState().revision;
+    openSmallMap();
+    expect(useEditorStore.getState().revision).toBe(revision);
+    expect(useEditorStore.getState().savedRevision).toBe(revision);
+    useEditorStore.getState().edit('Rename', (d) => void (d.name = 'b'));
+    useEditorStore.getState().markSaved(revision);
+    expect(useEditorStore.getState().savedRevision).not.toBe(useEditorStore.getState().revision);
   });
 
   it('saves the live terrain, not the heights stored at open time', () => {

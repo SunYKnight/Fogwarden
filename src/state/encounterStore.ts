@@ -18,7 +18,10 @@ interface EncounterState {
   /** Map the encounter plays on; read-only during play (door states live in the encounter). */
   map: BattleMap | null;
   terrain: HeightField | null;
-  /** Incremented on every encounter change; autosave and player sync watch it. */
+  /**
+   * Incremented on every encounter change; autosave and player sync watch it. Never reset, so a
+   * late save of the previous encounter cannot mark this one's edits saved.
+   */
   revision: number;
   savedRevision: number;
   selectedCombatantId: string | null;
@@ -48,16 +51,15 @@ export const useEncounterStore = create<EncounterState>((set, get) => ({
 
   open: (encounter, map) => {
     history.clear();
-    set({
+    set((s) => ({
       encounter,
       map,
       terrain: map ? HeightField.fromMap(map) : null,
-      revision: 0,
-      savedRevision: 0,
+      savedRevision: s.revision,
       selectedCombatantId: null,
       canUndo: false,
       canRedo: false,
-    });
+    }));
   },
 
   close: () => {
@@ -85,7 +87,7 @@ export const useEncounterStore = create<EncounterState>((set, get) => ({
   redo: () => applyHistoryStep('redo'),
 
   select: (selectedCombatantId) => set({ selectedCombatantId }),
-  markSaved: (revision) => set({ savedRevision: revision }),
+  markSaved: (revision) => set((s) => ({ savedRevision: Math.max(s.savedRevision, revision) })),
 }));
 
 function applyHistoryStep(direction: 'undo' | 'redo'): string | null {

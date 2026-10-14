@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { newJournalEntry } from '@/core/campaign/journal';
 import { formatCreatureFile } from '@/core/import/creatureFile';
 import {
@@ -10,7 +11,7 @@ import {
   type AssetRef,
   type Encounter,
 } from '@/core/model';
-import { writeZip } from '@/core/zip';
+import { readZip, writeZip } from '@/core/zip';
 import { spawnCombatant } from '@/state/encounterActions';
 import { AURORA_PACK } from './auroraImport';
 import { CampaignExistsError, exportCampaign, importCampaign, readCampaignZip } from './campaignArchive';
@@ -198,5 +199,19 @@ describe('campaign archives', () => {
   it('rejects archives that are no campaign archive', async () => {
     const zip = await writeZip([{ path: 'pack.json', bytes: new TextEncoder().encode('{}') }]);
     await expect(readCampaignZip(zip)).rejects.toThrow('no Fogwarden campaign archive');
+  });
+
+  it.each(['Con', 'red-hand.', 'red-hand ', 'red:hand'])('rejects the campaign id "%s"', async (id) => {
+    const manifestSchema = z.looseObject({ campaign: z.looseObject({}) });
+    const files = await readZip(await sampleCampaign());
+    const edited = files.map(({ path, bytes }) => {
+      let changed = bytes;
+      if (path === 'fogwarden-campaign.json') {
+        const manifest = manifestSchema.parse(JSON.parse(new TextDecoder().decode(bytes)));
+        changed = new TextEncoder().encode(JSON.stringify({ ...manifest, campaign: { ...manifest.campaign, id } }));
+      }
+      return { path, bytes: changed };
+    });
+    await expect(readCampaignZip(await writeZip(edited))).rejects.toThrow('is not valid');
   });
 });

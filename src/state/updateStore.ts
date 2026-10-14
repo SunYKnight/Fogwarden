@@ -1,6 +1,7 @@
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { create } from 'zustand';
+import { errorMessage } from '@/core/errors';
 import { autoCheckDecision } from '@/core/updates';
 import { useAppStore } from './appStore';
 import { flushEncounter, flushMap } from './autosave';
@@ -32,10 +33,9 @@ async function checkRelease(): Promise<UpdateStatus> {
     pending = await check();
     status = pending ? { kind: 'available', version: pending.version, notes: pending.body ?? '' } : { kind: 'current' };
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
     status = {
       kind: 'failed',
-      message: `Could not check for updates (offline, or no release published yet): ${detail}`,
+      message: `Could not check for updates (offline, or no release published yet): ${errorMessage(error)}`,
     };
   }
   return status;
@@ -75,8 +75,7 @@ export const useUpdateStore = create<UpdateState>((set) => ({
       });
       await relaunch();
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      set({ status: { kind: 'failed', message: `Update not installed: ${detail}` } });
+      set({ status: { kind: 'failed', message: `Update not installed: ${errorMessage(error)}` } });
     }
   },
 }));

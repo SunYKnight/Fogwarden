@@ -5,7 +5,7 @@ import type { AssetRef } from '@/core/model';
 import { PACK_FILE, PACKS_DIR, type PackManifest } from './packs';
 import type { Repository } from './repository';
 
-export const POLY_HAVEN_PACK: PackManifest = {
+const POLY_HAVEN_PACK: PackManifest = {
   id: 'poly-haven',
   name: 'Poly Haven models',
   version: '1',
@@ -168,15 +168,21 @@ export async function downloadPolyHaven(
     }
     const document = gltfJsonSchema.parse(await (await fetchOk(model.gltfUrl)).json());
     const variants = model.set ? splitGltfVariants(document) : [{ name: model.id, document }];
-    const written = new Set<string>();
+    const simplified = [];
     for (const variant of variants) {
-      const files = await simplifyVariant(variant, resources, TRIANGLE_BUDGET);
-      // The .gltf goes last: its presence marks the model as downloaded.
-      for (const [path, bytes] of Object.entries(files.resources).filter(([path]) => !written.has(path))) {
+      simplified.push({ name: variant.name, files: await simplifyVariant(variant, resources, TRIANGLE_BUDGET) });
+    }
+    const written = new Set<string>();
+    for (const [path, bytes] of simplified.flatMap(({ files }) => Object.entries(files.resources))) {
+      if (!written.has(path)) {
         await storage.writeBytes(`${dir}/${path}`, bytes);
         written.add(path);
       }
-      await storage.writeText(`${dir}/${variant.name}.gltf`, files.gltf);
+    }
+    // The .gltf files go last, all of them: one present marks the model as
+    // downloaded, so none may appear before every variant's resources.
+    for (const { name, files } of simplified) {
+      await storage.writeText(`${dir}/${name}.gltf`, files.gltf);
     }
   }
   await storage.writeText(`${PACKS_DIR}/${POLY_HAVEN_PACK.id}/LICENSE.md`, licenseText(plan));

@@ -26,11 +26,15 @@ interface LanState {
 
 export const useLanStore = create<LanState>((set, get) => {
   let unsubscribers: (() => void)[] = [];
+  // Pushes run one after another, each sending the table current when it
+  // starts, so an older table never lands after a newer one.
+  let pushes: Promise<void> = Promise.resolve();
 
-  const pushLinks = () =>
-    invoke<void>('lan_set_links', { links: linkTable(useViewLinksStore.getState()) }).catch(
-      useAppStore.getState().reportError,
-    );
+  const pushLinks = () => {
+    pushes = pushes
+      .then(() => invoke<void>('lan_set_links', { links: linkTable(useViewLinksStore.getState()) }))
+      .catch(useAppStore.getState().reportError);
+  };
 
   const connect = (info: LanInfo | null) => {
     const current = get().transport;
@@ -39,12 +43,12 @@ export const useLanStore = create<LanState>((set, get) => {
       unsubscribers = [
         transport.watchStatus(({ players }) => set((s) => (s.info ? { info: { ...s.info, players } } : {}))),
         useViewLinksStore.subscribe((state, previous) => {
-          if (state.tokens !== previous.tokens || state.views !== previous.views) void pushLinks();
+          if (state.tokens !== previous.tokens || state.linked !== previous.linked) pushLinks();
         }),
       ];
       set({ info, transport });
       // A server that outlived a reload may hold links from before it.
-      void pushLinks();
+      pushLinks();
     } else if (!info && current) {
       current.close();
       for (const unsubscribe of unsubscribers) {

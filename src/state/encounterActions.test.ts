@@ -115,6 +115,12 @@ describe('spawning', () => {
     expect(hp).toBe(1);
   });
 
+  it('leaves the token to the creature, so later picture changes show', () => {
+    const pictured = { ...goblin(), token: { area: 'data', path: 'library/creatures/goblin.token.png' } } as const;
+    const spawned = spawnCombatant(pictured, goblinRef, { hpMode: 'average', side: 'enemy', takenNames: [] });
+    expect(spawned.token).toBeNull();
+  });
+
   it("adds the party members not in the encounter yet as player characters under their members' ids", () => {
     const character = (name: string) => ({
       ...createCreature(name),
@@ -203,6 +209,25 @@ describe('turns', () => {
     expect(currentCombatant(e)?.name).toBe('c');
     const last = produce(e, (d) => removeCombatant(d, d.combatants[1]!.id));
     expect(currentCombatant(last)?.name).toBe('a');
+    expect(last.round).toBe(2);
+  });
+
+  it('starts a new round when the current combatant is removed at the end of the order', () => {
+    const e = produce(encounterWith(['a', 'b', 'c']), (d) => {
+      d.round = 1;
+      d.turnIndex = 2;
+      removeCombatant(d, d.combatants[2]!.id);
+    });
+    expect(currentCombatant(e)?.name).toBe('a');
+    expect(e.round).toBe(2);
+  });
+
+  it('ends the turn of the last remaining combatant when it is removed', () => {
+    const e = produce(encounterWith(['a']), (d) => {
+      d.round = 3;
+      removeCombatant(d, d.combatants[0]!.id);
+    });
+    expect([e.turnIndex, e.round]).toEqual([0, 3]);
   });
 });
 

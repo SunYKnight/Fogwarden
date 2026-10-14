@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { base64ToBytes, float32ToBase64 } from '@/core/binary';
+import { errorMessage } from '@/core/errors';
 import { formatCreatureFile, parseCreatureFile } from '@/core/import/creatureFile';
 import { freeDocumentId } from '@/core/import/ids';
 import {
@@ -57,7 +58,7 @@ import {
   type LibrarySource,
   type PackManifest,
 } from './packs';
-import type { DirEntry, Storage } from './storage';
+import { safeFileName, type DirEntry, type Storage } from './storage';
 
 export const LIBRARY_KINDS: LibraryKind[] = libraryKindSchema.options;
 
@@ -98,9 +99,9 @@ interface KindCodec<K extends LibraryKind> {
   write(target: LibrarySource, doc: LibraryDocs[K]): Promise<LibraryDocs[K]>;
 }
 
-const SETTINGS_PATH = 'settings.json';
+export const SETTINGS_PATH = 'settings.json';
 const TERRAIN_FILE = 'terrain.png';
-const PICTURE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
+export const PICTURE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
 /** `<id>.<ext>` is a creature's image, `<id>.token.<ext>` its token picture. */
 const PICTURE_FILE = /^(.+?)(\.token)?\.(png|jpe?g|webp)$/i;
 /** A file in the creature folder of My content or a pack. */
@@ -226,10 +227,6 @@ function fogMaskPaths(dir: string, fog: Pick<Fog, 'exploredBy'>) {
     revealed: `${dir}/fog/revealed.png`,
     hidden: `${dir}/fog/hidden.png`,
   };
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function extensionOf(path: string): string {
@@ -584,11 +581,12 @@ export class Repository {
   }
 
   /**
-   * Grid of the map an encounter uses, by precedence like in play. Disabled packs count too: their maps
-   * still decide the fog grid, so disabling a pack never drops an encounter's fog.
+   * Grid of the map an encounter uses, by precedence like in play. Disabled packs and packs hiding maps count
+   * after those, as their maps still decide the fog grid: disabling a pack never drops an encounter's fog.
    */
   private async mapGrid(ref: DocRef) {
-    const sources = (await this.installedPacks()).map((p) => p.source);
+    const { shown, held } = await this.kindSources('map');
+    const sources = [...shown, ...held.map((h) => h.source)];
     const folders = await this.kindFolders('map', sources);
     const source = sources[folders.findIndex((entries) => docIds('map', entries).includes(ref.id))];
     const grid = (text: string) => z.object({ grid: gridSchema }).parse(JSON.parse(text)).grid;
@@ -761,7 +759,7 @@ export class Repository {
   }
 
   async importMapAsset(mapId: string, fileName: string, bytes: Uint8Array, pack = MY_CONTENT): Promise<AssetRef> {
-    const safeName = fileName.replace(/[^\w.\- ]+/g, '_');
+    const safeName = safeFileName(fileName);
     const ref = mapAssetRef(mapId, safeName, pack);
     await this.storage.writeBytes(ref.path, bytes);
     return ref;

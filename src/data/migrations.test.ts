@@ -196,6 +196,10 @@ describe('atmosphere migrations', () => {
     expect(migrated.regions).toEqual([{ ...region, sound: null }]);
   });
 
+  it('names the field a malformed v2 map lacks', () => {
+    expect(() => migrate('map', { schema: 'map', version: 2 }, 3)).toThrow(/regions/);
+  });
+
   it('adds default volumes to v7 settings', () => {
     const { audio: _unused, ...v7 } = defaultSettings();
     const migrated = settingsSchema.parse(migrate('settings', { ...v7, version: 7 }));

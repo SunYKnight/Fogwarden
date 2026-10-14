@@ -88,6 +88,10 @@ const empty = <K extends LibraryKind>(): ShownListing<K> => ({
   duplicates: [],
 });
 
+// Refreshes of a kind can overlap; only the newest one sets the listing and
+// ends the loading state, so a slow older listing never replaces a newer one.
+const latestRefresh: Record<LibraryKind, number> = { creature: 0, marker: 0, map: 0, table: 0, item: 0, spell: 0 };
+
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   listings: {
     creature: empty(),
@@ -102,15 +106,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   packProblems: [],
 
   refresh: async (kind) => {
+    const mine = ++latestRefresh[kind];
     set((s) => ({ loading: { ...s.loading, [kind]: true } }));
     try {
       const { repository } = useAppStore.getState();
       const [listing, sources] = await Promise.all([repository.list(kind), repository.librarySources()]);
       const order = sources.map((s) => s.pack);
       const shown = withDuplicates(kind, listing, order, repository.packSettings.hideDuplicates);
-      set((s) => ({ listings: { ...s.listings, [kind]: shown } }));
+      if (mine === latestRefresh[kind]) {
+        set((s) => ({ listings: { ...s.listings, [kind]: shown } }));
+      }
     } finally {
-      set((s) => ({ loading: { ...s.loading, [kind]: false } }));
+      if (mine === latestRefresh[kind]) {
+        set((s) => ({ loading: { ...s.loading, [kind]: false } }));
+      }
     }
   },
 

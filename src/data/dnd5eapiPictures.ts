@@ -15,7 +15,7 @@ const PARALLEL_DOWNLOADS = 4;
 const RATE_LIMIT_PAUSE_MS = 1000;
 
 /** GET `path` (e.g. `/api/2014/spells`) of the API, waiting out its rate limit; the caller judges the status. */
-export async function fetchApi(path: string, signal?: AbortSignal): Promise<Response> {
+async function fetchApi(path: string, signal?: AbortSignal): Promise<Response> {
   let response = await fetch(`${DND5E_API}${path}`, { signal });
   while (response.status === 429) {
     const { promise, resolve } = Promise.withResolvers<void>();

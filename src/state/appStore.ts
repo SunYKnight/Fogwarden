@@ -1,6 +1,7 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { create } from 'zustand';
-import type { CreatureKind, DocRef, EncounterLocator, Settings } from '@/core/model';
+import { errorMessage } from '@/core/errors';
+import { defaultSettings, type CreatureKind, type DocRef, type EncounterLocator, type Settings } from '@/core/model';
 import { BrowserStorage } from '@/data/browserStorage';
 import { migrateDataRoot } from '@/data/layoutMigration';
 import { migrateToPacks } from '@/data/packMigration';
@@ -16,15 +17,12 @@ export type Route =
   | { page: 'home' }
   | { page: 'maps' }
   | { page: 'map-editor'; map: DocRef }
-  | { page: 'compendium'; tab: CompendiumTab }
+  | { page: 'compendium'; tab: CompendiumTab; /** Entry shown selected, e.g. picked in Ctrl+K. */ entryId?: string }
   | { page: 'campaigns'; campaignId: string | null }
   | { page: 'play' }
   | { page: 'settings'; section?: SettingsSection }
   /** `ref` null starts a new creature of `kind` (default monster). */
   | { page: 'creature-editor'; ref: DocRef | null; kind?: CreatureKind };
-
-/** The former Server page; its features live in Settings > Players. */
-type LegacyRoute = { page: 'server' };
 
 export type NoticeKind = 'error' | 'success' | 'info';
 
@@ -42,8 +40,7 @@ interface AppState {
   notices: Notice[];
   /** Asked before leaving the page, e.g. to keep unsaved edits; resolves true to leave. */
   leaveGuard: (() => Promise<boolean>) | null;
-  /** `{ page: 'server' }` opens Settings > Players, where the server settings live. */
-  navigate(route: Route | LegacyRoute): void;
+  navigate(route: Route): void;
   setLeaveGuard(guard: (() => Promise<boolean>) | null): void;
   /** Makes the encounter the one on the Play screen and shows it. */
   openEncounter(locator: EncounterLocator): Promise<void>;
@@ -69,8 +66,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   route: { page: 'home' },
   notices: [],
   leaveGuard: null,
-  navigate: (requested) => {
-    const route: Route = requested.page === 'server' ? { page: 'settings', section: 'players' } : requested;
+  navigate: (route) => {
     const guard = get().leaveGuard;
     if (guard) {
       guard().then((ok) => ok && set({ route, leaveGuard: null }), get().reportError);
@@ -80,12 +76,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setLeaveGuard: (leaveGuard) => set({ leaveGuard }),
   openEncounter: async (locator) => {
+    const guard = get().leaveGuard;
+    const leave = guard ? await guard() : true;
     const settings = get().settings;
     if (!settings) {
       throw new Error('Settings are not loaded yet');
     }
-    await get().setSettings({ ...settings, lastEncounter: locator });
-    set({ route: { page: 'play' } });
+    if (leave) {
+      await get().setSettings({ ...settings, lastEncounter: locator });
+      set({ route: { page: 'play' }, leaveGuard: null });
+    }
   },
   forgetEncounter: async (match) => {
     const settings = get().settings;
@@ -100,7 +100,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   reportError: (error) => {
     console.error(error);
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     set((s) => ({ notices: [...s.notices, { id: nextNoticeId++, kind: 'error', message }] }));
   },
   notify: (message, kind = 'success') => {
@@ -122,16 +122,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   init: async () => {
-    const repository = get().repository;
+    const { repository, reportError } = get();
     // A history that cannot be pruned (a file open elsewhere) must not keep
     // the app from starting; the next start tries again.
     if (repository.storage.kind === 'tauri') {
-      await pruneHistory().catch(get().reportError);
+      await pruneHistory().catch(reportError);
     }
-    // Packs move after the layout conversion, which works in the old places.
-    const layoutProblems = await migrateDataRoot(repository);
-    repository.layoutProblems = [...layoutProblems, ...(await migrateToPacks(repository))];
-    const [roots, settings] = await Promise.all([repository.storage.roots(), repository.loadSettings()]);
+    // A broken file must not keep the app from starting either: Settings >
+    // Data > Version history, which can restore it, has to stay reachable.
+    try {
+      // Packs move after the layout conversion, which works in the old places.
+      const layoutProblems = await migrateDataRoot(repository);
+      repository.layoutProblems = [...layoutProblems, ...(await migrateToPacks(repository))];
+    } catch (error) {
+      reportError(error);
+    }
+    const [roots, settings] = await Promise.all([
+      repository.storage.roots(),
+      repository.loadSettings().catch((error: unknown) => {
+        reportError(new Error(`Default settings are used until settings.json is fixed: ${errorMessage(error)}`));
+        return defaultSettings();
+      }),
+    ]);
     set({ roots, settings });
   },
 }));

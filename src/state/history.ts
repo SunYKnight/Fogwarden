@@ -43,6 +43,11 @@ export class History {
     return this.future.length > 0;
   }
 
+  /** Entry the next undo reverts. */
+  get newest(): HistoryEntry | undefined {
+    return this.past.at(-1);
+  }
+
   clear(): void {
     this.past = [];
     this.future = [];

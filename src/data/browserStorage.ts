@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { AssetRef, StorageArea } from '@/core/model';
 import { childEntries, StorageError, type DirEntry, type Storage, type StorageRoots } from './storage';
 
@@ -5,6 +6,13 @@ const DB_NAME = 'fogwarden';
 const STORE = 'files';
 
 type StoredValue = string | Uint8Array;
+
+const dirEntriesSchema = z.array(z.object({ name: z.string(), isDir: z.boolean() }));
+
+/** URL of a shipped content file; names may hold `#` or `?`. */
+function contentUrl(path: string): string {
+  return `/__content/file/${path.split('/').map(encodeURIComponent).join('/')}`;
+}
 
 function request<T>(req: IDBRequest<T>): Promise<T> {
   const { promise, resolve, reject } = Promise.withResolvers<T>();
@@ -44,7 +52,7 @@ export class BrowserStorage implements Storage {
   }
 
   private async fetchContent(path: string): Promise<Response> {
-    const response = await fetch(`/__content/file/${path.split('/').map(encodeURIComponent).join('/')}`);
+    const response = await fetch(contentUrl(path));
     if (!response.ok) {
       throw new StorageError(`Content request failed with ${response.status}`, path);
     }
@@ -91,15 +99,23 @@ export class BrowserStorage implements Storage {
   async list(area: StorageArea, dir: string): Promise<DirEntry[]> {
     const entries =
       area === 'content'
-        ? await fetch(`/__content/list?dir=${encodeURIComponent(dir)}`).then((r) => r.json() as Promise<DirEntry[]>)
+        ? await this.listContent(dir)
         : childEntries(dir, (await request((await this.store('readonly')).getAllKeys())).map(String));
     return entries;
+  }
+
+  private async listContent(dir: string): Promise<DirEntry[]> {
+    const response = await fetch(`/__content/list?dir=${encodeURIComponent(dir)}`);
+    if (!response.ok) {
+      throw new StorageError(`Content listing failed with ${response.status}`, dir);
+    }
+    return dirEntriesSchema.parse(await response.json());
   }
 
   async exists(area: StorageArea, path: string): Promise<boolean> {
     const found =
       area === 'content'
-        ? (await fetch(`/__content/file/${path}`, { method: 'HEAD' })).ok
+        ? (await fetch(contentUrl(path), { method: 'HEAD' })).ok
         : (await request((await this.store('readonly')).count(path))) > 0;
     return found;
   }
@@ -137,10 +153,7 @@ export class BrowserStorage implements Storage {
 
   async assetUrl(ref: AssetRef): Promise<string> {
     const cached = this.objectUrls.get(ref.path);
-    const url =
-      ref.area === 'content'
-        ? `/__content/file/${ref.path.split('/').map(encodeURIComponent).join('/')}`
-        : (cached ?? (await this.createObjectUrl(ref.path)));
+    const url = ref.area === 'content' ? contentUrl(ref.path) : (cached ?? (await this.createObjectUrl(ref.path)));
     return url;
   }
 

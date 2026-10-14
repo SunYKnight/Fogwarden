@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createCreature,
   createMap,
@@ -134,5 +134,25 @@ describe('library listings', () => {
       { id: 'api-wolf', pack: 'api', hidden: false },
     ]);
     expect(ids(listings.marker.listed)).toEqual(['aurora-cone']);
+  });
+
+  it('keeps the newest listing when an older refresh finishes last', async () => {
+    const listed = Promise.withResolvers<void>();
+    const slow = Promise.withResolvers<void>();
+    const list = repository.list.bind(repository);
+    vi.spyOn(repository, 'list').mockImplementationOnce(async (kind) => {
+      const listing = await list(kind);
+      listed.resolve();
+      await slow.promise;
+      return listing;
+    });
+    const older = useLibraryStore.getState().refresh('creature');
+    await listed.promise;
+    await repository.save('creature', creature('my-bear', 'Bear'));
+    await useLibraryStore.getState().refresh('creature');
+    slow.resolve();
+    await older;
+    expect(ids(useLibraryStore.getState().listings.creature.entries)).toContain('my-bear');
+    expect(useLibraryStore.getState().loading.creature).toBe(false);
   });
 });

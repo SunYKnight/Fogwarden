@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   CAMPAIGN_SCHEMA_VERSION,
   CREATURE_SCHEMA_VERSION,
@@ -24,7 +25,12 @@ type Migration = (doc: Record<string, unknown>) => Record<string, unknown>;
 /** A step that moved data into other files; `layoutMigration.ts` performs it once per data root. */
 const LAYOUT = 'layout';
 
-export const CURRENT_VERSION: Record<SchemaName, number> = {
+// Steps read fields of raw file JSON; parsing them names the broken field
+// where a cast would fail later with "Cannot read properties of undefined".
+const fields = z.record(z.string(), z.unknown());
+const fieldList = z.array(fields);
+
+const CURRENT_VERSION: Record<SchemaName, number> = {
   creature: CREATURE_SCHEMA_VERSION,
   map: MAP_SCHEMA_VERSION,
   marker: MARKER_SCHEMA_VERSION,
@@ -48,7 +54,10 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     // v3: sound regions carry an ambient loop.
     (doc) => ({
       ...doc,
-      regions: (doc.regions as Record<string, unknown>[]).map((region) => ({ ...region, sound: null })),
+      regions: z
+        .looseObject({ regions: fieldList })
+        .parse(doc)
+        .regions.map((region) => ({ ...region, sound: null })),
     }),
   ],
   marker: [],
@@ -70,7 +79,10 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     // and carried lights; old encounters knew none of them.
     (doc) => ({
       ...doc,
-      combatants: (doc.combatants as Record<string, unknown>[]).map((c) => ({ ...c, ...freshCombatState(null) })),
+      combatants: z
+        .looseObject({ combatants: fieldList })
+        .parse(doc)
+        .combatants.map((c) => ({ ...c, ...freshCombatState(null) })),
     }),
     // v6: players may move their own tokens; off until the DM allows it.
     (doc) => ({ ...doc, playersMoveTokens: false }),
@@ -89,7 +101,7 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     // v6: per-view player links and the player window's view.
     (doc) => ({
       ...doc,
-      playerWindow: { ...(doc.playerWindow as Record<string, unknown>), view: PARTY_VIEW },
+      playerWindow: { ...z.looseObject({ playerWindow: fields }).parse(doc).playerWindow, view: PARTY_VIEW },
       playerLinks: defaultPlayerLinks(),
     }),
     // v7: content packs, all enabled; `packMigration.ts` moves the data root's
@@ -101,21 +113,27 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     (doc) => ({ ...doc, updates: defaultUpdateSettings() }),
     // v10: the import from the old tool and its first step are gone.
     (doc) => {
-      const { done, ...onboarding } = doc.onboarding as { done: Record<string, unknown> };
+      const { onboarding } = z.looseObject({ onboarding: z.looseObject({ done: fields }) }).parse(doc);
+      const { done, ...rest } = onboarding;
       const { legacyImport: _unused, ...steps } = done;
-      return { ...doc, onboarding: { ...onboarding, done: steps } };
+      return { ...doc, onboarding: { ...rest, done: steps } };
     },
     // v11: graphics quality; GPU detection needs a browser, so the Settings
     // page only suggests a preset instead of choosing one here.
     (doc) => ({ ...doc, graphics: defaultGraphicsSettings() }),
     // v12: per-kind pack visibility and hidden name duplicates (on).
-    (doc) => ({ ...doc, packs: { ...defaultPackSettings(), ...(doc.packs as Record<string, unknown>) } }),
+    (doc) => ({ ...doc, packs: { ...defaultPackSettings(), ...z.looseObject({ packs: fields }).parse(doc).packs } }),
   ],
 };
 
 function exploredPerCharacter(doc: Record<string, unknown>): Record<string, unknown> {
-  const { explored, ...fog } = doc.fog as { explored: string };
-  const combatants = doc.combatants as { id: string; side: string; visionSource: boolean }[];
+  const { fog: fogField, combatants } = z
+    .looseObject({
+      fog: z.looseObject({ explored: z.string() }),
+      combatants: z.array(z.looseObject({ id: z.string(), side: z.string(), visionSource: z.boolean() })),
+    })
+    .parse(doc);
+  const { explored, ...fog } = fogField;
   const owners = explored === '' ? [] : combatants.filter((c) => c.visionSource || c.side === 'player');
   return { ...doc, fog: { ...fog, exploredBy: Object.fromEntries(owners.map((c) => [c.id, explored])) } };
 }
@@ -132,7 +150,7 @@ export function migrate(schema: SchemaName, raw: unknown, target = CURRENT_VERSI
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new MigrationError(`Expected a ${schema} document object`);
   }
-  let doc = raw as Record<string, unknown>;
+  let doc = fields.parse(raw);
   if (doc.schema !== schema) {
     throw new MigrationError(`Expected schema "${schema}", found "${String(doc.schema)}"`);
   }
