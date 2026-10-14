@@ -94,7 +94,8 @@ function WindowLine() {
 
 function LanLine() {
   const info = useLanStore((s) => s.info);
-  const [showLinks, setShowLinks] = useState(false);
+  // Open by default: the QR code is what phones need to join.
+  const [showLinks, setShowLinks] = useState(true);
   const desktop = isTauri();
   const status = !desktop
     ? 'Needs the desktop app'

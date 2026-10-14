@@ -20,18 +20,28 @@ export function Popover({ trigger, children, placement = 'below', label }: Popov
   const anchor = useRef<HTMLSpanElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
-  // The anchor is `display: contents`, so the trigger element carries the geometry.
+  // The anchor is `display: contents`, so the trigger carries the geometry.
+  // Placed again whenever the panel's size changes, so content that unfolds
+  // (links, QR codes) stays on screen.
   useLayoutEffect(() => {
-    const rect = anchor.current?.firstElementChild?.getBoundingClientRect();
-    const size = panel.current?.getBoundingClientRect();
-    if (open && rect && size) {
-      const left = placement === 'right' ? rect.right + 8 : rect.left;
-      const top = placement === 'right' ? rect.top : rect.bottom + 6;
-      setPos({
-        left: Math.max(8, Math.min(left, window.innerWidth - size.width - 8)),
-        top: Math.max(8, Math.min(top, window.innerHeight - size.height - 8)),
-      });
+    const place = () => {
+      const rect = anchor.current?.firstElementChild?.getBoundingClientRect();
+      const size = panel.current?.getBoundingClientRect();
+      if (rect && size) {
+        const left = placement === 'right' ? rect.right + 8 : rect.left;
+        const top = placement === 'right' ? rect.top : rect.bottom + 6;
+        setPos({
+          left: Math.max(8, Math.min(left, window.innerWidth - size.width - 8)),
+          top: Math.max(8, Math.min(top, window.innerHeight - size.height - 8)),
+        });
+      }
+    };
+    const observer = new ResizeObserver(place);
+    if (open && panel.current) {
+      place();
+      observer.observe(panel.current);
     }
+    return () => observer.disconnect();
   }, [open, placement]);
 
   useEffect(() => {

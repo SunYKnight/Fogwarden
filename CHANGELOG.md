@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Players popover: with LAN on, the player link and its QR code show right away (the QR button folds them), and
+  the popover moves up when its content grows; before, the QR code opened below the bottom of the window.
 - Play: the right Creature tab and the bottom turn bar became one **creature dock** under the map: the selected
   creature (during combat otherwise the current one) with side colour, name, AC, hit points, Damage / Heal / Temp,
   condition chips and, during its turn, how far it moved; tabs Actions (attacks, roll mode, last roll, resources),
