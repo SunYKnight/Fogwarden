@@ -1,7 +1,7 @@
 import type { Settings } from '@/core/model';
 import { NumberField } from '../components/fields';
 import { Section } from '../kit';
-import { OnlineSection } from '../server/OnlineSection';
+import { ONLINE_PLAY_AVAILABLE, OnlineSection } from '../server/OnlineSection';
 import { LanControls } from '../shell/LanControls';
 import { PlayerViewSection } from './PlayerViewSection';
 
@@ -23,7 +23,7 @@ export function PlayersSection({ settings, save }: { settings: Settings; save: (
           />
         </Section>
       </Section>
-      <OnlineSection remote={settings.remote} />
+      {ONLINE_PLAY_AVAILABLE && <OnlineSection remote={settings.remote} />}
     </>
   );
 }

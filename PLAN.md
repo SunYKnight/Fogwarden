@@ -217,6 +217,10 @@ Order: M0 → M1 (only what M2 needs first: map schema, storage) → **M2** → 
 - SRD creature source for `content/`: convert from an SRD 5.1 dataset with compatible license (to verify before M1 content step).
 - Phase 2 LAN server exposes a port: bind to LAN only, random session token in URL.
 - Testing the LAN view on a phone touches the local network → ask before M6 tests.
+- **To do: online play.** The relay (Settings > Players > Online, Players popover "Online", server deploy) is hidden
+  by `ONLINE_PLAY_AVAILABLE = false` in `src/ui/server/OnlineSection.tsx` because it was never tried against a real
+  server. Before switching it on: deploy the relay to a server with a domain, connect from the app, join from a
+  phone on mobile data, check map, fog, token moves, handouts and reconnects; then add the search keywords back.
 
 ## 11. Conventions
 

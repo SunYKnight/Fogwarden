@@ -6,7 +6,7 @@ import { useLanStore } from '@/state/lanStore';
 import { useRelayStore } from '@/state/relayStore';
 import { Button, Icon, Popover, type IconName } from '../kit';
 import { closePlayerWindow, monitorLabel, openPlayerWindow, usePlayerWindowStore } from '../playerWindow';
-import { LINK_TEXT, RelayButton } from '../server/OnlineSection';
+import { LINK_TEXT, ONLINE_PLAY_AVAILABLE, RelayButton } from '../server/OnlineSection';
 import { LanButton, LanLinks } from './LanControls';
 
 /** Short status of how players see the game right now, e.g. "Window on DISPLAY2 · LAN 2 players". */
@@ -187,7 +187,7 @@ export function PlayersMenu() {
           <PlayersSee />
           <WindowLine />
           <LanLine />
-          <OnlineLine />
+          {ONLINE_PLAY_AVAILABLE && <OnlineLine />}
           <div className="row">
             <Button
               icon="settings"

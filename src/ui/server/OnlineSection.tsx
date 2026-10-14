@@ -12,6 +12,10 @@ import { PlayerLinks } from '../shell/PlayerLinks';
 import { DeployDialog } from './DeployDialog';
 import { saveRemote, type ServerSetup } from './remoteSettings';
 
+// Online play through the relay has never been tried against a real server;
+// its settings and buttons stay hidden until it has (see PLAN.md).
+export const ONLINE_PLAY_AVAILABLE = false;
+
 export const LINK_TEXT: Record<RelayLink, string> = {
   off: 'Not connected',
   connecting: 'Connecting…',

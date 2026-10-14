@@ -97,6 +97,9 @@ start unless switched off there) and installs only installers signed with the ke
 
 ## Play over the internet
 
+> Hidden in the app for now: online play has not been tested against a real server yet (see `PLAN.md`), so the
+> Online settings and the Players popover's Online line are switched off. The steps below describe it once enabled.
+
 Players outside your network connect through a relay on a server you control; the app connects out to it, so
 nothing at home needs to be reachable. You need an Ubuntu 22.04/24.04 server with root or sudo SSH access and a DNS
 name pointing to it (ports 80 and 443 open).
