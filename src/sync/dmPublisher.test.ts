@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BitSet } from '@/core/binary';
 import { createEncounter, createMap, PARTY_VIEW, type Combatant } from '@/core/model';
 import { FOG_VISIBLE, fogSize, viewFog, type FogSources } from '@/core/vision/fog';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
+import { useAppStore } from '@/state/appStore';
 import { createPc } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { usePingStore } from '@/state/pingStore';
@@ -13,7 +14,7 @@ import { useViewLinksStore } from './views';
 /** Records what goes to which views; `views` are the ones with receivers. */
 class FakeTransport implements DmTransport {
   readonly sent: { views: readonly string[]; payload: SyncPayload }[] = [];
-  private resendHandler: (view: string | null) => void = () => undefined;
+  private resendHandler: (view: string | null, mapRevision?: number) => void = () => undefined;
   private requestHandler: (view: string, request: PlayerRequest) => void = () => undefined;
 
   constructor(private readonly views: string[]) {}
@@ -25,7 +26,7 @@ class FakeTransport implements DmTransport {
     }
   }
 
-  onResend(handler: (view: string | null) => void): () => void {
+  onResend(handler: (view: string | null, mapRevision?: number) => void): () => void {
     this.resendHandler = handler;
     return () => undefined;
   }
@@ -40,8 +41,8 @@ class FakeTransport implements DmTransport {
     return () => undefined;
   }
 
-  hello(view: string): void {
-    this.resendHandler(view);
+  hello(view: string, mapRevision?: number): void {
+    this.resendHandler(view, mapRevision);
   }
 
   request(view: string, request: PlayerRequest): void {
@@ -91,13 +92,12 @@ beforeEach(() => {
     hidden: new BitSet(16),
   };
   useFogViewStore.getState().setFog(viewFog(sources, [thorin.id, elara.id]), sources, 1);
-  useViewLinksStore.setState({
-    views: [
-      { id: PARTY_VIEW, name: 'Party' },
-      { id: thorin.id, name: 'Thorin' },
-      { id: elara.id, name: 'Elara' },
-    ],
-  });
+  const views = [
+    { id: PARTY_VIEW, name: 'Party' },
+    { id: thorin.id, name: 'Thorin' },
+    { id: elara.id, name: 'Elara' },
+  ];
+  useViewLinksStore.setState({ views, linked: views });
 });
 
 afterEach(() => {
@@ -132,6 +132,18 @@ describe('startDmPublisher', () => {
     expect(asking.sent.map((s) => s.payload.type)).toEqual(['map', 'view', 'encounter', 'fog', 'handout', 'camera']);
     expect(asking.sent.every((s) => s.views.length === 1 && s.views[0] === thorin.id)).toBe(true);
     expect(other.sent).toHaveLength(before);
+  });
+
+  it('leaves out the map a hello says the player already has', () => {
+    const transport = new FakeTransport([thorin.id]);
+    stop = startDmPublisher([transport]);
+    const revision = transport.lastOf(thorin.id, 'map')!.revision;
+    transport.sent.length = 0;
+    transport.hello(thorin.id, revision);
+    expect(transport.sent.map((s) => s.payload.type)).toEqual(['view', 'encounter', 'fog', 'handout', 'camera']);
+    transport.sent.length = 0;
+    transport.hello(thorin.id, revision - 1);
+    expect(transport.sent[0]?.payload).toMatchObject({ type: 'map', revision });
   });
 
   it('sends a goblin to a character view once that character sees it', () => {
@@ -188,5 +200,20 @@ describe('startDmPublisher', () => {
     expect(useEncounterStore.getState().encounter?.log.at(-1)?.text).toBe(text);
     const answers = transport.sent.filter((s) => s.payload.type === 'rolled');
     expect(answers).toEqual([{ views: [thorin.id], payload: { type: 'rolled', text } }]);
+  });
+
+  it("refuses a player's unreadable dice as a notice, not an app error", () => {
+    const transport = new FakeTransport([thorin.id]);
+    stop = startDmPublisher([transport]);
+    const notify = vi.spyOn(useAppStore.getState(), 'notify').mockImplementation(() => undefined);
+    const reportError = vi.spyOn(useAppStore.getState(), 'reportError').mockImplementation(() => undefined);
+    try {
+      transport.request(thorin.id, { type: 'roll', dice: 'd', mode: 'normal', label: '' });
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining('Invalid dice expression'), 'info');
+      expect(reportError).not.toHaveBeenCalled();
+    } finally {
+      notify.mockRestore();
+      reportError.mockRestore();
+    }
   });
 });

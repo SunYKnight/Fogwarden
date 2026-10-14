@@ -22,7 +22,11 @@ function interludePayload(nowMs: number): SyncPayload {
   const { interlude } = useInterludeStore.getState();
   return {
     type: 'interlude',
-    interlude: interlude && { asset: interlude.asset, positionSec: (nowMs - interlude.startedAtMs) / 1000 },
+    interlude: interlude && {
+      id: interlude.startedAtMs,
+      asset: interlude.asset,
+      positionSec: (nowMs - interlude.startedAtMs) / 1000,
+    },
   };
 }
 

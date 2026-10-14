@@ -6,9 +6,9 @@ import type { SyncPayload } from '@/sync/protocol';
 import { usePlayerStore } from './playerStore';
 
 /** Holding the pointer this long without moving points at the spot. */
-export const HOLD_MS = 500;
+const HOLD_MS = 500;
 /** Moving farther than this before the hold ends cancels the ping (a pan or pinch). */
-export const HOLD_SLOP_PX = 8;
+const HOLD_SLOP_PX = 8;
 
 interface PlayerPointerState {
   /** The player's own token while they drag it; `to` is snapped. */

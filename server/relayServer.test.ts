@@ -157,6 +157,15 @@ describe('relay sockets', () => {
     expect(await garbage.closed).toBe(1008);
   });
 
+  it('survives a player frame over the size limit', async () => {
+    await putLinks({ [TOKEN_A]: 'A' });
+    const a = player(TOKEN_A);
+    await a.opened;
+    a.socket.send('x'.repeat(2048));
+    expect(await a.closed).toBe(1009);
+    expect((await fetch(`${base}/health`)).status).toBe(200);
+  });
+
   it("forwards players' rolls, pings and own token moves rebuilt and tagged with the view", async () => {
     await putLinks({ [TOKEN_A]: 'A', [TOKEN_B]: 'party' });
     const dm = connect(`${base}/ws`, [RELAY_DM_PROTOCOL, DM_KEY]);
@@ -272,6 +281,23 @@ describe('relay links', () => {
     dm.socket.send('B\nnew view');
     await again.message((m) => m === 'new view');
     expect(again.messages).toEqual(['new view']);
+  });
+
+  it('ignores messages of a withdrawn socket during its close handshake', async () => {
+    await putLinks({ [TOKEN_A]: 'A', [TOKEN_B]: 'B' });
+    const dm = connect(`${base}/ws`, [RELAY_DM_PROTOCOL, DM_KEY]);
+    await dm.opened;
+    const a = player(TOKEN_A);
+    const b = player(TOKEN_B);
+    await Promise.all([a.opened, b.opened]);
+    // Paused, the client neither sees nor answers the close frame, so its
+    // socket stays open from its side.
+    a.socket.pause();
+    await putLinks({ [TOKEN_B]: 'B' });
+    a.socket.send(HELLO);
+    b.socket.send(HELLO);
+    await dm.message((m) => m.startsWith('B\n'));
+    expect(dm.messages.filter((m) => m.startsWith('A\n'))).toEqual([]);
   });
 
   it('accepts only tokens of the map, not a view name or an altered token', async () => {

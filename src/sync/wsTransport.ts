@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import {
+  playerMessageSchema,
   SYNC_PROTOCOL_VERSION,
   type DmTransport,
   type PlayerRequest,
@@ -12,7 +14,17 @@ import { accept, isPlayerRequest } from './transports';
 /** Waits before reconnect attempt 1, 2, 3, …; the last value repeats. */
 export const RECONNECT_DELAYS_MS = [500, 1000, 2000, 5000];
 
-const HELLO: SyncPayload = { type: 'hello' };
+const typedSchema = z.looseObject({ type: z.string() });
+
+/**
+ * Envelope of a message on the player side; the payload is the DM app's own and is checked only for its type,
+ * so another protocol version still reaches `accept`.
+ */
+const dmMessageSchema = z.object({
+  protocol: z.number(),
+  from: z.enum(['dm', 'player']),
+  payload: z.custom<SyncPayload>((p) => typedSchema.safeParse(p).success),
+});
 
 type CreateSocket = (url: string) => WebSocket;
 
@@ -92,18 +104,20 @@ class ReconnectingSocket {
 
 /**
  * Player side of the LAN server's or the relay's `/ws`. Every (re)connect announces itself with `hello`, which
- * makes the DM resend everything of this link's view.
+ * makes the DM resend everything of this link's view except the map this transport last delivered.
  */
 export class WebSocketTransport implements SyncTransport {
   private readonly handlers = new Set<(payload: SyncPayload) => void>();
   private readonly socket: ReconnectingSocket;
+  private mapRevision: number | undefined;
 
   constructor(url: string, createSocket: CreateSocket = (u) => new WebSocket(u)) {
     this.socket = new ReconnectingSocket(url, createSocket, {
-      open: () => this.send(HELLO),
+      open: () => this.send({ type: 'hello', mapRevision: this.mapRevision }),
       text: (data) => {
-        const message = JSON.parse(data) as SyncMessage;
+        const message = dmMessageSchema.parse(JSON.parse(data));
         if (accept(message, 'player')) {
+          this.mapRevision = message.payload.type === 'map' ? message.payload.revision : this.mapRevision;
           for (const handler of this.handlers) {
             handler(message.payload);
           }
@@ -145,7 +159,7 @@ type RelayCounts = RelayStatus['relay'];
  * asks for a resend to all of them, since players may have missed messages while the DM was away.
  */
 export class ViewSocketTransport implements DmTransport {
-  private readonly resendHandlers = new Set<(view: string | null) => void>();
+  private readonly resendHandlers = new Set<(view: string | null, mapRevision?: number) => void>();
   private readonly requestHandlers = new Set<(view: string, request: PlayerRequest) => void>();
   private readonly viewHandlers = new Set<(views: ReadonlySet<string>) => void>();
   private readonly statusHandlers = new Set<(status: RelayCounts) => void>();
@@ -170,10 +184,10 @@ export class ViewSocketTransport implements DmTransport {
 
   private receive(data: string): void {
     const frame = parseViewFrame(data);
-    const message = frame ? (JSON.parse(frame.message) as SyncMessage) : null;
+    const message = frame ? playerMessageSchema.parse(JSON.parse(frame.message)) : null;
     const payload = frame && message && accept(message, 'dm') ? message.payload : null;
     if (frame && payload?.type === 'hello') {
-      this.resend(frame.views[0]!);
+      this.resend(frame.views[0]!, payload.mapRevision);
     } else if (frame && payload && isPlayerRequest(payload)) {
       for (const handler of this.requestHandlers) {
         handler(frame.views[0]!, payload);
@@ -202,9 +216,9 @@ export class ViewSocketTransport implements DmTransport {
     }
   }
 
-  private resend(view: string | null): void {
+  private resend(view: string | null, mapRevision?: number): void {
     for (const handler of this.resendHandlers) {
-      handler(view);
+      handler(view, mapRevision);
     }
   }
 
@@ -216,7 +230,7 @@ export class ViewSocketTransport implements DmTransport {
     }
   }
 
-  onResend(handler: (view: string | null) => void): () => void {
+  onResend(handler: (view: string | null, mapRevision?: number) => void): () => void {
     this.resendHandlers.add(handler);
     return () => this.resendHandlers.delete(handler);
   }

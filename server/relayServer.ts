@@ -26,7 +26,7 @@ import {
 } from '@/sync/relayApi';
 import { containedPath, FileStore, HttpError } from './store';
 
-export const RELAY_SERVICE = 'fogwarden-relay';
+const RELAY_SERVICE = 'fogwarden-relay';
 /** Player messages are a hello, a roll, a ping or a move; anything bigger is not a valid message. */
 const PLAYER_MESSAGE_LIMIT = 1024;
 /** A player may send this many messages at once, then one per `PLAYER_REFILL_MS`; more are dropped. */
@@ -186,8 +186,6 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
     return { relay: { players: players.size, views: Object.fromEntries(views) } };
   };
 
-  const playersChanged = () => tellDms(status());
-
   const replaceLinks = (next: Map<string, string>) => {
     links = next;
     for (const [socket, { token, view }] of players) {
@@ -203,7 +201,7 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
         }
       }
     }
-    playersChanged();
+    tellDms(status());
   };
 
   const serveFile = async ({ request, response }: Request, file: string, headers: Record<string, string>) => {
@@ -402,6 +400,9 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
   const watch = (socket: WebSocket) => {
     alive.add(socket);
     socket.on('pong', () => alive.add(socket));
+    // Without a listener, a protocol error (oversized frame, bad UTF-8)
+    // throws and ends the process; ws closes the socket itself.
+    socket.on('error', (error) => console.error('WebSocket error:', error.message));
   };
 
   dmSockets.on('connection', (socket) => {
@@ -431,20 +432,25 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
     });
   });
 
-  playerSockets.on('connection', (socket: WebSocket, view: string) => {
+  playerSockets.on('connection', (socket: WebSocket) => {
     watch(socket);
-    playersChanged();
+    tellDms(status());
     socket.on('close', () => {
       players.delete(socket);
-      playersChanged();
+      tellDms(status());
     });
     const allowed = playerRateLimit();
     socket.on('message', (data: RawData, isBinary: boolean) => {
-      const message = isBinary ? null : rebuildPlayerMessage(data.toString(), view);
-      if (message === null) {
-        socket.close(CLOSE_POLICY, 'not a valid player message');
-      } else if (allowed()) {
-        tellDms(viewFrame([view], message));
+      // Read per message: a withdrawn or moved socket leaves `players` at
+      // once but still receives messages until its close handshake ends.
+      const view = players.get(socket)?.view;
+      if (view !== undefined) {
+        const message = isBinary ? null : rebuildPlayerMessage(data.toString(), view);
+        if (message === null) {
+          socket.close(CLOSE_POLICY, 'not a valid player message');
+        } else if (allowed()) {
+          tellDms(viewFrame([view], message));
+        }
       }
     });
   });
@@ -467,7 +473,7 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
       playerSockets.handleUpgrade(request, socket, head, (ws) => {
         // Registered before 'connection', so its status frame counts it.
         players.set(ws, { token, view });
-        playerSockets.emit('connection', ws, view);
+        playerSockets.emit('connection', ws);
       });
     } else {
       reject(socket, 401, 'Unauthorized');

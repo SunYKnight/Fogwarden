@@ -1,8 +1,19 @@
-import { describe, expect, it } from 'vitest';
-import { createCreature, createEncounter, PARTY_VIEW, type Encounter } from '@/core/model';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createCampaign,
+  createCreature,
+  createEncounter,
+  defaultSettings,
+  PARTY_VIEW,
+  type Encounter,
+} from '@/core/model';
+import { MemoryStorage } from '@/data/memoryStorage';
+import { Repository } from '@/data/repository';
+import { useAppStore } from '@/state/appStore';
 import { addParty, createPc } from '@/state/encounterActions';
+import { useEncounterStore } from '@/state/encounterStore';
 import { RELAY_TOKEN_PATTERN } from './relayApi';
-import { linkTable, linkToken, playerViews } from './views';
+import { linkTable, linkToken, playerViews, startViewLinks, useViewLinksStore } from './views';
 
 const SECRET = 'f'.repeat(64);
 
@@ -21,7 +32,7 @@ describe('player links', () => {
     // tells nothing about a token the DM's secret makes.
     expect(await linkToken('e'.repeat(64), 'thorin', 0)).not.toBe(thorin);
     const elara = await linkToken(SECRET, 'elara', 0);
-    const table = linkTable({ views: [{ id: 'thorin', name: 'Thorin' }], tokens: { thorin, elara } });
+    const table = linkTable({ linked: [{ id: 'thorin', name: 'Thorin' }], tokens: { thorin, elara } });
     expect(table).toEqual({ [thorin]: 'thorin' });
   });
 
@@ -62,5 +73,60 @@ describe('player links', () => {
     expect(ambush.combatant.id).toBe(member.id);
     expect(lair.combatant.partyMemberId).toBe(member.id);
     expect(await linkToken(SECRET, lair.views[1]!.id, 0)).toBe(await linkToken(SECRET, ambush.views[1]!.id, 0));
+  });
+});
+
+describe('startViewLinks', () => {
+  beforeEach(() => {
+    const settings = defaultSettings();
+    useAppStore.setState({
+      repository: new Repository(new MemoryStorage()),
+      settings: { ...settings, playerLinks: { secret: SECRET, rotations: {} } },
+    });
+    useViewLinksStore.setState({ views: [], linked: [], tokens: {} });
+  });
+
+  afterEach(() => useEncounterStore.getState().close());
+
+  it("keeps a character's link while the character sits out an encounter of the campaign", async () => {
+    const thorin = createPc({ name: 'Thorin', armorClass: 18, maxHp: 28, senses: {}, visionSource: true });
+    useEncounterStore.getState().open({ ...createEncounter('Ambush', 'c1', null), combatants: [thorin] }, null);
+    const stop = startViewLinks();
+    try {
+      const token = await linkToken(SECRET, thorin.id, 0);
+      await vi.waitFor(() => expect(linkTable(useViewLinksStore.getState())[token]).toBe(thorin.id));
+
+      useEncounterStore.getState().open(createEncounter('Lair', 'c1', null), null);
+      expect(useViewLinksStore.getState().views).toEqual([{ id: PARTY_VIEW, name: 'Party' }]);
+      expect(linkTable(useViewLinksStore.getState())[token]).toBe(thorin.id);
+
+      useEncounterStore.getState().open(createEncounter('Elsewhere', 'c2', null), null);
+      await vi.waitFor(() => expect(linkTable(useViewLinksStore.getState())[token]).toBeUndefined());
+    } finally {
+      stop();
+    }
+  });
+
+  it("links every member of the open campaign's party, also after a restart and a party edit", async () => {
+    const { repository } = useAppStore.getState();
+    const member = (id: string, player: string) => ({ id, creature: { area: 'data', id: `c-${id}` }, player }) as const;
+    const campaign = { ...createCampaign('Red Hand'), party: [member('anna', 'Anna')] };
+    await repository.storeCampaign(campaign);
+    useEncounterStore.getState().open(createEncounter('Ambush', campaign.id, null), null);
+    const stop = startViewLinks();
+    try {
+      const anna = await linkToken(SECRET, 'anna', 0);
+      await vi.waitFor(() => expect(linkTable(useViewLinksStore.getState())[anna]).toBe('anna'));
+      // Without the creature in the library, the player's name stands in.
+      expect(useViewLinksStore.getState().linked).toContainEqual({ id: 'anna', name: 'Anna' });
+      expect(useViewLinksStore.getState().views).toEqual([{ id: PARTY_VIEW, name: 'Party' }]);
+
+      await repository.saveCampaign({ ...campaign, party: [...campaign.party, member('ben', 'Ben')] });
+      useAppStore.setState({ route: { page: 'maps' } });
+      const ben = await linkToken(SECRET, 'ben', 0);
+      await vi.waitFor(() => expect(linkTable(useViewLinksStore.getState())[ben]).toBe('ben'));
+    } finally {
+      stop();
+    }
   });
 });

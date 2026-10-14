@@ -1,4 +1,5 @@
 import { bytesToBase64 } from '@/core/binary';
+import { DiceError } from '@/core/rules/dice';
 import { PARTY_VIEW, type BattleMap } from '@/core/model';
 import { viewFog, type FogCells, type FogSources } from '@/core/vision/fog';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
@@ -45,6 +46,9 @@ export function startDmPublisher(transports: DmTransport[]): () => void {
   const activeOn = new Map<DmTransport, ReadonlySet<string>>();
   const sent = new Map<string, ViewState>();
   let fogMemo: { sources: FogSources | null; byView: Map<string, FogCells> } = { sources: null, byView: new Map() };
+  // Encounter edits, such as the tracker's explored cells, republish every
+  // view; the fog bytes are encoded once per tracker result.
+  const fogPayloads = new WeakMap<FogCells, { fog: PlayerFog; json: string }>();
 
   const activeViews = () => [...new Set([...activeOn.values()].flatMap((views) => [...views]))];
 
@@ -85,7 +89,7 @@ export function startDmPublisher(transports: DmTransport[]): () => void {
     const fog = fogOf(view);
     const library = useLibraryStore.getState();
     const { settings } = useAppStore.getState();
-    const name = useViewLinksStore.getState().views.find((v) => v.id === view)?.name ?? view;
+    const name = useViewLinksStore.getState().linked.find((v) => v.id === view)?.name ?? view;
     const own = encounter?.combatants.find((c) => c.id === view && c.side === 'player' && !c.hiddenFromPlayers);
     const ownMoves = encounter?.playersMoveTokens ? (settings?.diagonalRule ?? '5-5-5') : undefined;
     const playerEncounter = encounter && {
@@ -97,9 +101,13 @@ export function startDmPublisher(transports: DmTransport[]): () => void {
       }),
       ...(own && { sheet: playerSheet(own, findCreature(own.creature)), ownMoves }),
     };
-    const playerFog: PlayerFog | null = fog
-      ? { cellsX: fog.size.cellsX, cellsY: fog.size.cellsY, cells: bytesToBase64(fog.cells) }
-      : null;
+    let fogPayload = fog && fogPayloads.get(fog);
+    if (fog && !fogPayload) {
+      const encoded: PlayerFog = { cellsX: fog.size.cellsX, cellsY: fog.size.cellsY, cells: bytesToBase64(fog.cells) };
+      fogPayload = { fog: encoded, json: JSON.stringify(encoded) };
+      fogPayloads.set(fog, fogPayload);
+    }
+    const playerFog = fogPayload?.fog ?? null;
     const { shown } = useHandoutStore.getState();
     const handout = shown && (shown.audience === null || shown.audience === view) ? shown.handout : null;
     const last = sent.get(view);
@@ -108,7 +116,7 @@ export function startDmPublisher(transports: DmTransport[]): () => void {
       encounter: playerEncounter,
       encounterJson: JSON.stringify(playerEncounter),
       fog: playerFog,
-      fogJson: JSON.stringify(playerFog),
+      fogJson: fogPayload?.json ?? 'null',
       handout,
     };
     sent.set(view, next);
@@ -144,10 +152,13 @@ export function startDmPublisher(transports: DmTransport[]): () => void {
 
   // Changes go to every transport first, so the resend can repeat the
   // current state to this transport alone.
-  const resend = (transport: DmTransport, view: string | null) => {
+  const resend = (transport: DmTransport, view: string | null, hasMap?: number) => {
     const views = view === null ? [...(activeOn.get(transport) ?? [])] : [view];
     publishMap();
-    transport.send(views, { type: 'map', revision: mapRevision, map: playerMap });
+    // Multi-MB terrain would reach every device of the view again.
+    if (hasMap !== mapRevision) {
+      transport.send(views, { type: 'map', revision: mapRevision, map: playerMap });
+    }
     for (const each of views) {
       const state = publishView(each);
       const combatantId = each === PARTY_VIEW ? null : each;
@@ -173,13 +184,19 @@ export function startDmPublisher(transports: DmTransport[]): () => void {
 
   const unsubscribers = [
     ...transports.map(watchViews),
-    ...transports.map((transport) => transport.onResend((view) => resend(transport, view))),
+    ...transports.map((transport) => transport.onResend((view, hasMap) => resend(transport, view, hasMap))),
     ...transports.map((transport) =>
       transport.onPlayerRequest((view, request) => {
         try {
           handlePlayerRequest(view, request, (payload) => sendAll([view], payload));
         } catch (error) {
-          useAppStore.getState().reportError(error);
+          const { notify, reportError } = useAppStore.getState();
+          // Only a modified player page sends dice the DM cannot read.
+          if (error instanceof DiceError) {
+            notify(`A player's roll was refused: ${error.message}`, 'info');
+          } else {
+            reportError(error);
+          }
         }
       }),
     ),
@@ -202,7 +219,7 @@ export function startDmPublisher(transports: DmTransport[]): () => void {
     useDmCameraStore.subscribe(publishCamera),
     usePlayerViewStore.subscribe(publishViews),
     useViewLinksStore.subscribe((state, previous) => {
-      if (state.views !== previous.views) publishViews();
+      if (state.linked !== previous.linked) publishViews();
     }),
     useLibraryStore.subscribe((state, previous) => {
       if (state.listings.creature !== previous.listings.creature) publishViews();

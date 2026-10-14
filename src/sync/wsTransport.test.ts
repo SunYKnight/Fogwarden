@@ -56,10 +56,14 @@ function dm() {
   const { sockets, create } = fakeSockets();
   const transport = new ViewSocketTransport('ws://127.0.0.1/ws?token=d', create);
   const resends: (string | null)[] = [];
+  const mapRevisions: (number | undefined)[] = [];
   const views: string[][] = [];
-  transport.onResend((view) => resends.push(view));
+  transport.onResend((view, mapRevision) => {
+    resends.push(view);
+    mapRevisions.push(mapRevision);
+  });
   transport.watchViews((active) => views.push([...active]));
-  return { transport, sockets, resends, views };
+  return { transport, sockets, resends, mapRevisions, views };
 }
 
 const status = (views: Record<string, number>) =>
@@ -88,6 +92,23 @@ describe('WebSocketTransport', () => {
     expect(sockets).toHaveLength(2);
     sockets[1]!.open();
     expect(sockets[1]!.sent).toEqual([hello]);
+  });
+
+  it('names the map it last delivered in the hello after a reconnect', () => {
+    const { sockets } = player();
+    sockets[0]!.open();
+    sockets[0]!.receive(message('dm', { type: 'map', revision: 7, map: null }));
+    sockets[0]!.close();
+    vi.advanceTimersToNextTimer();
+    sockets[1]!.open();
+    expect(sockets[1]!.sent).toEqual([message('player', { type: 'hello', mapRevision: 7 })]);
+  });
+
+  it('refuses a message that is no sync message', () => {
+    const { sockets } = player();
+    sockets[0]!.open();
+    expect(() => sockets[0]!.receive('null')).toThrow();
+    expect(() => sockets[0]!.receive('{"protocol":2,"from":"dm","payload":7}')).toThrow();
   });
 
   it('backs off while the server is unreachable and resets after a successful connect', () => {
@@ -175,19 +196,21 @@ describe('ViewSocketTransport', () => {
   });
 
   it('asks for a resend of one view on its hello and of all views after every reconnect', () => {
-    const { sockets, resends } = dm();
+    const { sockets, resends, mapRevisions } = dm();
     sockets[0]!.open();
     sockets[0]!.receive(status({ party: 1 }));
     expect(resends).toEqual([null]);
     sockets[0]!.receive(`thorin\n${hello}`);
+    sockets[0]!.receive(`elara\n${message('player', { type: 'hello', mapRevision: 7 })}`);
     sockets[0]!.receive(status({ party: 1, thorin: 1 }));
-    expect(resends).toEqual([null, 'thorin']);
+    expect(resends).toEqual([null, 'thorin', 'elara']);
+    expect(mapRevisions).toEqual([undefined, undefined, 7]);
 
     sockets[0]!.close();
     vi.advanceTimersToNextTimer();
     sockets[1]!.open();
     sockets[1]!.receive(status({ party: 1 }));
-    expect(resends).toEqual([null, 'thorin', null]);
+    expect(resends).toEqual([null, 'thorin', 'elara', null]);
   });
 
   it("hands players' requests to the DM with the view they came from", () => {
@@ -203,6 +226,13 @@ describe('ViewSocketTransport', () => {
       ['thorin', { type: 'roll', dice: '1d20', mode: 'normal', label: '' }],
     ]);
     expect(resends).toEqual([]);
+  });
+
+  it("refuses a player's message that is no valid player message", () => {
+    const { sockets } = dm();
+    sockets[0]!.open();
+    expect(() => sockets[0]!.receive('thorin\nnull')).toThrow();
+    expect(() => sockets[0]!.receive(`thorin\n${message('player', { type: 'rolled', text: 'x' })}`)).toThrow();
   });
 
   it('reports player counts from status frames', () => {

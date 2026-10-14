@@ -54,14 +54,12 @@ export function startFogTracker(): () => void {
   let lastPersist = 0;
   let composed: { visible: unknown; fog: unknown; key: string } = { visible: null, fog: null, key: '' };
 
-  const post = (request: VisibilityRequest) => worker.postMessage(request);
-
   const compute = (key: string, state: VisionState) => {
     if (inFlight) {
       pending = { key, state };
     } else {
       inFlight = { id: nextId++, key };
-      post({ type: 'compute', id: inFlight.id, state });
+      worker.postMessage({ type: 'compute', id: inFlight.id, state } satisfies VisibilityRequest);
     }
   };
 
@@ -87,7 +85,7 @@ export function startFogTracker(): () => void {
   const compose = () => {
     const { encounter, map } = useEncounterStore.getState();
     const size = encounter && map ? fogSize(map.grid, encounter.fog.cellsPerSquare) : null;
-    const key = encounter && size ? `${encounter.id}:${size.cellsX}x${size.cellsY}` : '';
+    const key = encounter && map && size ? `${encounter.id}:${map.id}:${size.cellsX}x${size.cellsY}` : '';
     if (encounter && size && (key !== exploredKey || encounter.fog.exploredBy !== written)) {
       clearTimeout(persistTimer);
       persistTimer = undefined;
@@ -120,16 +118,17 @@ export function startFogTracker(): () => void {
         scene = { map, terrain, ambientLight };
         requested = '';
         const { grid, walls, openings, rooms, regions, lights } = map;
-        post({
+        worker.postMessage({
           type: 'scene',
           map: { grid, walls, openings, rooms, regions, lights, ambientLight },
           terrain: { cols: terrain.cols, rows: terrain.rows, spacingFt: terrain.spacingFt, data: terrain.data },
-        });
+        } satisfies VisibilityRequest);
       }
       const state = visionState(encounter);
       const size = fogSize(map.grid, state.cellsPerSquare);
-      // Explored-key prefix: other encounters' or sizes' results never apply.
-      const key = `${encounter.id}:${size.cellsX}x${size.cellsY}|${JSON.stringify(state)}`;
+      // Explored-key prefix: other encounters', maps' or sizes' results
+      // never apply.
+      const key = `${encounter.id}:${map.id}:${size.cellsX}x${size.cellsY}|${JSON.stringify(state)}`;
       if (key !== requested) {
         requested = key;
         compute(key, state);

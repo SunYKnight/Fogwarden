@@ -100,8 +100,12 @@ export interface PlayerScene {
   weather: Weather;
 }
 
-/** Fullscreen video for the players; `positionSec` lets late joiners catch up. */
+/**
+ * Fullscreen video for the players; `positionSec` lets late joiners catch up. `id` (the DM's start time) stays
+ * the same in resends, so a screen already playing it keeps playing.
+ */
 export interface PlayerInterlude {
+  id: number;
   asset: AssetRef;
   positionSec: number;
 }
@@ -115,8 +119,11 @@ export interface PlayerFog {
 }
 
 export type SyncPayload =
-  /** Player asks the DM for a full resend (on connect or reconnect). */
-  | { type: 'hello' }
+  /**
+   * Player asks the DM for a full resend (on connect or reconnect); `mapRevision` names the map it already has,
+   * which the DM then leaves out.
+   */
+  | { type: 'hello'; mapRevision?: number }
   /** Map stripped of DM-only data (secret doors, hidden regions, notes); null clears the view. */
   | { type: 'map'; revision: number; map: BattleMap | null }
   | { type: 'encounter'; encounter: PlayerEncounter | null }
@@ -173,7 +180,7 @@ export const playerMessageSchema = z.strictObject({
   protocol: z.number().int().nonnegative(),
   from: z.literal('player'),
   payload: z.discriminatedUnion('type', [
-    z.strictObject({ type: z.literal('hello') }),
+    z.strictObject({ type: z.literal('hello'), mapRevision: z.number().int().nonnegative().optional() }),
     z.strictObject({
       type: z.literal('roll'),
       dice: z.string().regex(PLAYER_DICE_PATTERN),
@@ -231,10 +238,10 @@ export interface DmTransport {
   /** Sends `payload` to the receivers of `views`; views without receivers on this transport are skipped. */
   send(views: readonly string[], payload: SyncPayload): void;
   /**
-   * Calls `handler` with a view whose receivers need everything again (a player's hello), or with null when all
-   * receivers of this transport do (the transport itself reconnected).
+   * Calls `handler` with a view whose receivers need everything again (a player's hello, with the map revision
+   * it has), or with null when all receivers of this transport do (the transport itself reconnected).
    */
-  onResend(handler: (view: string | null) => void): () => void;
+  onResend(handler: (view: string | null, mapRevision?: number) => void): () => void;
   /** Calls `handler` with every player request and the view of the receiver that sent it. */
   onPlayerRequest(handler: (view: string, request: PlayerRequest) => void): () => void;
   /** Calls `handler` with the views that have receivers: now and on every change. */

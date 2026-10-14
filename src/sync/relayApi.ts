@@ -64,10 +64,10 @@ export type PlayerBundle = z.infer<typeof playerBundleSchema>;
 
 /**
  * Version of this contract. 2: per-view player links (`PUT /api/links`) and view-routed frames on the DM
- * socket. 3: players may also send rolls, pings and token moves (`rebuildPlayerMessage`). The app refuses relays
- * that report another version.
+ * socket. 3: players may also send rolls, pings and token moves (`rebuildPlayerMessage`). 4: a player's hello may
+ * name its map revision; older relays close such a socket. The app refuses relays that report another version.
  */
-export const RELAY_API_VERSION = 3;
+export const RELAY_API_VERSION = 4;
 
 export const relaySessionSchema = z.object({
   /** Missing on relays before version 2, which answered with a single player token instead. */

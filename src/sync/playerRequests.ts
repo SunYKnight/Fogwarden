@@ -99,7 +99,7 @@ function applyMove(view: string, request: Extract<PlayerRequest, { type: 'move' 
  * as `rolled`, a point becomes a ping, a move is applied as one undo step. Throws when a roll cannot be made.
  */
 export function handlePlayerRequest(view: string, request: PlayerRequest, reply: (payload: SyncPayload) => void): void {
-  const name = useViewLinksStore.getState().views.find((v) => v.id === view)?.name ?? view;
+  const name = useViewLinksStore.getState().linked.find((v) => v.id === view)?.name ?? view;
   switch (request.type) {
     case 'point':
       usePingStore.getState().add({ at: request.at, by: name, from: view });

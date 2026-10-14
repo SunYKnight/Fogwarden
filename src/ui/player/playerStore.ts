@@ -17,7 +17,7 @@ import type {
 const KEPT_ROLLS = 5;
 
 /** A received message with the local clock time it arrived, so positions in it can advance. */
-export interface Received<T> {
+interface Received<T> {
   value: T;
   atMs: number;
 }
@@ -92,7 +92,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         set({ scene: payload.scene });
         break;
       case 'interlude':
-        set({ interlude: payload.interlude && { value: payload.interlude, atMs: Date.now() } });
+        // Resends for another device of this view repeat the running video.
+        if (payload.interlude?.id !== get().interlude?.value.id) {
+          set({ interlude: payload.interlude && { value: payload.interlude, atMs: Date.now() } });
+        }
         break;
       case 'sfx':
         set({ effect: { asset: payload.asset, volume: payload.volume, seq: (get().effect?.seq ?? 0) + 1 } });

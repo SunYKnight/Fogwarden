@@ -21,7 +21,7 @@ const CHANNEL = 'fogwarden-sync';
 export type Role = SyncMessage['from'];
 
 /** True for current-protocol messages sent by the other side. */
-export function accept(message: SyncMessage, role: Role): boolean {
+export function accept(message: { protocol: number; from: Role }, role: Role): boolean {
   return message.protocol === SYNC_PROTOCOL_VERSION && message.from !== role;
 }
 
