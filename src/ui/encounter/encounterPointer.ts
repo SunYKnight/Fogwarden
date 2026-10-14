@@ -134,13 +134,22 @@ function measurePointer(event: MapPointerEvent): void {
 /** Routes map pointer events of the encounter view to marker placement, the ruler or token handling. */
 export function handleEncounterPointer(event: MapPointerEvent): void {
   const ui = useEncounterUi.getState();
-  if (ui.placement && event.type === 'down' && event.button === 0 && event.point) {
-    placeMarker(event.point);
-  } else if (ui.placement && event.type === 'move' && event.point) {
-    useEncounterUi.setState({ pointer: event.point });
+  // Until the origin is set the preview follows the square the area will
+  // start from; afterwards the raw pointer aims it.
+  const aim = ui.placement && event.point && (ui.placement.origin ? event.point : squareCentre(event.point));
+  if (ui.placement && event.type === 'down' && event.button === 0 && aim) {
+    placeMarker(aim);
+  } else if (ui.placement && event.type === 'move' && aim) {
+    useEncounterUi.setState({ pointer: aim });
   } else if (!ui.placement && ui.tool === 'measure') {
     measurePointer(event);
   } else if (!ui.placement) {
     selectPointer(event);
   }
+}
+
+/** Centre of the grid square under `point`, on the ground; areas start there. */
+function squareCentre(point: MapPoint): MapPoint {
+  const { map, terrain } = useEncounterStore.getState();
+  return map && terrain ? snapTokenPoint(point, 'medium', map.grid, terrain) : point;
 }
