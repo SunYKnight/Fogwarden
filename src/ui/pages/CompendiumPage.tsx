@@ -5,10 +5,11 @@ import { useAppStore, type CompendiumTab } from '@/state/appStore';
 import { LoadProblems } from '../components/LoadProblems';
 import { Button, PageHeader, Tabs, type TabSpec } from '../kit';
 import { attachPortraitsFromApi, attachPortraitsFromFolder } from '../library/AttachPortraitsDialog';
-import { openAuroraImport, openCreatureImport } from '../library/compendiumUi';
+import { openAuroraImport, openCreatureImport, openDndApiImport } from '../library/compendiumUi';
 import { CreatureLibrary } from '../library/CreatureLibrary';
 import { ItemLibrary, ReferenceActions, SpellLibrary } from '../library/ItemSpellLibrary';
 import { MarkerActions, MarkerLibrary } from '../library/MarkerLibrary';
+import { PlayerActions, PlayerLibrary } from '../library/PlayerLibrary';
 import { MenuButton } from '../library/SplitButton';
 import { TableActions, TableLibrary } from '../library/TableLibrary';
 
@@ -36,6 +37,7 @@ function CreatureActions() {
         icon="upload"
         label="Import"
         items={[
+          { label: 'Everything from the D&D 5e API…', icon: 'download', run: openDndApiImport },
           { label: 'Stat block from text…', icon: 'upload', run: () => openCreatureImport('') },
           {
             label: desktop ? 'Characters from Aurora Builder…' : 'Characters from Aurora Builder… (desktop app)',
@@ -69,6 +71,14 @@ export const COMPENDIUM_TABS: CompendiumTabSpec[] = [
     kinds: ['creature'],
     Body: CreatureLibrary,
     Actions: CreatureActions,
+  },
+  {
+    id: 'players',
+    label: 'Players',
+    icon: 'user',
+    kinds: ['creature'],
+    Body: PlayerLibrary,
+    Actions: PlayerActions,
   },
   { id: 'items', label: 'Items', icon: 'shield', kinds: ['item'], Body: ItemLibrary, Actions: ReferenceActions },
   { id: 'spells', label: 'Spells', icon: 'book', kinds: ['spell'], Body: SpellLibrary, Actions: ReferenceActions },

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MY_CONTENT } from './packs';
 import type { Repository } from './repository';
 
 /** The free D&D 5e API (https://www.dnd5eapi.co): stat blocks and one painted picture per SRD 5.1 monster. */
@@ -9,23 +10,66 @@ const listSchema = z.object({ results: z.array(z.object({ index: z.string(), nam
 // The API's PNGs are about 1.7 MB each; tokens and previews never need more.
 const MAX_SIDE = 768;
 const PARALLEL_DOWNLOADS = 4;
+// The API answers 429 beyond 100 requests a second per address (Retry-After
+// 1); CORS hides that header from the app, so the pause is fixed.
+const RATE_LIMIT_PAUSE_MS = 1000;
 
-async function fetchOk(url: string): Promise<Response> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`D&D 5e API download failed (HTTP ${response.status}): ${url}`);
+/** GET `path` (e.g. `/api/2014/spells`) of the API, waiting out its rate limit; the caller judges the status. */
+export async function fetchApi(path: string, signal?: AbortSignal): Promise<Response> {
+  let response = await fetch(`${DND5E_API}${path}`, { signal });
+  while (response.status === 429) {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, RATE_LIMIT_PAUSE_MS);
+    await promise;
+    response = await fetch(`${DND5E_API}${path}`, { signal });
   }
   return response;
 }
 
-// The shipped SRD creatures are `srd-<monster index>`; naming the files that
-// way matches them by id, also forms like "Werewolf, Human Form".
+export async function fetchApiJson(path: string, signal?: AbortSignal): Promise<unknown> {
+  const response = await fetchApi(path, signal);
+  if (!response.ok) {
+    throw new Error(`D&D 5e API download failed (HTTP ${response.status}): ${DND5E_API}${path}`);
+  }
+  return response.json();
+}
+
+/** Index and name of everything in an API list (`monsters`, `spells`, `magic-items`, `equipment`). */
+export async function listApi(endpoint: string, signal?: AbortSignal): Promise<{ index: string; name: string }[]> {
+  return listSchema.parse(await fetchApiJson(`/api/2014/${endpoint}`, signal)).results;
+}
+
+/**
+ * Runs `work` on every item, `PARALLEL_DOWNLOADS` at a time. The first failure or an abort of `signal` stops
+ * the others taking further items.
+ */
+export async function inParallel<T>(
+  items: readonly T[],
+  work: (item: T) => Promise<void>,
+  signal?: AbortSignal,
+): Promise<void> {
+  const queue = [...items];
+  const worker = async () => {
+    for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+      try {
+        signal?.throwIfAborted();
+        await work(next);
+      } catch (error) {
+        queue.length = 0;
+        throw error;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: PARALLEL_DOWNLOADS }, worker));
+}
+
+// The API import names SRD creatures `srd-<monster index>`; naming the
+// files that way matches them by id, also forms like "Werewolf, Human Form".
 const SRD_PREFIX = 'srd-';
 
 /** Picture file names the API offers, `srd-<monster index>.png`, ready for `matchPortraits`. */
 export async function listApiPictures(): Promise<string[]> {
-  const list = listSchema.parse(await (await fetchOk(`${DND5E_API}/api/2014/monsters`)).json());
-  return list.results.map((monster) => `${SRD_PREFIX}${monster.index}.png`);
+  return (await listApi('monsters')).map((monster) => `${SRD_PREFIX}${monster.index}.png`);
 }
 
 async function shrinkToJpeg(picture: Blob): Promise<Uint8Array> {
@@ -48,33 +92,34 @@ export interface ApiPicture {
 }
 
 /**
- * Downloads each picture, shrinks it to a JPEG and stores it as the creature's image in My content, which
- * pictures pack creatures too. Returns the creatures the API has no picture for.
+ * Downloads each picture, shrinks it to a JPEG and stores it as the creature's image in `pack` (My content,
+ * which pictures pack creatures too, by default). Returns the creatures the API has no picture for.
  */
 export async function downloadApiPictures(
   repository: Repository,
   plan: readonly ApiPicture[],
   onProgress: (done: number) => void,
+  { pack = MY_CONTENT, signal }: { pack?: string; signal?: AbortSignal } = {},
 ): Promise<string[]> {
-  const queue = [...plan];
   const missing: string[] = [];
   let done = 0;
-  const worker = async () => {
-    for (let next = queue.shift(); next; next = queue.shift()) {
+  await inParallel(
+    plan,
+    async (next) => {
       const file = next.fileName.slice(SRD_PREFIX.length);
-      const response = await fetch(`${DND5E_API}/api/images/monsters/${file}`);
+      const response = await fetchApi(`/api/images/monsters/${file}`, signal);
       if (response.status === 404) {
         missing.push(next.creatureId);
       } else if (!response.ok) {
         throw new Error(`D&D 5e API download failed (HTTP ${response.status}): ${next.fileName}`);
       } else {
         const jpeg = await shrinkToJpeg(await response.blob());
-        await repository.importCreaturePicture(next.creatureId, 'image', `${next.creatureId}.jpg`, jpeg);
+        await repository.importCreaturePicture(next.creatureId, 'image', `${next.creatureId}.jpg`, jpeg, pack);
       }
       done += 1;
       onProgress(done);
-    }
-  };
-  await Promise.all(Array.from({ length: PARALLEL_DOWNLOADS }, worker));
+    },
+    signal,
+  );
   return missing;
 }

@@ -1,0 +1,1754 @@
+[
+  {
+    "index": "acolyte",
+    "name": "Acolyte",
+    "desc": "Acolytes are junior members of a clergy, usually answerable to a priest. They perform a variety of functions in a temple and are granted minor spellcasting power by their deities.",
+    "size": "Medium",
+    "type": "humanoid",
+    "subtype": "any race",
+    "alignment": "any alignment",
+    "armor_class": [
+      {
+        "type": "dex",
+        "value": 10
+      }
+    ],
+    "hit_points": 9,
+    "hit_dice": "2d8",
+    "hit_points_roll": "2d8",
+    "speed": {
+      "walk": "30 ft."
+    },
+    "strength": 10,
+    "dexterity": 10,
+    "constitution": 10,
+    "intelligence": 10,
+    "wisdom": 14,
+    "charisma": 11,
+    "proficiencies": [
+      {
+        "value": 4,
+        "proficiency": {
+          "index": "skill-medicine",
+          "name": "Skill: Medicine"
+        }
+      },
+      {
+        "value": 2,
+        "proficiency": {
+          "index": "skill-religion",
+          "name": "Skill: Religion"
+        }
+      }
+    ],
+    "damage_vulnerabilities": [],
+    "damage_resistances": [],
+    "damage_immunities": [],
+    "condition_immunities": [],
+    "senses": {
+      "passive_perception": 12
+    },
+    "languages": "any one language (usually Common)",
+    "challenge_rating": 0.25,
+    "proficiency_bonus": 2,
+    "xp": 50,
+    "special_abilities": [
+      {
+        "name": "Spellcasting",
+        "desc": "The acolyte is a 1st-level spellcaster. Its spellcasting ability is Wisdom (spell save DC 12, +4 to hit with spell attacks). The acolyte has following cleric spells prepared:\n\n- Cantrips (at will): light, sacred flame, thaumaturgy\n- 1st level (3 slots): bless, cure wounds, sanctuary",
+        "spellcasting": {
+          "level": 1,
+          "ability": {
+            "index": "wis",
+            "name": "WIS"
+          },
+          "dc": 12,
+          "modifier": 4,
+          "components_required": ["V", "S", "M"],
+          "school": "cleric",
+          "slots": {
+            "1": 3
+          },
+          "spells": [
+            {
+              "name": "Light",
+              "level": 0
+            },
+            {
+              "name": "Sacred Flame",
+              "level": 0
+            },
+            {
+              "name": "Thaumaturgy",
+              "level": 0
+            },
+            {
+              "name": "Bless",
+              "level": 1
+            },
+            {
+              "name": "Cure Wounds",
+              "level": 1
+            },
+            {
+              "name": "Sanctuary",
+              "level": 1
+            }
+          ]
+        },
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "name": "Club",
+        "desc": "Melee Weapon Attack: +2 to hit, reach 5 ft., one target. Hit: 2 (1d4) bludgeoning damage.",
+        "attack_bonus": 2,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "bludgeoning",
+              "name": "Bludgeoning"
+            },
+            "damage_dice": "1d4"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/acolyte.png",
+    "forms": [],
+    "legendary_actions": [],
+    "reactions": []
+  },
+  {
+    "index": "adult-red-dragon",
+    "name": "Adult Red Dragon",
+    "size": "Huge",
+    "type": "dragon",
+    "alignment": "chaotic evil",
+    "armor_class": [
+      {
+        "type": "natural",
+        "value": 19
+      }
+    ],
+    "hit_points": 256,
+    "hit_dice": "19d12",
+    "hit_points_roll": "19d12+133",
+    "speed": {
+      "walk": "40 ft.",
+      "climb": "40 ft.",
+      "fly": "80 ft."
+    },
+    "strength": 27,
+    "dexterity": 10,
+    "constitution": 25,
+    "intelligence": 16,
+    "wisdom": 13,
+    "charisma": 21,
+    "proficiencies": [
+      {
+        "value": 6,
+        "proficiency": {
+          "index": "saving-throw-dex",
+          "name": "Saving Throw: DEX"
+        }
+      },
+      {
+        "value": 13,
+        "proficiency": {
+          "index": "saving-throw-con",
+          "name": "Saving Throw: CON"
+        }
+      },
+      {
+        "value": 7,
+        "proficiency": {
+          "index": "saving-throw-wis",
+          "name": "Saving Throw: WIS"
+        }
+      },
+      {
+        "value": 11,
+        "proficiency": {
+          "index": "saving-throw-cha",
+          "name": "Saving Throw: CHA"
+        }
+      },
+      {
+        "value": 13,
+        "proficiency": {
+          "index": "skill-perception",
+          "name": "Skill: Perception"
+        }
+      },
+      {
+        "value": 6,
+        "proficiency": {
+          "index": "skill-stealth",
+          "name": "Skill: Stealth"
+        }
+      }
+    ],
+    "damage_vulnerabilities": [],
+    "damage_resistances": [],
+    "damage_immunities": ["fire"],
+    "condition_immunities": [],
+    "senses": {
+      "blindsight": "60 ft.",
+      "darkvision": "120 ft.",
+      "passive_perception": 23
+    },
+    "languages": "Common, Draconic",
+    "challenge_rating": 17,
+    "proficiency_bonus": 6,
+    "xp": 18000,
+    "special_abilities": [
+      {
+        "name": "Legendary Resistance",
+        "desc": "If the dragon fails a saving throw, it can choose to succeed instead.",
+        "usage": {
+          "type": "per day",
+          "times": 3,
+          "rest_types": []
+        },
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "damage": [],
+        "name": "Multiattack",
+        "multiattack_type": "actions",
+        "desc": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.",
+        "actions": [
+          {
+            "action_name": "Frightful Presence",
+            "count": "1",
+            "type": "ability"
+          },
+          {
+            "action_name": "Bite",
+            "count": "1",
+            "type": "melee"
+          },
+          {
+            "action_name": "Claw",
+            "count": "2",
+            "type": "melee"
+          }
+        ]
+      },
+      {
+        "name": "Bite",
+        "desc": "Melee Weapon Attack: +14 to hit, reach 10 ft., one target. Hit: 19 (2d10 + 8) piercing damage plus 7 (2d6) fire damage.",
+        "attack_bonus": 14,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "piercing",
+              "name": "Piercing"
+            },
+            "damage_dice": "2d10+8"
+          },
+          {
+            "damage_type": {
+              "index": "fire",
+              "name": "Fire"
+            },
+            "damage_dice": "2d6"
+          }
+        ],
+        "actions": []
+      },
+      {
+        "name": "Claw",
+        "desc": "Melee Weapon Attack: +14 to hit, reach 5 ft., one target. Hit: 15 (2d6 + 8) slashing damage.",
+        "attack_bonus": 14,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "slashing",
+              "name": "Slashing"
+            },
+            "damage_dice": "2d6+8"
+          }
+        ],
+        "actions": []
+      },
+      {
+        "name": "Tail",
+        "desc": "Melee Weapon Attack: +14 to hit, reach 15 ft., one target. Hit: 17 (2d8 + 8) bludgeoning damage.",
+        "attack_bonus": 14,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "bludgeoning",
+              "name": "Bludgeoning"
+            },
+            "damage_dice": "2d8+8"
+          }
+        ],
+        "actions": []
+      },
+      {
+        "damage": [],
+        "name": "Frightful Presence",
+        "desc": "Each creature of the dragon's choice that is within 120 ft. of the dragon and aware of it must succeed on a DC 19 Wisdom saving throw or become frightened for 1 minute. A creature can repeat the saving throw at the end of each of its turns, ending the effect on itself on a success. If a creature's saving throw is successful or the effect ends for it, the creature is immune to the dragon's Frightful Presence for the next 24 hours.",
+        "dc": {
+          "dc_type": {
+            "index": "wis",
+            "name": "WIS"
+          },
+          "dc_value": 19,
+          "success_type": "none"
+        },
+        "actions": []
+      },
+      {
+        "name": "Fire Breath",
+        "desc": "The dragon exhales fire in a 60-foot cone. Each creature in that area must make a DC 21 Dexterity saving throw, taking 63 (18d6) fire damage on a failed save, or half as much damage on a successful one.",
+        "usage": {
+          "type": "recharge on roll",
+          "dice": "1d6",
+          "min_value": 5
+        },
+        "dc": {
+          "dc_type": {
+            "index": "dex",
+            "name": "DEX"
+          },
+          "dc_value": 21,
+          "success_type": "none"
+        },
+        "damage": [
+          {
+            "damage_type": {
+              "index": "fire",
+              "name": "Fire"
+            },
+            "damage_dice": "18d6"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "legendary_actions": [
+      {
+        "name": "Detect",
+        "desc": "The dragon makes a Wisdom (Perception) check.",
+        "damage": []
+      },
+      {
+        "name": "Tail Attack",
+        "desc": "The dragon makes a tail attack.",
+        "damage": []
+      },
+      {
+        "name": "Wing Attack (Costs 2 Actions)",
+        "desc": "The dragon beats its wings. Each creature within 10 ft. of the dragon must succeed on a DC 22 Dexterity saving throw or take 15 (2d6 + 8) bludgeoning damage and be knocked prone. The dragon can then fly up to half its flying speed.",
+        "dc": {
+          "dc_type": {
+            "index": "dex",
+            "name": "DEX"
+          },
+          "dc_value": 22,
+          "success_type": "none"
+        },
+        "damage": [
+          {
+            "damage_type": {
+              "index": "bludgeoning",
+              "name": "Bludgeoning"
+            },
+            "damage_dice": "2d6+8"
+          }
+        ]
+      }
+    ],
+    "image": "/api/images/monsters/adult-red-dragon.png",
+    "forms": [],
+    "reactions": []
+  },
+  {
+    "index": "cult-fanatic",
+    "name": "Cult Fanatic",
+    "desc": "Fanatics are often part of a cult’s leadership, using their charisma and dogma to influence and prey on those of weak will. Most are interested in personal power above all else.",
+    "size": "Medium",
+    "type": "humanoid",
+    "subtype": "any race",
+    "alignment": "any non-good alignment",
+    "armor_class": [
+      {
+        "type": "armor",
+        "value": 13,
+        "armor": [
+          {
+            "index": "leather-armor",
+            "name": "Leather Armor"
+          }
+        ]
+      }
+    ],
+    "hit_points": 22,
+    "hit_dice": "6d8",
+    "hit_points_roll": "6d8-5",
+    "speed": {
+      "walk": "30 ft."
+    },
+    "strength": 11,
+    "dexterity": 14,
+    "constitution": 12,
+    "intelligence": 10,
+    "wisdom": 13,
+    "charisma": 14,
+    "proficiencies": [
+      {
+        "value": 4,
+        "proficiency": {
+          "index": "skill-deception",
+          "name": "Skill: Deception"
+        }
+      },
+      {
+        "value": 4,
+        "proficiency": {
+          "index": "skill-persuasion",
+          "name": "Skill: Persuasion"
+        }
+      },
+      {
+        "value": 2,
+        "proficiency": {
+          "index": "skill-religion",
+          "name": "Skill: Religion"
+        }
+      }
+    ],
+    "damage_vulnerabilities": [],
+    "damage_resistances": [],
+    "damage_immunities": [],
+    "condition_immunities": [],
+    "senses": {
+      "passive_perception": 11
+    },
+    "languages": "any one language (usually Common)",
+    "challenge_rating": 2,
+    "proficiency_bonus": 2,
+    "xp": 450,
+    "special_abilities": [
+      {
+        "name": "Dark Devotion",
+        "desc": "The fanatic has advantage on saving throws against being charmed or frightened.",
+        "damage": []
+      },
+      {
+        "name": "Spellcasting",
+        "desc": "The fanatic is a 4th-level spellcaster. Its spell casting ability is Wisdom (spell save DC 11, +3 to hit with spell attacks). The fanatic has the following cleric spells prepared:\n\nCantrips (at will): light, sacred flame, thaumaturgy\n- 1st level (4 slots): command, inflict wounds, shield of faith\n- 2nd level (3 slots): hold person, spiritual weapon",
+        "spellcasting": {
+          "level": 4,
+          "ability": {
+            "index": "wis",
+            "name": "WIS"
+          },
+          "dc": 11,
+          "modifier": 3,
+          "components_required": ["V", "S", "M"],
+          "school": "cleric",
+          "slots": {
+            "1": 4,
+            "2": 3
+          },
+          "spells": [
+            {
+              "name": "Light",
+              "level": 0
+            },
+            {
+              "name": "Sacred Flame",
+              "level": 0
+            },
+            {
+              "name": "Thaumaturgy",
+              "level": 0
+            },
+            {
+              "name": "Command",
+              "level": 1
+            },
+            {
+              "name": "Inflict Wounds",
+              "level": 1
+            },
+            {
+              "name": "Shield of Faith",
+              "level": 1
+            },
+            {
+              "name": "Hold Person",
+              "level": 2
+            },
+            {
+              "name": "Spiritual Weapon",
+              "level": 2
+            }
+          ]
+        },
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "damage": [],
+        "name": "Multiattack",
+        "multiattack_type": "actions",
+        "desc": "The fanatic makes two melee attacks.",
+        "actions": [
+          {
+            "action_name": "Dagger",
+            "count": "2",
+            "type": "melee"
+          }
+        ]
+      },
+      {
+        "name": "Dagger",
+        "desc": "Melee or Ranged Weapon Attack: +4 to hit, reach 5 ft. or range 20/60 ft., one creature. Hit: 4 (1d4 + 2) piercing damage.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "piercing",
+              "name": "Piercing"
+            },
+            "damage_dice": "1d4+2"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/cult-fanatic.png",
+    "forms": [],
+    "legendary_actions": [],
+    "reactions": []
+  },
+  {
+    "index": "cultist",
+    "name": "Cultist",
+    "desc": "Cultists swear allegiance to dark powers such as elemental princes, demon lords, or archdevils. Most conceal their loyalties to avoid being ostracized, imprisoned, or executed for their beliefs. Unlike evil acolytes, cultists often show signs of insanity in their beliefs and practices.",
+    "size": "Medium",
+    "type": "humanoid",
+    "subtype": "any race",
+    "alignment": "any non-good alignment",
+    "armor_class": [
+      {
+        "type": "armor",
+        "value": 12,
+        "armor": [
+          {
+            "index": "leather-armor",
+            "name": "Leather Armor"
+          }
+        ]
+      }
+    ],
+    "hit_points": 9,
+    "hit_dice": "2d8",
+    "hit_points_roll": "2d8",
+    "speed": {
+      "walk": "30 ft."
+    },
+    "strength": 11,
+    "dexterity": 12,
+    "constitution": 10,
+    "intelligence": 10,
+    "wisdom": 11,
+    "charisma": 10,
+    "proficiencies": [
+      {
+        "value": 2,
+        "proficiency": {
+          "index": "skill-deception",
+          "name": "Skill: Deception"
+        }
+      },
+      {
+        "value": 2,
+        "proficiency": {
+          "index": "skill-religion",
+          "name": "Skill: Religion"
+        }
+      }
+    ],
+    "damage_vulnerabilities": [],
+    "damage_resistances": [],
+    "damage_immunities": [],
+    "condition_immunities": [],
+    "senses": {
+      "passive_perception": 10
+    },
+    "languages": "any one language (usually Common)",
+    "challenge_rating": 0.125,
+    "proficiency_bonus": 2,
+    "xp": 25,
+    "special_abilities": [
+      {
+        "name": "Dark Devotion",
+        "desc": "The cultist has advantage on saving throws against being charmed or frightened.",
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "name": "Scimitar",
+        "desc": "Melee Weapon Attack: +3 to hit, reach 5 ft., one creature. Hit: 4 (1d6 + 1) slashing damage.",
+        "attack_bonus": 3,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "slashing",
+              "name": "Slashing"
+            },
+            "damage_dice": "1d6+1"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/cultist.png",
+    "forms": [],
+    "legendary_actions": [],
+    "reactions": []
+  },
+  {
+    "index": "gelatinous-cube",
+    "name": "Gelatinous Cube",
+    "size": "Large",
+    "type": "ooze",
+    "alignment": "unaligned",
+    "armor_class": [
+      {
+        "type": "dex",
+        "value": 6
+      }
+    ],
+    "hit_points": 84,
+    "hit_dice": "8d10",
+    "hit_points_roll": "8d10+40",
+    "speed": {
+      "walk": "15 ft."
+    },
+    "strength": 14,
+    "dexterity": 3,
+    "constitution": 20,
+    "intelligence": 1,
+    "wisdom": 6,
+    "charisma": 1,
+    "proficiencies": [],
+    "damage_vulnerabilities": [],
+    "damage_resistances": [],
+    "damage_immunities": [],
+    "condition_immunities": [
+      {
+        "index": "blinded",
+        "name": "Blinded"
+      },
+      {
+        "index": "charmed",
+        "name": "Charmed"
+      },
+      {
+        "index": "deafened",
+        "name": "Deafened"
+      },
+      {
+        "index": "exhaustion",
+        "name": "Exhaustion"
+      },
+      {
+        "index": "frightened",
+        "name": "Frightened"
+      },
+      {
+        "index": "prone",
+        "name": "Prone"
+      }
+    ],
+    "senses": {
+      "blindsight": "60 ft. (blind beyond this radius)",
+      "passive_perception": 8
+    },
+    "languages": "",
+    "challenge_rating": 2,
+    "proficiency_bonus": 2,
+    "xp": 450,
+    "special_abilities": [
+      {
+        "name": "Ooze Cube",
+        "desc": "The cube takes up its entire space. Other creatures can enter the space, but a creature that does so is subjected to the cube's Engulf and has disadvantage on the saving throw.\nCreatures inside the cube can be seen but have total cover.\nA creature within 5 feet of the cube can take an action to pull a creature or object out of the cube. Doing so requires a successful DC 12 Strength check, and the creature making the attempt takes 10 (3d6) acid damage.\nThe cube can hold only one Large creature or up to four Medium or smaller creatures inside it at a time.",
+        "damage": []
+      },
+      {
+        "name": "Transparent",
+        "desc": "Even when the cube is in plain sight, it takes a successful DC 15 Wisdom (Perception) check to spot a cube that has neither moved nor attacked. A creature that tries to enter the cube's space while unaware of the cube is surprised by the cube.",
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "name": "Pseudopod",
+        "desc": "Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 10 (3d6) acid damage.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "acid",
+              "name": "Acid"
+            },
+            "damage_dice": "3d6"
+          }
+        ],
+        "actions": []
+      },
+      {
+        "name": "Engulf",
+        "desc": "The cube moves up to its speed. While doing so, it can enter Large or smaller creatures' spaces. Whenever the cube enters a creature's space, the creature must make a DC 12 Dexterity saving throw.\nOn a successful save, the creature can choose to be pushed 5 feet back or to the side of the cube. A creature that chooses not to be pushed suffers the consequences of a failed saving throw.\nOn a failed save, the cube enters the creature's space, and the creature takes 10 (3d6) acid damage and is engulfed. The engulfed creature can't breathe, is restrained, and takes 21 (6d6) acid damage at the start of each of the cube's turns. When the cube moves, the engulfed creature moves with it.\nAn engulfed creature can try to escape by taking an action to make a DC 12 Strength check. On a success, the creature escapes and enters a space of its choice within 5 feet of the cube.",
+        "dc": {
+          "dc_type": {
+            "index": "dex",
+            "name": "DEX"
+          },
+          "dc_value": 12,
+          "success_type": "none"
+        },
+        "damage": [
+          {
+            "damage_type": {
+              "index": "acid",
+              "name": "Acid"
+            },
+            "damage_dice": "3d6"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/gelatinous-cube.png",
+    "forms": [],
+    "legendary_actions": [],
+    "reactions": []
+  },
+  {
+    "index": "ghoul",
+    "name": "Ghoul",
+    "size": "Medium",
+    "type": "undead",
+    "alignment": "chaotic evil",
+    "armor_class": [
+      {
+        "type": "dex",
+        "value": 12
+      }
+    ],
+    "hit_points": 22,
+    "hit_dice": "5d8",
+    "hit_points_roll": "5d8",
+    "speed": {
+      "walk": "30 ft."
+    },
+    "strength": 13,
+    "dexterity": 15,
+    "constitution": 10,
+    "intelligence": 7,
+    "wisdom": 10,
+    "charisma": 6,
+    "proficiencies": [],
+    "damage_vulnerabilities": [],
+    "damage_resistances": [],
+    "damage_immunities": ["poison"],
+    "condition_immunities": [
+      {
+        "index": "poisoned",
+        "name": "Poisoned"
+      },
+      {
+        "index": "charmed",
+        "name": "Charmed"
+      },
+      {
+        "index": "exhaustion",
+        "name": "Exhaustion"
+      }
+    ],
+    "senses": {
+      "darkvision": "60 ft.",
+      "passive_perception": 10
+    },
+    "languages": "Common",
+    "challenge_rating": 1,
+    "proficiency_bonus": 2,
+    "xp": 200,
+    "actions": [
+      {
+        "name": "Bite",
+        "desc": "Melee Weapon Attack: +2 to hit, reach 5 ft., one creature. Hit: 9 (2d6 + 2) piercing damage.",
+        "attack_bonus": 2,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "piercing",
+              "name": "Piercing"
+            },
+            "damage_dice": "2d6+2"
+          }
+        ],
+        "actions": []
+      },
+      {
+        "name": "Claws",
+        "desc": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (2d4 + 2) slashing damage. If the target is a creature other than an elf or undead, it must succeed on a DC 10 Constitution saving throw or be paralyzed for 1 minute. The target can repeat the saving throw at the end of each of its turns, ending the effect on itself on a success.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "slashing",
+              "name": "Slashing"
+            },
+            "damage_dice": "2d4+2"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/ghoul.png",
+    "forms": [],
+    "legendary_actions": [],
+    "reactions": [],
+    "special_abilities": []
+  },
+  {
+    "index": "goblin",
+    "name": "Goblin",
+    "size": "Small",
+    "type": "humanoid",
+    "subtype": "goblinoid",
+    "alignment": "neutral evil",
+    "armor_class": [
+      {
+        "type": "armor",
+        "value": 15,
+        "armor": [
+          {
+            "index": "leather-armor",
+            "name": "Leather Armor"
+          },
+          {
+            "index": "shield",
+            "name": "Shield"
+          }
+        ]
+      }
+    ],
+    "hit_points": 7,
+    "hit_dice": "2d6",
+    "hit_points_roll": "2d6",
+    "speed": {
+      "walk": "30 ft."
+    },
+    "strength": 8,
+    "dexterity": 14,
+    "constitution": 10,
+    "intelligence": 10,
+    "wisdom": 8,
+    "charisma": 8,
+    "proficiencies": [
+      {
+        "value": 6,
+        "proficiency": {
+          "index": "skill-stealth",
+          "name": "Skill: Stealth"
+        }
+      }
+    ],
+    "damage_vulnerabilities": [],
+    "damage_resistances": [],
+    "damage_immunities": [],
+    "condition_immunities": [],
+    "senses": {
+      "darkvision": "60 ft.",
+      "passive_perception": 9
+    },
+    "languages": "Common, Goblin",
+    "challenge_rating": 0.25,
+    "proficiency_bonus": 2,
+    "xp": 50,
+    "special_abilities": [
+      {
+        "name": "Nimble Escape",
+        "desc": "The goblin can take the Disengage or Hide action as a bonus action on each of its turns.",
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "name": "Scimitar",
+        "desc": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) slashing damage.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "slashing",
+              "name": "Slashing"
+            },
+            "damage_dice": "1d6+2"
+          }
+        ],
+        "actions": []
+      },
+      {
+        "name": "Shortbow",
+        "desc": "Ranged Weapon Attack: +4 to hit, range 80/320 ft., one target. Hit: 5 (1d6 + 2) piercing damage.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "piercing",
+              "name": "Piercing"
+            },
+            "damage_dice": "1d6+2"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/goblin.png",
+    "forms": [],
+    "legendary_actions": [],
+    "reactions": []
+  },
+  {
+    "index": "lich",
+    "name": "Lich",
+    "size": "Medium",
+    "type": "undead",
+    "alignment": "any evil alignment",
+    "armor_class": [
+      {
+        "type": "natural",
+        "value": 17
+      }
+    ],
+    "hit_points": 135,
+    "hit_dice": "18d8",
+    "hit_points_roll": "18d8+54",
+    "speed": {
+      "walk": "30 ft."
+    },
+    "strength": 11,
+    "dexterity": 16,
+    "constitution": 16,
+    "intelligence": 20,
+    "wisdom": 14,
+    "charisma": 16,
+    "proficiencies": [
+      {
+        "value": 10,
+        "proficiency": {
+          "index": "saving-throw-con",
+          "name": "Saving Throw: CON"
+        }
+      },
+      {
+        "value": 12,
+        "proficiency": {
+          "index": "saving-throw-int",
+          "name": "Saving Throw: INT"
+        }
+      },
+      {
+        "value": 9,
+        "proficiency": {
+          "index": "saving-throw-wis",
+          "name": "Saving Throw: WIS"
+        }
+      },
+      {
+        "value": 18,
+        "proficiency": {
+          "index": "skill-arcana",
+          "name": "Skill: Arcana"
+        }
+      },
+      {
+        "value": 12,
+        "proficiency": {
+          "index": "skill-history",
+          "name": "Skill: History"
+        }
+      },
+      {
+        "value": 9,
+        "proficiency": {
+          "index": "skill-insight",
+          "name": "Skill: Insight"
+        }
+      },
+      {
+        "value": 9,
+        "proficiency": {
+          "index": "skill-perception",
+          "name": "Skill: Perception"
+        }
+      }
+    ],
+    "damage_vulnerabilities": [],
+    "damage_resistances": ["cold", "lightning", "necrotic"],
+    "damage_immunities": ["poison", "bludgeoning, piercing, and slashing from nonmagical weapons"],
+    "condition_immunities": [
+      {
+        "index": "charmed",
+        "name": "Charmed"
+      },
+      {
+        "index": "exhaustion",
+        "name": "Exhaustion"
+      },
+      {
+        "index": "frightened",
+        "name": "Frightened"
+      },
+      {
+        "index": "paralyzed",
+        "name": "Paralyzed"
+      },
+      {
+        "index": "poisoned",
+        "name": "Poisoned"
+      }
+    ],
+    "senses": {
+      "truesight": "120 ft.",
+      "passive_perception": 19
+    },
+    "languages": "Common plus up to five other languages",
+    "challenge_rating": 21,
+    "proficiency_bonus": 7,
+    "xp": 33000,
+    "special_abilities": [
+      {
+        "name": "Legendary Resistance",
+        "desc": "If the lich fails a saving throw, it can choose to succeed instead.",
+        "usage": {
+          "type": "per day",
+          "times": 3,
+          "rest_types": []
+        },
+        "damage": []
+      },
+      {
+        "name": "Rejuvenation",
+        "desc": "If it has a phylactery, a destroyed lich gains a new body in 1d10 days, regaining all its hit points and becoming active again. The new body appears within 5 feet of the phylactery.",
+        "damage": []
+      },
+      {
+        "name": "Spellcasting",
+        "desc": "The lich is an 18th-level spellcaster. Its spellcasting ability is Intelligence (spell save DC 20, +12 to hit with spell attacks). The lich has the following wizard spells prepared:\n\n- Cantrips (at will): mage hand, prestidigitation, ray of frost\n- 1st level (4 slots): detect magic, magic missile, shield, thunderwave\n- 2nd level (3 slots): acid arrow, detect thoughts, invisibility, mirror image\n- 3rd level (3 slots): animate dead, counterspell, dispel magic, fireball\n- 4th level (3 slots): blight, dimension door\n- 5th level (3 slots): cloudkill, scrying\n- 6th level (1 slot): disintegrate, globe of invulnerability\n- 7th level (1 slot): finger of death, plane shift\n- 8th level (1 slot): dominate monster, power word stun\n- 9th level (1 slot): power word kill",
+        "spellcasting": {
+          "level": 18,
+          "ability": {
+            "index": "int",
+            "name": "INT"
+          },
+          "dc": 20,
+          "modifier": 12,
+          "components_required": ["V", "S", "M"],
+          "school": "wizard",
+          "slots": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "4": 3,
+            "5": 3,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          },
+          "spells": [
+            {
+              "name": "Mage Hand",
+              "level": 0
+            },
+            {
+              "name": "Prestidigitation",
+              "level": 0
+            },
+            {
+              "name": "Ray of Frost",
+              "level": 0
+            },
+            {
+              "name": "Detect Magic",
+              "level": 1
+            },
+            {
+              "name": "Magic Missile",
+              "level": 1
+            },
+            {
+              "name": "Shield",
+              "level": 1
+            },
+            {
+              "name": "Thunderwave",
+              "level": 1
+            },
+            {
+              "name": "Acid Arrow",
+              "level": 2
+            },
+            {
+              "name": "Detect Thoughts",
+              "level": 2
+            },
+            {
+              "name": "Invisibility",
+              "level": 2
+            },
+            {
+              "name": "Mirror Image",
+              "level": 2
+            },
+            {
+              "name": "Animate Dead",
+              "level": 3
+            },
+            {
+              "name": "Counterspell",
+              "level": 3
+            },
+            {
+              "name": "Dispel Magic",
+              "level": 3
+            },
+            {
+              "name": "Fireball",
+              "level": 3
+            },
+            {
+              "name": "Blight",
+              "level": 4
+            },
+            {
+              "name": "Dimension Door",
+              "level": 4
+            },
+            {
+              "name": "Cloudkill",
+              "level": 5
+            },
+            {
+              "name": "Scrying",
+              "level": 5
+            },
+            {
+              "name": "Disintegrate",
+              "level": 6
+            },
+            {
+              "name": "Globe of Invulnerability",
+              "level": 6
+            },
+            {
+              "name": "Finger of Death",
+              "level": 7
+            },
+            {
+              "name": "Plane Shift",
+              "level": 7
+            },
+            {
+              "name": "Dominate Monster",
+              "level": 8
+            },
+            {
+              "name": "Power Word Stun",
+              "level": 8
+            },
+            {
+              "name": "Power Word Kill",
+              "level": 9
+            }
+          ]
+        },
+        "damage": []
+      },
+      {
+        "name": "Turn Resistance",
+        "desc": "The lich has advantage on saving throws against any effect that turns undead.",
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "name": "Paralyzing Touch",
+        "desc": "Melee Spell Attack: +12 to hit, reach 5 ft., one creature. Hit: 10 (3d6) cold damage. The target must succeed on a DC 18 Constitution saving throw or be paralyzed for 1 minute. The target can repeat the saving throw at the end of each of its turns, ending the effect on itself on a success.",
+        "attack_bonus": 12,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "cold",
+              "name": "Cold"
+            },
+            "damage_dice": "3d6"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "legendary_actions": [
+      {
+        "name": "Cantrip",
+        "desc": "The lich casts a cantrip.",
+        "damage": []
+      },
+      {
+        "name": "Paralyzing Touch (Costs 2 Actions)",
+        "desc": "The lich uses its Paralyzing Touch.",
+        "damage": []
+      },
+      {
+        "name": "Frightening Gaze (Costs 2 Actions)",
+        "desc": "The lich fixes its gaze on one creature it can see within 10 feet of it. The target must succeed on a DC 18 Wisdom saving throw against this magic or become frightened for 1 minute. The frightened target can repeat the saving throw at the end of each of its turns, ending the effect on itself on a success. If a target's saving throw is successful or the effect ends for it, the target is immune to the lich's gaze for the next 24 hours.",
+        "dc": {
+          "dc_type": {
+            "index": "wis",
+            "name": "WIS"
+          },
+          "dc_value": 18,
+          "success_type": "none"
+        },
+        "damage": []
+      },
+      {
+        "name": "Disrupt Life (Costs 3 Actions)",
+        "desc": "Each living creature within 20 feet of the lich must make a DC 18 Constitution saving throw against this magic, taking 21 (6d6) necrotic damage on a failed save, or half as much damage on a successful one.",
+        "dc": {
+          "dc_type": {
+            "index": "con",
+            "name": "CON"
+          },
+          "dc_value": 18,
+          "success_type": "none"
+        },
+        "damage": [
+          {
+            "damage_type": {
+              "index": "necrotic",
+              "name": "Necrotic"
+            },
+            "damage_dice": "6d6"
+          }
+        ]
+      }
+    ],
+    "image": "/api/images/monsters/lich.png",
+    "forms": [],
+    "reactions": []
+  },
+  {
+    "index": "shadow",
+    "name": "Shadow",
+    "size": "Medium",
+    "type": "undead",
+    "alignment": "chaotic evil",
+    "armor_class": [
+      {
+        "type": "dex",
+        "value": 12
+      }
+    ],
+    "hit_points": 16,
+    "hit_dice": "3d8",
+    "hit_points_roll": "3d8+3",
+    "speed": {
+      "walk": "40 ft."
+    },
+    "strength": 6,
+    "dexterity": 14,
+    "constitution": 13,
+    "intelligence": 6,
+    "wisdom": 10,
+    "charisma": 8,
+    "proficiencies": [
+      {
+        "value": 4,
+        "proficiency": {
+          "index": "skill-stealth",
+          "name": "Skill: Stealth"
+        }
+      }
+    ],
+    "damage_vulnerabilities": ["radiant"],
+    "damage_resistances": [
+      "acid",
+      "cold",
+      "fire",
+      "lightning",
+      "thunder",
+      "bludgeoning, piercing, and slashing from nonmagical weapons"
+    ],
+    "damage_immunities": ["necrotic", "poison"],
+    "condition_immunities": [
+      {
+        "index": "exhaustion",
+        "name": "Exhaustion"
+      },
+      {
+        "index": "frightened",
+        "name": "Frightened"
+      },
+      {
+        "index": "grappled",
+        "name": "Grappled"
+      },
+      {
+        "index": "paralyzed",
+        "name": "Paralyzed"
+      },
+      {
+        "index": "petrified",
+        "name": "Petrified"
+      },
+      {
+        "index": "poisoned",
+        "name": "Poisoned"
+      },
+      {
+        "index": "prone",
+        "name": "Prone"
+      },
+      {
+        "index": "restrained",
+        "name": "Restrained"
+      }
+    ],
+    "senses": {
+      "darkvision": "60 ft.",
+      "passive_perception": 10
+    },
+    "languages": "",
+    "challenge_rating": 0.5,
+    "proficiency_bonus": 2,
+    "xp": 100,
+    "special_abilities": [
+      {
+        "name": "Amorphous",
+        "desc": "The shadow can move through a space as narrow as 1 inch wide without squeezing.",
+        "damage": []
+      },
+      {
+        "name": "Shadow Stealth",
+        "desc": "While in dim light or darkness, the shadow can take the Hide action as a bonus action. Its stealth bonus is also improved to +6.",
+        "damage": []
+      },
+      {
+        "name": "Sunlight Weakness",
+        "desc": "While in sunlight, the shadow has disadvantage on attack rolls, ability checks, and saving throws.",
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "name": "Strength Drain",
+        "desc": "Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 9 (2d6 + 2) necrotic damage, and the target's Strength score is reduced by 1d4. The target dies if this reduces its Strength to 0. Otherwise, the reduction lasts until the target finishes a short or long rest.\nIf a non-evil humanoid dies from this attack, a new shadow rises from the corpse 1d4 hours later.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "necrotic",
+              "name": "Necrotic"
+            },
+            "damage_dice": "2d6+2"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/shadow.png",
+    "forms": [],
+    "legendary_actions": [],
+    "reactions": []
+  },
+  {
+    "index": "skeleton",
+    "name": "Skeleton",
+    "size": "Medium",
+    "type": "undead",
+    "alignment": "lawful evil",
+    "armor_class": [
+      {
+        "type": "armor",
+        "value": 13,
+        "desc": "armor scraps"
+      }
+    ],
+    "hit_points": 13,
+    "hit_dice": "2d8",
+    "hit_points_roll": "2d8+4",
+    "speed": {
+      "walk": "30 ft."
+    },
+    "strength": 10,
+    "dexterity": 14,
+    "constitution": 15,
+    "intelligence": 6,
+    "wisdom": 8,
+    "charisma": 5,
+    "proficiencies": [],
+    "damage_vulnerabilities": ["bludgeoning"],
+    "damage_resistances": [],
+    "damage_immunities": ["poison"],
+    "condition_immunities": [
+      {
+        "index": "poisoned",
+        "name": "Poisoned"
+      },
+      {
+        "index": "exhaustion",
+        "name": "Exhaustion"
+      }
+    ],
+    "senses": {
+      "darkvision": "60 ft.",
+      "passive_perception": 9
+    },
+    "languages": "understands all languages it spoke in life but can't speak",
+    "challenge_rating": 0.25,
+    "proficiency_bonus": 2,
+    "xp": 50,
+    "actions": [
+      {
+        "name": "Shortsword",
+        "desc": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) piercing damage.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "piercing",
+              "name": "Piercing"
+            },
+            "damage_dice": "1d6+2"
+          }
+        ],
+        "actions": []
+      },
+      {
+        "name": "Shortbow",
+        "desc": "Ranged Weapon Attack: +4 to hit, range 80/320 ft., one target. Hit: 5 (1d6 + 2) piercing damage.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "piercing",
+              "name": "Piercing"
+            },
+            "damage_dice": "1d6+2"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/skeleton.png",
+    "forms": [],
+    "legendary_actions": [],
+    "reactions": [],
+    "special_abilities": []
+  },
+  {
+    "index": "werewolf-hybrid",
+    "name": "Werewolf, Hybrid Form",
+    "size": "Medium",
+    "type": "humanoid",
+    "subtype": "human",
+    "alignment": "chaotic evil",
+    "armor_class": [
+      {
+        "type": "natural",
+        "value": 12
+      }
+    ],
+    "hit_points": 58,
+    "hit_dice": "9d8",
+    "forms": [
+      {
+        "index": "werewolf-human",
+        "name": "Werewolf, Human Form"
+      },
+      {
+        "index": "werewolf-wolf",
+        "name": "Werewolf, Wolf Form"
+      }
+    ],
+    "hit_points_roll": "9d8+18",
+    "speed": {
+      "walk": "30 ft."
+    },
+    "strength": 15,
+    "dexterity": 13,
+    "constitution": 14,
+    "intelligence": 10,
+    "wisdom": 11,
+    "charisma": 10,
+    "proficiencies": [
+      {
+        "value": 4,
+        "proficiency": {
+          "index": "skill-perception",
+          "name": "Skill: Perception"
+        }
+      }
+    ],
+    "damage_vulnerabilities": [],
+    "damage_resistances": [],
+    "damage_immunities": ["bludgeoning, piercing, and slashing from nonmagical weapons that aren't silvered"],
+    "condition_immunities": [],
+    "senses": {
+      "passive_perception": 14
+    },
+    "languages": "Common",
+    "challenge_rating": 3,
+    "proficiency_bonus": 2,
+    "xp": 700,
+    "special_abilities": [
+      {
+        "name": "Shapechanger",
+        "desc": "The werewolf can use its action to polymorph into a wolf-humanoid hybrid or into a wolf, or back into its true form, which is humanoid. Its statistics, other than its AC, are the same in each form. Any equipment it is wearing or carrying isn't transformed. It reverts to its true form if it dies.",
+        "damage": []
+      },
+      {
+        "name": "Keen Hearing and Smell",
+        "desc": "The werewolf has advantage on Wisdom (Perception) checks that rely on hearing or smell.",
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "damage": [],
+        "name": "Multiattack",
+        "multiattack_type": "actions",
+        "desc": "The werewolf makes two attacks: two with its spear (humanoid form) or one with its bite and one with its claws (hybrid form).",
+        "actions": [
+          {
+            "action_name": "Bite",
+            "count": "1",
+            "type": "melee"
+          },
+          {
+            "action_name": "Claws",
+            "count": "1",
+            "type": "melee"
+          }
+        ]
+      },
+      {
+        "name": "Bite",
+        "desc": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 6 (1d8 + 2) piercing damage. If the target is a humanoid, it must succeed on a DC 12 Constitution saving throw or be cursed with werewolf lycanthropy.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "piercing",
+              "name": "Piercing"
+            },
+            "damage_dice": "1d8+2"
+          }
+        ],
+        "actions": []
+      },
+      {
+        "name": "Claws",
+        "desc": "Melee Weapon Attack: +4 to hit, reach 5 ft., one creature. Hit: 7 (2d4 + 2) slashing damage.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "slashing",
+              "name": "Slashing"
+            },
+            "damage_dice": "2d4+2"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/werewolf-hybrid.png",
+    "legendary_actions": [],
+    "reactions": []
+  },
+  {
+    "index": "wolf",
+    "name": "Wolf",
+    "size": "Medium",
+    "type": "beast",
+    "alignment": "unaligned",
+    "armor_class": [
+      {
+        "type": "natural",
+        "value": 13
+      }
+    ],
+    "hit_points": 11,
+    "hit_dice": "2d8",
+    "hit_points_roll": "2d8+2",
+    "speed": {
+      "walk": "40 ft."
+    },
+    "strength": 12,
+    "dexterity": 15,
+    "constitution": 12,
+    "intelligence": 3,
+    "wisdom": 12,
+    "charisma": 6,
+    "proficiencies": [
+      {
+        "value": 3,
+        "proficiency": {
+          "index": "skill-perception",
+          "name": "Skill: Perception"
+        }
+      },
+      {
+        "value": 4,
+        "proficiency": {
+          "index": "skill-stealth",
+          "name": "Skill: Stealth"
+        }
+      }
+    ],
+    "damage_vulnerabilities": [],
+    "damage_resistances": [],
+    "damage_immunities": [],
+    "condition_immunities": [],
+    "senses": {
+      "passive_perception": 13
+    },
+    "languages": "",
+    "challenge_rating": 0.25,
+    "proficiency_bonus": 2,
+    "xp": 50,
+    "special_abilities": [
+      {
+        "name": "Keen Hearing and Smell",
+        "desc": "The wolf has advantage on Wisdom (Perception) checks that rely on hearing or smell.",
+        "damage": []
+      },
+      {
+        "name": "Pack Tactics",
+        "desc": "The wolf has advantage on an attack roll against a creature if at least one of the wolf's allies is within 5 ft. of the creature and the ally isn't incapacitated.",
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "name": "Bite",
+        "desc": "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 7 (2d4 + 2) piercing damage. If the target is a creature, it must succeed on a DC 11 Strength saving throw or be knocked prone.",
+        "attack_bonus": 4,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "piercing",
+              "name": "Piercing"
+            },
+            "damage_dice": "2d4+2"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/wolf.png",
+    "forms": [],
+    "legendary_actions": [],
+    "reactions": []
+  },
+  {
+    "index": "zombie",
+    "name": "Zombie",
+    "size": "Medium",
+    "type": "undead",
+    "alignment": "neutral evil",
+    "armor_class": [
+      {
+        "type": "dex",
+        "value": 8
+      }
+    ],
+    "hit_points": 22,
+    "hit_dice": "3d8",
+    "hit_points_roll": "3d8+9",
+    "speed": {
+      "walk": "20 ft."
+    },
+    "strength": 13,
+    "dexterity": 6,
+    "constitution": 16,
+    "intelligence": 3,
+    "wisdom": 6,
+    "charisma": 5,
+    "proficiencies": [
+      {
+        "value": 0,
+        "proficiency": {
+          "index": "saving-throw-wis",
+          "name": "Saving Throw: WIS"
+        }
+      }
+    ],
+    "damage_vulnerabilities": [],
+    "damage_resistances": [],
+    "damage_immunities": ["poison"],
+    "condition_immunities": [
+      {
+        "index": "poisoned",
+        "name": "Poisoned"
+      }
+    ],
+    "senses": {
+      "darkvision": "60 ft.",
+      "passive_perception": 8
+    },
+    "languages": "understands all languages it spoke in life but can't speak",
+    "challenge_rating": 0.25,
+    "proficiency_bonus": 2,
+    "xp": 50,
+    "special_abilities": [
+      {
+        "name": "Undead Fortitude",
+        "desc": "If damage reduces the zombie to 0 hit points, it must make a Constitution saving throw with a DC of 5+the damage taken, unless the damage is radiant or from a critical hit. On a success, the zombie drops to 1 hit point instead.",
+        "damage": []
+      }
+    ],
+    "actions": [
+      {
+        "name": "Slam",
+        "desc": "Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6 + 1) bludgeoning damage.",
+        "attack_bonus": 3,
+        "damage": [
+          {
+            "damage_type": {
+              "index": "bludgeoning",
+              "name": "Bludgeoning"
+            },
+            "damage_dice": "1d6+1"
+          }
+        ],
+        "actions": []
+      }
+    ],
+    "image": "/api/images/monsters/zombie.png",
+    "forms": [],
+    "legendary_actions": [],
+    "reactions": []
+  }
+]

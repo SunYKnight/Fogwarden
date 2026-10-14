@@ -2,13 +2,36 @@
 
 ## Unreleased
 
-- Creature pictures from the free D&D 5e API (dnd5eapi.co), which has one painted picture per SRD 5.1 monster:
-  Compendium › Creatures › Import ▾ › Pictures from the D&D 5e API…, the hint "N SRD monsters have no picture"
-  above the creature list, or the new first step "Download monster pictures" on Home. The dialog lists the
-  matches, can replace existing pictures, shows progress, shrinks each picture to a 768 px JPEG and saves it in My
-  content (about 580 MB download, 45 MB stored for all 334). "Pictures from a folder" uses the same dialog.
-- Compendium › Creatures: New creature is a plain button; next to it **Import ▾** gathers Stat block from text,
-  Characters from Aurora Builder, Pictures from the D&D 5e API and Pictures from a folder.
+- **Import from the D&D 5e API**: the app no longer ships monsters; Compendium › Creatures › Import ▾ › Everything
+  from the D&D 5e API… (also Items and Spells, their empty states, the empty Creatures list and Add combatants)
+  downloads the System Reference Document 5.1 from dnd5eapi.co into the pack "D&D 5e API (SRD 5.1)" in the data
+  folder: 334 monsters (stat blocks), 319 spells, area templates for the 88 spells with an area (save with a
+  placeholder DC 13, damage at the spell's own level, a color per damage type), 362 magic items with their variants,
+  237 pieces of equipment (weapons with damage and properties, armor with AC, gear, tools, mounts) and, optionally,
+  the 334 monster pictures (about 580 MB download, shrunk to 768 px JPEG, for personal use). Each part has its own
+  checkbox with count and size, progress per part and can be cancelled; what was written stays, importing again
+  overwrites the pack. Ids are the SRD ones (`srd-goblin`), so existing encounters, pictures named
+  `library/creatures/srd-*.jpg` and the five shipped area templates keep working; the API's area templates
+  replace the shipped five by pack precedence. The shipped pack "SRD 5.1" now holds only those five area
+  templates. The first step on Home "Download the SRD rules content" (settings: `srdData`, replacing
+  `monsterPictures`) opens the import and is done once an import wrote something.
+- Monster pictures alone: Compendium › Creatures › Import ▾ › Pictures from the D&D 5e API…, or the hint "N SRD
+  monsters have no picture" above the creature list (it counts monsters of the D&D 5e API pack; with no monsters at
+  all it offers the import instead). The dialog lists the matches, can replace existing pictures, shows progress,
+  shrinks each picture to a 768 px JPEG and saves it in My content (about 580 MB download, 45 MB stored for all
+  334). "Pictures from a folder" uses the same dialog.
+- Compendium › Creatures: New creature is a plain button; next to it **Import ▾** gathers Everything from the D&D
+  5e API, Stat block from text, Characters from Aurora Builder, Pictures from the D&D 5e API and Pictures from a
+  folder. Items and Spells: Import from the D&D 5e API…, with Import from Aurora Builder… and Manage content packs…
+  in the arrow menu.
+- **Campaign party and stable player links.** The Compendium has a new **Players** tab listing your player
+  characters (Aurora Builder imports and your own) with picture, level, race/class, AC, HP and the campaigns whose
+  party they are in; create one with **New player character** or import from Aurora Builder. The Creatures tab now
+  lists monsters and NPCs only. Each campaign gets a **Party** tab: add characters from the compendium (or import
+  them from Aurora first), note who plays them, remove them again. In an encounter, **+ Add > Add party** brings in
+  every party member not yet there as a player character and vision source. A party member's player link and QR
+  code now stay the same for the whole campaign instead of changing with every encounter. Campaign exports bundle
+  the party's own characters and name the packs (e.g. Aurora Builder) the others come from.
 - Campaigns can be **exported and imported** as one `.zip` (`<campaign id>.fogwarden-campaign.zip`): Export… on
   the campaign page (also right-click a campaign card, or Search › Export campaign…), Import campaign… on the
   Campaigns page (also Search, and Home's Import… or a drop on Home). The archive holds the whole campaign folder
@@ -23,7 +46,8 @@
   calendar with events, and three encounters on the sample chapel map: the goblin ambush, a night vigil
   (darkvision, a torch, a shadow hidden from the players, a Moonbeam area, Bless and Turn Undead with durations,
   fog weather) and Brother Aldric's midnight rite, prepared with nobody placed yet. It is created once; afterwards
-  only a deleted goblin ambush comes back.
+  only a deleted goblin ambush comes back. Its monsters missing from the data folder are imported from the D&D 5e
+  API first (needs internet; offline it says so).
 - Maps: the sample map (and any map from a pack) can be deleted; that turns its pack off (the confirm names what
   else the pack holds), and Settings > Content turns it back on.
 - Compendium Items and Spells: rows show the source book ("Player’s Handbook", "Xanathar’s Guide to Everything")

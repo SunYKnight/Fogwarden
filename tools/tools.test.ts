@@ -1,12 +1,17 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { calendarSchema } from '../src/core/campaign/calendar';
+import { formatCreatureFile } from '../src/core/import/creatureFile';
+import { srdCreature } from '../src/core/import/dnd5eApi';
+import { FIXTURE_MONSTERS } from '../src/core/import/fixtures/dnd5eApiMonsters';
 import { imageSize } from '../src/core/imageSize';
 import { campaignSchema, defaultSettings, encounterSchema } from '../src/core/model';
 import { HeightField } from '../src/core/terrain/heightfield';
 import { CampaignFiles, CAST, JOURNAL, QUESTS } from '../src/data/campaignFiles';
-import { campaignPath, Repository } from '../src/data/repository';
+import { DND5E_API_PACK } from '../src/data/dnd5eApiImport';
+import { writableSource } from '../src/data/packs';
+import { campaignPath, libraryDocPath, Repository } from '../src/data/repository';
 import { StorageError } from '../src/data/storage';
 import { ensureSampleCampaign } from '../src/ui/home/sampleCampaign';
 import {
@@ -26,16 +31,24 @@ mkdirSync(scratchParent, { recursive: true });
 const scratch = mkdtempSync(join(scratchParent, 'tools-test-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
+/** The sample campaign's monsters as the D&D 5e API import leaves them, without asking the API. */
+async function seedApiMonsters(repository: Repository): Promise<void> {
+  await repository.ensurePack(DND5E_API_PACK);
+  const source = writableSource(DND5E_API_PACK.id);
+  for (const creature of FIXTURE_MONSTERS.map(srdCreature)) {
+    await repository.storage.writeText(libraryDocPath('creature', source, creature.id), formatCreatureFile(creature));
+  }
+}
+
 describe('shipped SRD content', () => {
   const repository = new Repository(new NodeStorage(scratch, CONTENT_ROOT));
 
-  it('loads every creature and marker without problems', async () => {
+  it('ships area templates and no creatures', async () => {
     const creatures = await repository.list('creature');
     const markers = await repository.list('marker');
     expect(creatures.problems).toEqual([]);
     expect(markers.problems).toEqual([]);
-    expect(creatures.entries.length).toBeGreaterThanOrEqual(300);
-    expect(creatures.entries.every((e) => e.doc.license === 'CC-BY-4.0' && e.pack === 'srd')).toBe(true);
+    expect(creatures.entries).toEqual([]);
     expect(markers.entries.map((e) => [e.doc.name, e.doc.shape, e.doc.sizeFt])).toEqual([
       ['Burning Hands', 'cone', 15],
       ['Fireball', 'sphere', 20],
@@ -57,7 +70,7 @@ describe('shipped SRD content', () => {
     expect(shipped.map((p) => p.counts)).toEqual([
       { creature: 0, marker: 0, map: 0, table: 0, item: 0, spell: 0, model: 11, portrait: 0 },
       { creature: 0, marker: 0, map: 1, table: 0, item: 0, spell: 0, model: 0, portrait: 0 },
-      { creature: 334, marker: 5, map: 0, table: 0, item: 0, spell: 0, model: 0, portrait: 0 },
+      { creature: 0, marker: 5, map: 0, table: 0, item: 0, spell: 0, model: 0, portrait: 0 },
     ]);
     expect(shipped.every((p) => existsSync(join(CONTENT_ROOT, p.source.root, 'LICENSE.md')))).toBe(true);
   });
@@ -81,7 +94,7 @@ describe('shipped sample map', () => {
 
   it('builds the sample encounter with four goblins and two PCs on the map', async () => {
     const map = await repository.load('map', SAMPLE_MAP);
-    const goblin = await repository.load('creature', SAMPLE_GOBLIN);
+    const goblin = srdCreature(FIXTURE_MONSTERS.find((m) => `srd-${m.index}` === SAMPLE_GOBLIN.id)!);
     const encounter = encounterSchema.parse(createSampleEncounter(map, goblin));
     const terrain = HeightField.fromMap(map);
     expect(encounter.map).toEqual(SAMPLE_MAP);
@@ -105,6 +118,7 @@ describe('sample campaign', () => {
   const encounterIds = [SAMPLE_ENCOUNTER_ID, SAMPLE_PREPARED_ID, SAMPLE_NIGHT_ID];
 
   it('creates every document so that it parses with its schema', async () => {
+    await seedApiMonsters(repository);
     await ensureSampleCampaign(repository);
     const { campaigns, problems } = await repository.listCampaigns();
     expect(problems).toEqual([]);
@@ -162,6 +176,17 @@ describe('sample campaign', () => {
     await hidden.saveSettings({ ...defaultSettings(), packs: { order: [], disabled: ['sample-map'] } });
     await expect(ensureSampleCampaign(hidden)).rejects.toThrow('"Sample map"; enable it under Settings > Content');
     expect(await hidden.storage.exists('data', campaignPath(SAMPLE_CAMPAIGN_ID))).toBe(false);
+  });
+
+  it('explains that it needs the D&D 5e API when the monsters are missing and the API is unreachable', async () => {
+    const offline = new Repository(new NodeStorage(mkdtempSync(join(scratch, 'offline-')), CONTENT_ROOT));
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    try {
+      await expect(ensureSampleCampaign(offline)).rejects.toThrow('check the internet connection');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(await offline.storage.exists('data', campaignPath(SAMPLE_CAMPAIGN_ID))).toBe(false);
   });
 });
 

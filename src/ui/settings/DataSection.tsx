@@ -95,8 +95,8 @@ export function DataSection() {
           </p>
         )}
         <p className="muted small">
-          Put the data folder in a synced folder (e.g. Dropbox) to use it on several computers. Shipped SRD content is
-          read from <code>{roots?.contentRoot}</code>.
+          Put the data folder in a synced folder (e.g. Dropbox) to use it on several computers. Shipped content (sample
+          map, stand-in models, SRD area templates) is read from <code>{roots?.contentRoot}</code>.
         </p>
         {history && (
           <Dialog title="Version history" width={720} onClose={() => setHistory(false)}>

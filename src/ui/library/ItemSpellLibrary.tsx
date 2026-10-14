@@ -6,7 +6,7 @@ import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { Markdown } from '../components/Markdown';
 import { Button, EmptyState, type IconName } from '../kit';
-import { openAuroraImport } from './compendiumUi';
+import { openAuroraImport, openDndApiImport } from './compendiumUi';
 import { FilterRow, FilterSelect, type FilterChip } from './FilterRow';
 import { OriginBadge } from './OriginBadge';
 import { SplitButton } from './SplitButton';
@@ -24,11 +24,12 @@ export function ReferenceActions() {
   const navigate = useAppStore((s) => s.navigate);
   return (
     <SplitButton
-      icon="upload"
-      label="Import from Aurora Builder…"
-      onClick={openAuroraImport}
+      icon="download"
+      label="Import from the D&D 5e API…"
+      onClick={openDndApiImport}
       menuLabel="More ways to add content"
       items={[
+        { label: 'Import from Aurora Builder…', icon: 'upload', run: openAuroraImport },
         {
           label: 'Manage content packs…',
           icon: 'package',
@@ -100,12 +101,15 @@ function ReferenceSplit<K extends 'item' | 'spell'>(props: SplitProps<K>) {
             title={total === 0 ? `No ${noun}s yet.` : `No ${noun}s match the filters.`}
             action={
               total === 0 ? (
-                <Button
-                  icon="upload"
-                  label="Import from Aurora Builder…"
-                  variant="primary"
-                  onClick={openAuroraImport}
-                />
+                <>
+                  <Button
+                    icon="download"
+                    label="Import from the D&D 5e API…"
+                    variant="primary"
+                    onClick={openDndApiImport}
+                  />
+                  <Button icon="upload" label="Import from Aurora Builder…" onClick={openAuroraImport} />
+                </>
               ) : (
                 <Button label="Reset filters" onClick={reset} />
               )

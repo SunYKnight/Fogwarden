@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BitSet, bytesToBase64 } from '../src/core/binary';
-import { parseCreatureFile } from '../src/core/import/creatureFile';
+import { srdCreature } from '../src/core/import/dnd5eApi';
+import { FIXTURE_MONSTERS } from '../src/core/import/fixtures/dnd5eApiMonsters';
 import { mapSchema } from '../src/core/model';
 import { HeightField } from '../src/core/terrain/heightfield';
 import { exploreBySource, fogSize, viewFog, type FogSources } from '../src/core/vision/fog';
 import { computeVisibility, type VisionState } from '../src/core/vision/visibility';
+import { PACKS_DIR } from '../src/data/packs';
 import { filterEncounterForPlayers } from '../src/sync/playerFilter';
 import { createSampleEncounter, SAMPLE_GOBLIN, SAMPLE_MAP } from '../src/ui/home/sampleContent';
 import { CONTENT_ROOT } from './cli';
@@ -17,11 +19,9 @@ import { CONTENT_ROOT } from './cli';
  */
 const RUNS = 200;
 
-const map = mapSchema.parse(JSON.parse(readFileSync(join(CONTENT_ROOT, 'maps', SAMPLE_MAP.id, 'map.json'), 'utf8')));
-const goblin = parseCreatureFile(
-  readFileSync(join(CONTENT_ROOT, 'creatures', `${SAMPLE_GOBLIN.id}.txt`), 'utf8'),
-  SAMPLE_GOBLIN.id,
-);
+const mapFile = join(CONTENT_ROOT, PACKS_DIR, 'sample-map', 'maps', SAMPLE_MAP.id, 'map.json');
+const map = mapSchema.parse(JSON.parse(readFileSync(mapFile, 'utf8')));
+const goblin = srdCreature(FIXTURE_MONSTERS.find((m) => `srd-${m.index}` === SAMPLE_GOBLIN.id)!);
 const encounter = createSampleEncounter(map, goblin);
 const terrain = HeightField.fromMap(map);
 const pcs = encounter.combatants.filter((c) => c.side === 'player').map((c) => c.id);

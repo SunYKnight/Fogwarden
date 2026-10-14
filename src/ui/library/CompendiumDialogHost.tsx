@@ -9,6 +9,7 @@ import { StatBlock } from '../creature/StatBlock';
 import { Button, Dialog, Icon } from '../kit';
 import { AttachPortraitsDialog } from './AttachPortraitsDialog';
 import { AuroraImportDialog } from './AuroraImportDialog';
+import { DndApiImportDialog } from './DndApiImportDialog';
 import { closeCompendiumDialog, useCompendiumDialogStore } from './compendiumUi';
 
 // Long enough to wait out a burst of typing, short enough to feel live.
@@ -257,6 +258,8 @@ export function CompendiumDialogHost() {
     shown = <AttachPortraitsDialog source={dialog.source} files={dialog.files} />;
   } else if (dialog?.kind === 'aurora-import') {
     shown = <AuroraImportDialog onClose={closeCompendiumDialog} />;
+  } else if (dialog?.kind === 'dnd5e-api-import') {
+    shown = <DndApiImportDialog />;
   }
   return shown;
 }

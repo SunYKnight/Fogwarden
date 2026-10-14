@@ -26,7 +26,7 @@ between modules.
 | `src/workers` | Web workers (visibility).                                                                                   |
 | `src-tauri`   | Rust shell: storage commands, later LAN server.                                                             |
 | `tools`       | Node CLI scripts (run with `pnpm tsx tools/<script>.ts`).                                                   |
-| `content`     | Shipped, read-only content packs in `content/packs/` (SRD 5.1, CC0 models, the generated sample map).       |
+| `content`     | Shipped, read-only content packs in `content/packs/` (SRD 5.1 area templates, CC0 models, the sample map).  |
 
 ## Documents and storage
 
@@ -89,7 +89,7 @@ Packs (`content/packs/<id>/`, `<data root>/packs/<id>/`) use the same folders as
   settings.json
   library/
     creatures/<id>.txt                 stat block text with a header
-    creatures/<id>.png|jpg|jpeg|webp   picture (also for shipped creatures)
+    creatures/<id>.png|jpg|jpeg|webp   picture (also for pack creatures)
     creatures/<id>.token.<ext>         token picture
     markers/<id>.json                  area template
     maps/<id>/map.json                 map without heights
@@ -138,8 +138,8 @@ Packs (`content/packs/<id>/`, `<data root>/packs/<id>/`) use the same folders as
   player character's `level` becomes its combatant's level when added. Unknown or duplicate keys are errors
   naming the line. With a header the block is read exactly (indented lines continue an entry, a bracketed line
   under an action holds attack data its text does not imply); without one, any pasted stat block loads tolerantly
-  as a monster. `parseCreatureFile(formatCreatureFile(c))` reproduces every shipped creature exactly and the text
-  byte for byte (`creatureFile.test.ts`).
+  as a monster. `parseCreatureFile(formatCreatureFile(c))` reproduces every D&D 5e API monster of the fixture
+  `src/core/import/fixtures/dnd5e-api-monsters.json` exactly and the text byte for byte (`creatureFile.test.ts`).
 
   ```text
   ---
@@ -167,8 +167,9 @@ damageType, halfOnSuccess}` (`damage` a dice formula rolled once for all targets
   coarsest power of two the heights lie on, at most 2^-16 ft for small ranges, so saving moves a height by at most
   half a step (whole and half feet stay exact) and a reloaded map saves the same image again. 8-bit and RGB edits load
   too (8-bit value × 257, first channel).
-- **Campaign** (`campaign.json`, schema `campaign` v2): `{schema, version, id, name, createdAt, updatedAt}`;
-  notes in `notes.md` (missing file = no notes).
+- **Campaign** (`campaign.json`, schema `campaign` v3): `{schema, version, id, name, createdAt, updatedAt,
+party: [{id, creature: DocRef, player}]}`; notes in `notes.md` (missing file = no notes). Party members are
+  library creatures (kind player) referenced by `DocRef` plus the player's name; v2 → v3 adds `party: []`.
 - **Journal, people and places, quests** (`src/core/campaign/journal.ts`, `people.ts`, `quests.ts`): Markdown with
   an optional header between `---` lines (`src/core/frontMatter.ts`: one `key: value` per line, lists comma
   separated, unknown or duplicate keys are errors naming the line). Journal keys `title`, `session`, `date`
@@ -199,7 +200,11 @@ title, notes}]}`; months and days count from 1, days have 24 hours, years are th
 dimFt, color}` or null); log kinds `xp`, `loot` and `death` mark End combat and deaths. Fog masks are 1-bit
   grayscale PNGs with one pixel per fog cell (`squaresX *
 cellsPerSquare` × `squaresY * cellsPerSquare`), white = set. Paint white into `fog/revealed.png` to reveal cells.
-  Masks of another size than the map's fog grid (map resized) read as empty.
+  Masks of another size than the map's fog grid (map resized) read as empty. `partyMemberId?` names the party member
+  a combatant was spawned from; such a combatant's `id` is the member's id (`addParty(encounter, members)` in
+  `encounterActions.ts`, Add combatants > Add party), so its player view, link token, `settings.playerWindow.view`
+  and fog key (`fog.exploredBy`, `fog/explored/<id>.png`) are the same in every encounter of the campaign. Absent
+  for everyone else; no encounter schema bump (optional field).
 - **Settings** (`settings.json`, schema `settings` v6): UI and server preferences. Secrets, keep the file private:
   `remote.dmKey` (authenticates the app at the internet relay as DM) and `playerLinks.secret` (all player links are
   derived from it; changing it invalidates every link).
@@ -226,9 +231,9 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
 
 - A pack is a folder `packs/<id>/` with `pack.json` (`packManifestSchema`: `id`, `name`, `version`, `author`,
   `license`, `description`, `url`) and the library folders. Shipped packs are in the content root
-  (`content/packs/srd`, `cc0-models`, `sample-map`), imported ones in the data root; the data root's `library/` is
-  "My content" (`MY_CONTENT`), always on and first. `src/data/packs.ts`: `LibrarySource {pack, area, root}`,
-  `MY_CONTENT_SOURCE`, `packSource`, `writableSource`, `orderPacks`, `mapAssetRefs`/`remapJsonAssets`.
+  (`content/packs/srd` (five area templates), `cc0-models`, `sample-map`), imported ones in the data root; the data
+  root's `library/` is "My content" (`MY_CONTENT`), always on and first. `src/data/packs.ts`: `LibrarySource {pack,
+area, root}`, `MY_CONTENT_SOURCE`, `packSource`, `writableSource`, `orderPacks`, `mapAssetRefs`/`remapJsonAssets`.
 - Precedence: My content, then `settings.packs.order` (settings v7), then packs the order does not name (imported
   before shipped, by id); `settings.packs.disabled` hides packs. `repository.installedPacks()` (all, with
   `enabled`), `librarySources()` (enabled, in order), `listPacks()` (manifest, counts per kind and 3D models,
@@ -260,20 +265,28 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
   (item type and rarity; spell level, school and class; source book for both), rows with the source book (the
   pack shows in the preview), at most 300 rows at once, preview with the facts and the
   Markdown description. `PictureLibraryDialog` (creature editor Image/Token "Library…", Add combatants' hand-typed
-  player character) shows `repository.listPortraits()` as thumbnails.
+  player character) shows `repository.listPortraits()` as thumbnails. Compendium tab Players (`PlayerLibrary.tsx`,
+  `PlayerActions`): library creatures of kind player with `characterSummary` (level, subtype as race, tags but
+  `aurora` as class, AC, HP) and their campaigns' parties; edit/duplicate/delete via
+  `useCreatureActions`/`CreaturePreview` shared with `CreatureLibrary` (which hides kind player). Route
+  `creature-editor` takes `kind` for new creatures (New player character); the editor's Close goes back to the tab
+  of the creature's kind. Campaign tab Party (`src/ui/campaign/PartyTab.tsx`): members with picture, summary,
+  editable player name, remove; Add characters… picker; Import from Aurora…
 - Campaign archives (`src/data/campaignArchive.ts`, `<campaign id>.fogwarden-campaign.zip`) mirror the data root:
   `fogwarden-campaign.json` (`manifestSchema`: `format` 1, `app`, `exportedAt`, `campaign {id, name}`,
   `library [{kind: creature|marker|map, id, files}]`, `assets`, `packs [{id, name}]`), `campaigns/<id>/…` (whole
   folder), `library/…` (My content maps, creatures with pictures and area templates its encounters use) and other
   data files its JSON or bundled maps refer to. `exportCampaign(repository, campaignId, now)` bundles a document when
-  My content holds it, else lists its pack. `readCampaignZip` validates the manifest with zod and the file layout.
+  My content holds it, else lists its pack; it also bundles the My content creatures of `campaign.json`'s party and
+  names the packs holding the others. `readCampaignZip` validates the manifest with zod and the file layout.
   `importCampaign(repository, archive, 'fail' | 'replace' | 'copy')`: `CampaignExistsError` for `'fail'`; a copy is
   `Name (2)`… under `newCampaignId`; documents identical to My content's are shared, others whose id is taken get
-  `newLibraryId(kind, id)` and the references follow; assets keep their path when free or identical, else go to
-  `campaigns/<id>/imported-assets/<path>`; staged in `campaigns.importing/<id>`, read back, then swapped in; the
-  result names `missingPacks`. UI (`src/ui/campaign/campaignArchiveUi.ts`): campaign page Export…, campaign card
-  context menu Export…, Campaigns header Import campaign…, Home Import…/drop (`.zip`), commands `campaign:import`
-  and `campaign:export`; Replace campaign / Import as copy via `choiceDialog` (kit). Sound moods are not bundled.
+  `newLibraryId(kind, id)` and the references follow (party `creature` refs too); assets keep their path when free
+  or identical, else go to `campaigns/<id>/imported-assets/<path>`; staged in `campaigns.importing/<id>`, read back,
+  then swapped in; the result names `missingPacks`. UI (`src/ui/campaign/campaignArchiveUi.ts`): campaign page
+  Export…, campaign card context menu Export…, Campaigns header Import campaign…, Home Import…/drop (`.zip`),
+  commands `campaign:import` and `campaign:export`; Replace campaign / Import as copy via `choiceDialog` (kit).
+  Sound moods are not bundled.
 
 ## Rules and imports
 
@@ -314,8 +327,19 @@ rotationDeg}}}`; `model` is an `AssetRef` (null skips the kind), `unitFt` feet p
   (problems per unreadable file); `runAuroraImport(plan, source, repository, onProgress)` writes the pack
   `aurora-builder` (`AURORA_PACK`, license "see source books"): portraits, items, spells, characters (portrait
   from the folder by file name, else the embedded one), then deletes the pack's files the import did not write.
-  UI: `AuroraImportDialog` (Compendium > Packs, Add combatants > Player character > From Aurora…; folder dialog
-  starting in `Documents/5e Character Builder`, counts preview, progress, report).
+  UI: `AuroraImportDialog` (Compendium > Packs, Compendium > Players, campaign Party tab, Add combatants > Player
+  character > From Aurora…; folder dialog starting in `Documents/5e Character Builder`, counts preview, progress,
+  report).
+- **D&D 5e API import** (`src/core/import/dnd5eApi.ts` pure conversion, `src/data/dnd5eApiImport.ts` I/O,
+  `src/ui/library/DndApiImportDialog.tsx`): lists `/api/2014/{monsters,spells,magic-items,equipment}`, fetches
+  each document (4 at a time; HTTP 429 waits 1 s and retries since CORS hides `Retry-After`) and writes it into the
+  user pack `dnd5e-api` as it arrives. Monsters are rendered to stat block text and read back with `parseStatBlock`
+  (`srdCreature`, cross-checked against the API's numbers); spells → `Spell` (`srdSpell`), spell
+  `area_of_effect` → `MarkerTemplate` (`srdAreaTemplate`), magic items and equipment → `Item` (`srdMagicItem`,
+  `srdEquipment`). Ids `srd-<index>`. Spells and their areas share one download. `importApiMonsters(repository,
+indexes | 'all')` imports single monsters the pack lacks (sample campaign). Opened by `openDndApiImport()`
+  (Compendium Creatures Import ▾, Items and Spells header and empty states, empty Creatures list, Add combatants
+  with an empty library, first step `srdData`); `attachPortraitsFromApi()` fetches monster pictures alone.
 - Map imports (`src/core/import`, all positions end in feet from the map's north-west corner):
   - `uvtt.ts` `parseUvtt(text, fileName)`: Universal VTT (`.dd2vtt`/`.df2vtt`/`.uvtt`). Squares minus
     `map_origin` × 5 ft; `pixels_per_grid` is the calibration; the base64 picture is sniffed (`sniffImage`: PNG,
@@ -380,8 +404,8 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
     step after the image (pick or drop the `.dam`, Skip creates the map without it); `.df2vtt`/`.uvtt` come from
     other tools and have no project.
 - CLI (`pnpm tsx tools/<script>.ts`, default data root = the desktop app's, override with `--data-root`):
-  `import-statblocks.ts <folder> [--source <name>] [--pack <id>]`, `build-srd.ts [--input <5e-SRD-Monsters.json>]`
-  regenerates the pack `content/packs/srd` (attribution in its `LICENSE.md`), `build-sample.ts` regenerates the
+  `import-statblocks.ts <folder> [--source <name>] [--pack <id>]`, `build-srd.ts` regenerates the pack
+  `content/packs/srd` (five area templates; attribution in its `LICENSE.md`), `build-sample.ts` regenerates the
   pack `content/packs/sample-map` with the map `sample-chapel` (procedural drawing, PNG encoder `src/core/png.ts`).
 
 ## Map rendering
@@ -545,7 +569,9 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   hidden combatants, secret doors, hidden regions or notes. Combatant tokens are sent resolved
   (`filterEncounterForPlayers(..., { showTurnOrder, standees, tokenOf, typeIconOf })`).
 - Player views (`src/sync/views.ts`): `PARTY_VIEW` (`'party'`, all vision sources) or one player character's
-  combatant id (only that character's vision). `playerViews(encounter)` lists Party plus the encounter's player
+  combatant id, which for party members is their member id (`playerViews` uses `partyMemberId ?? id`); only that
+  character's vision. View id = combatant id everywhere (fog, sheets, moves, `rebuildPlayerMessage`, `lan.rs`,
+  relay), so nothing needs translating. `playerViews(encounter)` lists Party plus the encounter's player
   characters; `useViewLinksStore` keeps them (also while no encounter is open, so leaving Play withdraws no link)
   with one link token each. `startViewLinks()` (in `DmApp`) derives the tokens: `linkToken(secret, view, rotation)`
   is HMAC-SHA256 under `settings.playerLinks.secret` (created on first start), truncated to 128 bits; `rotateLink`
@@ -725,13 +751,16 @@ transports' `onPlayerRequest`, tagged with the view of the link it came over.
   `CompendiumTab` union in `appStore.ts`.
 - Routes: `Route` union in `src/state/appStore.ts` + `Page` switch in `src/ui/DmApp.tsx`.
 - Home (`src/ui/home/HomePage.tsx`, default route): Continue card (`settings.lastEncounter`), recent maps and
-  encounters, `FirstSteps` (progress in `settings.onboarding`, `completeOnboardingStep(step)`), drop zone.
-  `openSampleEncounter()` (`onboarding.ts`) calls `ensureSampleCampaign(repository)` (`sampleCampaign.ts`). While
-  campaign `sample-campaign` does not exist it creates all of it (notes, journal, quests, people and places,
-  calendar; encounters `sample-goblin-ambush`, `sample-night-vigil`, `sample-midnight-rite` built in
-  `sampleContent.ts`; `campaign.json` written last so a failed run starts over); afterwards it only recreates a
-  missing `sample-goblin-ambush`. Then it opens the goblin ambush. A shipped map's Delete (`MapLibrary.tsx`) turns
-  its pack off after a confirm naming the rest of the pack.
+  encounters, `FirstSteps` (progress in `settings.onboarding`, `completeOnboardingStep(step)`; step `srdData` opens
+  the D&D 5e API import and is done when an import wrote something), drop zone. `openSampleEncounter()`
+  (`onboarding.ts`) calls `ensureSampleCampaign(repository)` (`sampleCampaign.ts`). Before building encounters it
+  imports the sample's monsters (`SAMPLE_MONSTER_INDEXES`) with `importApiMonsters`, which skips present ones; a
+  failed download becomes an error asking to check the internet connection. While campaign `sample-campaign` does
+  not exist it creates all of it (notes, journal, quests, people and places, calendar; encounters
+  `sample-goblin-ambush`, `sample-night-vigil`, `sample-midnight-rite` built in `sampleContent.ts`; `campaign.json`
+  written last so a failed run starts over); afterwards it only recreates a missing `sample-goblin-ambush`. Then it
+  opens the goblin ambush. A shipped map's Delete (`MapLibrary.tsx`) turns its pack off after a confirm naming the
+  rest of the pack.
 - New map wizard: `openNewMapWizard(files?)` (`src/ui/library/NewMapWizard.tsx`, host in `DmApp`); image → grid
   (`calibrateFromSquare` from a drag or two clicks, SVG overlay in image pixels) → `createCalibratedMap`
   (`mapImport.ts`) saves the map already calibrated. A Universal VTT file skips the grid ("Check grid" opens it with

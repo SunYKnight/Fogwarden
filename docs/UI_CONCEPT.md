@@ -64,7 +64,8 @@ work in progress is never hidden behind "back".
 - **Continue** card: last encounter (map thumbnail, round, whose turn) → _Resume_.
 - **Recent**: last 6 maps / encounters.
 - **First steps** (shown until done, dismissible): _Choose data folder_ · _Create a map from an image_ ·
-  _Open the sample encounter_ (shipped SRD content + a sample map).
+  _Download the SRD rules content_ (D&D 5e API import: monsters, spells, items, area templates; pictures optional) ·
+  _Open the sample encounter_ (a sample map; its SRD monsters come from the D&D 5e API).
 - Big drop zone: dropping an image creates a map (→ 4.2 wizard); dropping a `.txt` stat block opens the creature import.
 
 ### 4.2 New map wizard (instead of "uncalibrated map + find the tool")
@@ -224,7 +225,8 @@ Verification per phase: GUI smoke in the running app over the WebView2 DevTools 
 
 - **Icon set:** own SVG icons in the repo (`src/ui/kit/icons.tsx`), no icon dependency.
 - **Folder picker:** native folder dialog via `tauri-plugin-dialog`.
-- **Sample content:** a generated, license-free sample battlemap and a sample encounter built from SRD creatures.
+- **Sample content:** a generated, license-free sample battlemap and a sample encounter built from SRD creatures,
+  which the D&D 5e API import brings into the data folder (the app ships no monsters).
 - **Editor steps:** tabs in the recommended order (Ground → Walls → Areas → Light & objects), free to switch.
 
 ## 10. Declutter (order of work)
@@ -243,8 +245,10 @@ Screens follow the DM's order: set up once → prepare a session → at the tabl
 - **Map editor:** the canvas uses the full width unless something is selected; step help is an ⓘ popover (shown
   once per step), layers a button on the canvas, light rings only in step 4 or for the selected light; Map settings
   has Map · Grid · Lighting & ground tabs; Export is in the header's ⋯ menu.
-- **Compendium:** the primary New … button per tab with the imports beside it (Creatures: Import ▾ with stat block,
-  Aurora characters and pictures), filters behind a Filters button with removable chips.
+- **Compendium:** the primary New … button per tab with the imports beside it (Creatures: Import ▾ with everything
+  from the D&D 5e API, stat block, Aurora characters and pictures; Items and Spells: Import from the D&D 5e API with
+  Aurora in the arrow menu), filters behind a Filters button with removable chips. Empty libraries offer the D&D 5e
+  API import.
 - **Play** follows the combat state (Set up · Combat · Wrap up). Turn buttons (Previous / Next turn, before combat
   Roll initiative / Start combat) sit at the top of the initiative list. One **creature dock** under the map shows
   the selected creature (during combat otherwise the current one): HP, AC, Damage / Heal / Temp and conditions on

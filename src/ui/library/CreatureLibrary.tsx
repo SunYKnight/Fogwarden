@@ -1,6 +1,7 @@
-import { useMemo, useState, type MouseEvent } from 'react';
+import { useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { CREATURE_TYPES, nowIso, type Creature } from '@/core/model';
 import { formatCr } from '@/core/rules/abilities';
+import { DND5E_API_PACK } from '@/data/dnd5eApiImport';
 import { MY_CONTENT } from '@/data/packs';
 import type { LibraryEntry } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
@@ -9,7 +10,7 @@ import { CreatureThumb } from '../creatureTypes/CreatureThumb';
 import { StatBlock } from '../creature/StatBlock';
 import { Button, confirmDialog, EmptyState, openContextMenu, type MenuItem } from '../kit';
 import { attachPortraitsFromApi } from './AttachPortraitsDialog';
-import { openCreatureImport } from './compendiumUi';
+import { openCreatureImport, openDndApiImport } from './compendiumUi';
 import { FilterRow, FilterSelect, type FilterChip } from './FilterRow';
 import { OriginBadge } from './OriginBadge';
 
@@ -124,24 +125,20 @@ function FilterBar({
   );
 }
 
-export function CreatureLibrary() {
+export interface CreatureActions {
+  edit(entry: Entry): void;
+  duplicate(creature: Creature): Promise<void>;
+  /** Deletes a My content creature or reverts an override, after asking. */
+  remove(entry: Entry): Promise<void>;
+  menuItems(entry: Entry): MenuItem[];
+}
+
+/** Edit, duplicate and delete or revert of library creatures; `select` shows a new duplicate. */
+export function useCreatureActions(select: (id: string) => void): CreatureActions {
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const navigate = useAppStore((s) => s.navigate);
-  const listing = useLibraryStore((s) => s.listings.creature);
   const refresh = useLibraryStore((s) => s.refresh);
-  const [filter, setFilter] = useState(NO_FILTER);
-  const [sort, setSort] = useState<SortKey>('name');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const sources = useMemo(() => [...new Set(listing.entries.map((e) => e.doc.source))].sort(), [listing]);
-  const entries = useMemo(
-    () => listing.entries.filter((e) => matches(e, filter)).sort((a, b) => SORTERS[sort](a.doc, b.doc)),
-    [listing, filter, sort],
-  );
-  const selected = listing.entries.find((e) => e.ref.id === selectedId) ?? null;
-  // The D&D 5e API only has pictures of the shipped SRD monsters.
-  const unpictured = useMemo(() => listing.entries.filter((e) => e.pack === 'srd' && !e.doc.image).length, [listing]);
 
   const edit = (entry: Entry) => navigate({ page: 'creature-editor', ref: entry.ref });
 
@@ -152,7 +149,7 @@ export function CreatureLibrary() {
     const copy = { ...creature, id, name, createdAt: at, updatedAt: at };
     const stored = await repository.save('creature', copy);
     await refresh('creature');
-    setSelectedId(stored.id);
+    select(stored.id);
     useAppStore.getState().notify(`Created "${stored.name}"`);
   };
 
@@ -191,6 +188,60 @@ export function CreatureLibrary() {
     },
   ];
 
+  return { edit, duplicate, remove, menuItems };
+}
+
+/** A selected creature: origin, Edit, Duplicate, Delete or Revert, portrait, `children`, stat block. */
+export function CreaturePreview(props: { entry: Entry; actions: CreatureActions; children?: ReactNode }) {
+  const { entry, actions, children } = props;
+  const reportError = useAppStore((s) => s.reportError);
+  return (
+    <>
+      <div className="row">
+        <OriginBadge entry={entry} />
+        <div className="spacer" />
+        <Button icon="edit" label="Edit" onClick={() => actions.edit(entry)} />
+        <Button icon="copy" label="Duplicate" onClick={() => actions.duplicate(entry.doc).catch(reportError)} />
+        {entry.pack === MY_CONTENT && (
+          <Button
+            icon={entry.overrides.length > 0 ? 'undo' : 'trash'}
+            label={entry.overrides.length > 0 ? 'Revert' : 'Delete'}
+            variant="danger"
+            onClick={() => actions.remove(entry).catch(reportError)}
+          />
+        )}
+      </div>
+      <CreatureThumb creature={entry.doc} alt={`Portrait of ${entry.doc.name}`} className="creature-portrait" />
+      {children}
+      <StatBlock creature={entry.doc} />
+    </>
+  );
+}
+
+export function CreatureLibrary() {
+  const reportError = useAppStore((s) => s.reportError);
+  const listing = useLibraryStore((s) => s.listings.creature);
+  const [filter, setFilter] = useState(NO_FILTER);
+  const [sort, setSort] = useState<SortKey>('name');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const actions = useCreatureActions(setSelectedId);
+  const { edit, menuItems } = actions;
+  // Player characters have their own tab.
+  const creatures = useMemo(() => listing.entries.filter((e) => e.doc.kind !== 'player'), [listing]);
+
+  const sources = useMemo(() => [...new Set(creatures.map((e) => e.doc.source))].sort(), [creatures]);
+  const entries = useMemo(
+    () => creatures.filter((e) => matches(e, filter)).sort((a, b) => SORTERS[sort](a.doc, b.doc)),
+    [creatures, filter, sort],
+  );
+  const selected = creatures.find((e) => e.ref.id === selectedId) ?? null;
+  const monsters = useMemo(() => creatures.filter((e) => e.doc.kind === 'monster').length, [creatures]);
+  // The D&D 5e API only has pictures of its own monsters.
+  const unpictured = useMemo(
+    () => creatures.filter((e) => e.pack === DND5E_API_PACK.id && !e.doc.image).length,
+    [creatures],
+  );
+
   const showMenu = (e: MouseEvent, entry: Entry) => {
     e.preventDefault();
     setSelectedId(entry.ref.id);
@@ -201,6 +252,12 @@ export function CreatureLibrary() {
     <div className="compendium-split">
       <div className="compendium-list">
         <FilterBar filter={filter} setFilter={setFilter} sources={sources} />
+        {monsters === 0 && creatures.length > 0 && (
+          <div className="row">
+            <span className="muted grow">No monsters yet.</span>
+            <Button icon="download" label="Import from the D&D 5e API…" variant="ghost" onClick={openDndApiImport} />
+          </div>
+        )}
         {unpictured > 0 && (
           <div className="row">
             <span className="muted grow">
@@ -216,7 +273,7 @@ export function CreatureLibrary() {
         )}
         <div className="row">
           <span className="muted">
-            {entries.length} of {listing.entries.length}
+            {entries.length} of {creatures.length}
           </span>
           <div className="spacer" />
           <label className="row">
@@ -254,41 +311,30 @@ export function CreatureLibrary() {
         {entries.length === 0 && (
           <EmptyState
             icon="search"
-            title={listing.entries.length === 0 ? 'No creatures yet.' : 'No creatures match the filters.'}
+            title={creatures.length === 0 ? 'No creatures yet.' : 'No creatures match the filters.'}
             action={
-              listing.entries.length === 0 ? (
-                <Button icon="upload" label="Import from text" onClick={() => openCreatureImport('')} />
+              creatures.length === 0 ? (
+                <>
+                  <Button
+                    icon="download"
+                    label="Import from the D&D 5e API…"
+                    variant="primary"
+                    onClick={openDndApiImport}
+                  />
+                  <Button icon="upload" label="Import from text" onClick={() => openCreatureImport('')} />
+                </>
               ) : (
                 <Button label="Reset filters" onClick={() => setFilter(NO_FILTER)} />
               )
             }
-          />
+          >
+            {creatures.length === 0 && 'The app ships no monsters: import the SRD 5.1 ones from the D&D 5e API.'}
+          </EmptyState>
         )}
       </div>
       <div className="creature-preview">
         {selected ? (
-          <>
-            <div className="row">
-              <OriginBadge entry={selected} />
-              <div className="spacer" />
-              <Button icon="edit" label="Edit" onClick={() => edit(selected)} />
-              <Button icon="copy" label="Duplicate" onClick={() => duplicate(selected.doc).catch(reportError)} />
-              {selected.pack === MY_CONTENT && (
-                <Button
-                  icon={selected.overrides.length > 0 ? 'undo' : 'trash'}
-                  label={selected.overrides.length > 0 ? 'Revert' : 'Delete'}
-                  variant="danger"
-                  onClick={() => remove(selected).catch(reportError)}
-                />
-              )}
-            </div>
-            <CreatureThumb
-              creature={selected.doc}
-              alt={`Portrait of ${selected.doc.name}`}
-              className="creature-portrait"
-            />
-            <StatBlock creature={selected.doc} />
-          </>
+          <CreaturePreview entry={selected} actions={actions} />
         ) : (
           <EmptyState icon="book" title="Select a creature to see its stat block." />
         )}

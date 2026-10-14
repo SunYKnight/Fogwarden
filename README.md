@@ -9,22 +9,25 @@ players a fog-of-war view on a second screen or in any browser on the local netw
 - **Encounters**: initiative, HP, conditions, attack and dice rolls with a log, tokens on the map, area templates,
   doors, measuring; encounter difficulty, area saves with resistances, timed effects and concentration, monster
   resources (legendary, recharge, slots), death saves, carried torches, XP and loot at the end of combat.
-- **Libraries**: creatures (334 SRD 5.1 monsters shipped, stat block import from text), items, spells, area
-  markers, maps, random tables (names, loot, rumours as editable text), a picture library, campaigns; Aurora Builder
-  characters, items, spells and portraits import into a local pack.
-- **Campaigns**: encounters, a session journal that Play fills with combat events, people and places with
-  pictures, quests, and an in-game calendar with rests. Campaigns export to one `.zip` with the maps, creatures and
-  pictures of My content they use, for another computer or a co-DM; packs they use are named, not copied. "Open the
-  sample encounter" on Home sets up a sample campaign around a ruined chapel that shows all of this, including a
-  night encounter with vision, light and fog of war.
+- **Libraries**: creatures (SRD 5.1 monsters, spells, magic items and equipment from the D&D 5e API import, stat
+  block import from text), player characters, items, spells, area markers, maps, random tables (names, loot,
+  rumours as editable text), a picture library, campaigns; Aurora Builder characters, items, spells and portraits
+  import into a local pack. The app ships no monsters; **Import from the D&D 5e API** in the Compendium brings them.
+- **Campaigns**: a party, encounters, a session journal that Play fills with combat events, people and places with
+  pictures, quests, and an in-game calendar with rests. Put your group's characters into the campaign's **Party**
+  tab (Compendium > Players lists them; Import from Aurora Builder fills it); **+ Add > Add party** then adds them
+  to each encounter. Campaigns export to one `.zip` with the maps, creatures and pictures of My content they use,
+  for another computer or a co-DM; packs they use are named, not copied. "Open the sample encounter" on Home sets
+  up a sample campaign around a ruined chapel that shows all of this, including a night encounter with vision,
+  light and fog of war; it imports its monsters from the D&D 5e API first, so it needs internet once.
 - **Player view**: second window, LAN browser or any browser on the internet through a small relay server; each
   screen sees through one character's eyes or the whole party's (line of sight, light, darkvision, truesight), with
   explored areas remembered per character.
 
 The left rail follows the order of work: **Home** (dashboard of the current campaign: continue, next session,
-recent maps) · **Campaigns** · **Maps** · **Compendium** · **Play**, with **Search** (Ctrl+K: every command,
-creature, map, campaign and encounter by name), **Players** (player window, LAN and online status with one button
-each) and **Settings** at the bottom.
+recent maps) · **Campaigns** · **Maps** · **Compendium** (creatures, player characters, items, spells, area
+templates, tables) · **Play**, with **Search** (Ctrl+K: every command, creature, map, campaign and encounter by
+name), **Players** (player window, LAN and online status with one button each) and **Settings** at the bottom.
 
 Background and design: [`PLAN.md`](PLAN.md). Code layout and module contracts:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -117,8 +120,10 @@ an outdated relay and asks you to run the setup again.
 In Settings > Players (LAN and Online) and in the rail's Players popover, _Link for_ picks a view: **Party** shows
 what all characters see and have explored, each player character's link only what that character sees and
 remembers. The links stay valid across restarts and work for LAN and relay alike (with the respective address);
-**New link** replaces a view's link and disconnects everyone still using the old one. Characters' links belong to
-the open encounter. The player window picks its view under Settings > Players > _Shows_; Esc closes it.
+**New link** replaces a view's link and disconnects everyone still using the old one. Player links of party members
+stay the same for the whole campaign; hand each player their link or QR code once. Characters added by hand in an
+encounter get a link for that encounter only. The player window picks its view under Settings > Players > _Shows_;
+Esc closes it.
 
 On a character's link players see their sheet (hit points, AC, speed, conditions, death saves, spell slots) with
 dice you roll and log for them, a "Your turn" banner (phones vibrate), and can hold the map to ping a spot; you ping
@@ -132,7 +137,7 @@ camera and the turn order go to the players.
 | What                    | Where                                                                                                 |
 | ----------------------- | ----------------------------------------------------------------------------------------------------- |
 | Source                  | `src/`, `src-tauri/`, `server/` (internet relay), `tools/`                                            |
-| Shipped content (packs) | `content/packs/` (SRD 5.1, CC0 models, sample map)                                                    |
+| Shipped content (packs) | `content/packs/` (five SRD 5.1 area templates, CC0 models, sample map)                                |
 | Build output            | `dist/`, `dist-server/`, `src-tauri/target/`, `artifacts/` (all gitignored)                           |
 | Your data               | `%APPDATA%/io.github.sunyknight.fogwarden/` by default; change it in Settings (e.g. a Dropbox folder) |
 
@@ -159,7 +164,7 @@ the app. Settings > Data shows and changes the folder.
 | Creature pictures | `library/creatures/<id>.png` (or `.jpg`, `.jpeg`, `.webp`), token picture `<id>.token.png`              |
 | Area templates    | `library/markers/<id>.json`                                                                             |
 | Maps              | `library/maps/<id>/`: `map.json`, `terrain.png` (heights), `assets/` (image, 3D models)                 |
-| Campaigns         | `campaigns/<id>/campaign.json`, `notes.md`                                                              |
+| Campaigns         | `campaigns/<id>/campaign.json` (name and party), `notes.md`                                             |
 | Encounters        | `campaigns/<id>/encounters/<id>/encounter.json`, `fog/` (explored areas as black/white PNG)             |
 | Session journal   | `campaigns/<id>/journal/<date>-session-<n>.md`: a short header, then your notes (Markdown)              |
 | People and places | `campaigns/<id>/people-and-places/<id>.md` (header: name, kind, picture, tags) and the picture file     |
@@ -175,7 +180,7 @@ the app. Settings > Data shows and changes the folder.
 | Version history   | `history/<YYYY-MM-DD>/<path>`: earlier versions of changed and deleted files (see below)                |
 
 - File names are the ids. A new `.txt` stat block in `library/creatures/` shows up in the Compendium; a picture named
-  after a creature id pictures it, shipped ones too (`srd-goblin.jpg` for the SRD goblin).
+  after a creature id pictures it, also creatures of packs (`srd-goblin.jpg` for the imported SRD goblin).
 - A new document's id comes from its name when it is created: "Goblin Boss" becomes `goblin-boss`, a second one
   `goblin-boss-2`. Renaming a document in the app keeps its id, so its file or folder name stays. Documents created
   by older versions keep their 26-character ids.
@@ -232,14 +237,23 @@ removes imported packs and imports new ones (**Import pack…** for a `.zip`, **
 - Switched-off packs disappear from the Compendium, the Maps page and the Add dialog. Running encounters keep their
   combatants (hit points, armor class, conditions); a creature's stat block and a map from a switched-off pack show
   a notice naming the pack until you switch it on again.
-- Shipped packs (SRD 5.1, CC0 models, sample map) are read-only; editing one of their entries creates your copy.
-  Imported packs live in your data folder under `packs/<id>/`.
+- Shipped packs (SRD 5.1 area templates, CC0 models, sample map) are read-only; editing one of their entries creates
+  your copy. Imported packs live in your data folder under `packs/<id>/`.
+
+### D&D 5e API
+
+**Compendium > Creatures > Import ▾ > Everything from the D&D 5e API…** (also on the Items and Spells tabs and on
+Home's first steps) imports from the D&D 5e API (dnd5eapi.co, SRD 5.1, CC-BY-4.0): monsters, monster pictures,
+spells, spell area templates, magic items and equipment into the pack `dnd5e-api`. Needs internet; about 1250 small
+requests (≈ 45 s) plus 580 MB for pictures. Item pictures are not imported (items have no picture). Each part has
+its own checkbox; importing again overwrites the pack.
 
 ### Aurora Builder
 
-**Settings > Content > Import from Aurora Builder…** (desktop app; also **Add combatants > Player character > From
-Aurora…**) reads Aurora's documents folder (`Documents/5e Character Builder`: `custom/`, `portraits/`, `*.dnd5e`),
-shows what it found and writes the pack "Aurora Builder" into your data folder:
+**Settings > Content > Import from Aurora Builder…** (desktop app; also **Compendium > Players**, the campaign's
+**Party** tab and **Add combatants > Player character > From Aurora…**) reads Aurora's documents folder
+(`Documents/5e Character Builder`: `custom/`, `portraits/`, `*.dnd5e`), shows what it found and writes the pack
+"Aurora Builder" into your data folder:
 
 - characters as player characters (`creatures/<file name>.txt` with `kind: player` and `level`): AC, hit points,
   speed, ability scores, saves, skills, passive Perception, darkvision, attacks, spell slots and the portrait,
@@ -314,15 +328,15 @@ battlemap exports its first frame.
 ## Creature pictures and standees
 
 Tokens show the creature picture: a disc in the top view, an upright standee in the 3D view (Settings > Rules
-switches standees off for you and your players). To give the shipped SRD creatures pictures, use **Compendium >
-Creatures > Import ▾ > Pictures from the D&D 5e API…** (painted pictures for all SRD monsters, downloaded and saved
-in your data folder) or **Import ▾ > Pictures from a folder…** and pick a folder of PNG/JPEG/WebP files named after
-the creatures
+switches standees off for you and your players). Monsters come from **Compendium > Creatures > Import ▾ >
+Everything from the D&D 5e API…**; tick "Monster pictures" there for the paintings, or add them later with
+**Import ▾ > Pictures from the D&D 5e API…** (painted pictures for the SRD monsters, downloaded and saved in your
+data folder). **Import ▾ > Pictures from a folder…** takes a folder of PNG/JPEG/WebP files named after the creatures
 (`goblin.jpg`, `Adult Red Dragon.png`, `homebrew--werewolf.jpg`; case, accents, punctuation and `source--` prefixes
 don't matter). The preview lists matched and unmatched files before anything is copied into your data folder under
 the creatures' ids; existing pictures are only replaced when you tick the box. One picture per creature also works
-in the creature editor's Image/Token fields (the file is copied at once); for shipped creatures that keeps the
-creature shipped.
+in the creature editor's Image/Token fields (the file is copied at once); for pack creatures that keeps the pack's
+creature untouched.
 
 ## Graphics quality
 
@@ -334,9 +348,10 @@ takes them when it opens, LAN/relay players use the defaults (4 lights, full res
 
 ## License of shipped content
 
-The shipped packs live in `content/packs/`, each with its `LICENSE.md`: `srd/` contains material from the System
-Reference Document 5.1 under CC-BY-4.0 ([`LICENSE.md`](content/packs/srd/LICENSE.md)); the sample map in
-`sample-map/` is generated by `tools/build-sample.ts` and released under CC0
+The shipped packs live in `content/packs/`, each with its `LICENSE.md`: `srd/` contains five area templates from the
+System Reference Document 5.1 under CC-BY-4.0 ([`LICENSE.md`](content/packs/srd/LICENSE.md)); monsters, spells,
+items and equipment come from the D&D 5e API import into the data folder's pack `dnd5e-api` (attribution in its
+`LICENSE.md`); the sample map in `sample-map/` is generated by `tools/build-sample.ts` and released under CC0
 ([`LICENSE.md`](content/packs/sample-map/LICENSE.md)); the stand-in models in `cc0-models/` are Kenney's (CC0;
 sources in [`LICENSE.md`](content/packs/cc0-models/LICENSE.md)).
 

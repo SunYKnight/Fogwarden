@@ -4,6 +4,7 @@ import type { CastEntry } from '@/core/campaign/people';
 import type { Quest } from '@/core/campaign/quests';
 import { createCampaign, type Campaign } from '@/core/model';
 import { CampaignFiles, CAST, JOURNAL, QUESTS } from '@/data/campaignFiles';
+import { importApiMonsters } from '@/data/dnd5eApiImport';
 import { campaignPath, encounterPath, type Repository } from '@/data/repository';
 import {
   loadSampleLibrary,
@@ -11,6 +12,7 @@ import {
   SAMPLE_ENCOUNTER_ID,
   SAMPLE_ENCOUNTERS,
   SAMPLE_MAP,
+  SAMPLE_MONSTER_INDEXES,
   SAMPLE_NIGHT_ID,
   SAMPLE_PREPARED_ID,
 } from './sampleContent';
@@ -206,7 +208,8 @@ function createSampleCalendar(): Calendar {
 
 /**
  * Creates the whole sample campaign when it does not exist yet; afterwards only the goblin ambush, which
- * "Open the sample encounter" opens. What the DM deleted or changed stays that way.
+ * "Open the sample encounter" opens. What the DM deleted or changed stays that way. The app ships no monsters,
+ * so the missing ones come from the D&D 5e API first.
  */
 export async function ensureSampleCampaign(repository: Repository): Promise<void> {
   if ((await repository.sourceOf('map', SAMPLE_MAP.id)) === null) {
@@ -217,6 +220,14 @@ export async function ensureSampleCampaign(repository: Repository): Promise<void
   const ambushMissing = !(await storage.exists('data', encounterPath(SAMPLE_CAMPAIGN_ID, SAMPLE_ENCOUNTER_ID)));
   const encounters = fresh ? Object.keys(SAMPLE_ENCOUNTERS) : ambushMissing ? [SAMPLE_ENCOUNTER_ID] : [];
   if (encounters.length > 0) {
+    try {
+      await importApiMonsters(repository, SAMPLE_MONSTER_INDEXES);
+    } catch (error) {
+      throw new Error(
+        'The sample campaign needs its monsters from the D&D 5e API (dnd5eapi.co); check the internet connection.',
+        { cause: error },
+      );
+    }
     const library = await loadSampleLibrary(repository);
     await Promise.all(encounters.map((id) => repository.saveEncounter(SAMPLE_ENCOUNTERS[id]!(library))));
   }

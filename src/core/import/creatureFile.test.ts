@@ -1,11 +1,12 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CREATURE_SCHEMA_VERSION, createCreature, type Creature } from '../model';
 import { formatCreatureFile, formatStatBlock, parseCreatureFile } from './creatureFile';
+import { srdCreature } from './dnd5eApi';
+import { FIXTURE_MONSTERS } from './fixtures/dnd5eApiMonsters';
 import { parseStatBlock, StatBlockError } from './statblock';
 
-const SHIPPED = join(import.meta.dirname, '..', '..', '..', 'content', 'packs', 'srd', 'creatures');
 const CREATED = '2024-01-02T03:04:05.000Z';
 const UPDATED = '2024-02-03T04:05:06.000Z';
 
@@ -24,21 +25,14 @@ function headerOf(text: string): string[] {
   return text.slice(0, text.indexOf('\n---\n')).split('\n').slice(1);
 }
 
-describe('shipped SRD creature files', () => {
-  const files = readdirSync(SHIPPED).filter((n) => n.endsWith('.txt'));
-
-  it('ships all SRD creatures as text files', () => {
-    expect(files).toHaveLength(334);
-    expect(readdirSync(SHIPPED).filter((n) => !n.endsWith('.txt'))).toEqual([]);
-  });
-
-  it.each(files)('%s reads and writes back byte for byte', (name) => {
-    const id = name.replace(/\.txt$/, '');
-    const text = readFileSync(join(SHIPPED, name), 'utf8');
-    const creature = parseCreatureFile(text, id);
-    expect(creature).toMatchObject({ id, image: null, token: null, version: CREATURE_SCHEMA_VERSION });
-    expect(formatCreatureFile(creature)).toBe(text);
-    expect(parseCreatureFile(formatCreatureFile(creature), id)).toStrictEqual(creature);
+describe('creature files of D&D 5e API monsters', () => {
+  it.each(FIXTURE_MONSTERS.map((m) => m.index))('%s reads and writes back byte for byte', (index) => {
+    const creature = srdCreature(FIXTURE_MONSTERS.find((m) => m.index === index)!);
+    const text = formatCreatureFile(creature);
+    const parsed = parseCreatureFile(text, creature.id);
+    expect(parsed).toMatchObject({ id: `srd-${index}`, image: null, token: null, version: CREATURE_SCHEMA_VERSION });
+    expect(formatCreatureFile(parsed)).toBe(text);
+    expect(parseCreatureFile(formatCreatureFile(parsed), creature.id)).toStrictEqual(parsed);
   });
 });
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { OnboardingStep } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import { Button, Icon, type IconName } from '../kit';
-import { attachPortraitsFromApi } from '../library/AttachPortraitsDialog';
+import { openDndApiImport } from '../library/compendiumUi';
 import { openNewMapWizard } from '../library/NewMapWizard';
 import { completeOnboardingStep, dismissFirstSteps, openSampleEncounter } from './onboarding';
 
@@ -30,18 +30,20 @@ const STEPS: StepSpec[] = [
     action: 'New map',
   },
   {
+    id: 'srdData',
+    icon: 'download',
+    title: 'Download the SRD rules content',
+    text:
+      'Monsters, spells, items and area templates from the free D&D 5e API; monster pictures are optional ' +
+      '(about 580 MB).',
+    action: 'Download',
+  },
+  {
     id: 'sampleEncounter',
     icon: 'play',
     title: 'Open the sample encounter',
     text: 'Four goblins ambush two heroes at a ruined chapel, part of a sample campaign with journal and quests.',
     action: 'Open sample',
-  },
-  {
-    id: 'monsterPictures',
-    icon: 'download',
-    title: 'Download monster pictures',
-    text: 'Painted pictures for the SRD monsters from the free D&D 5e API: about 580 MB download, 45 MB stored.',
-    action: 'Download',
   },
 ];
 
@@ -65,7 +67,7 @@ export function FirstSteps() {
         setBusy(false);
       }
     },
-    monsterPictures: () => attachPortraitsFromApi(),
+    srdData: async () => openDndApiImport(),
   };
 
   const remaining = onboarding ? STEPS.filter((s) => !onboarding.done[s.id]).length : 0;

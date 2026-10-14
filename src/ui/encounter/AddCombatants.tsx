@@ -1,16 +1,16 @@
 import { isTauri } from '@tauri-apps/api/core';
-import { useState } from 'react';
-import { sideSchema, type AssetRef, type Side } from '@/core/model';
+import { useEffect, useState } from 'react';
+import { sideSchema, type AssetRef, type PartyMember, type Side } from '@/core/model';
 import { formatCr } from '@/core/rules/abilities';
 import { useAppStore } from '@/state/appStore';
-import { createPc, spawnCombatant, type HpMode } from '@/state/encounterActions';
+import { addParty, createPc, spawnCombatant, type HpMode } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLibraryStore } from '@/state/libraryStore';
 import { AssetImage } from '../components/AssetImage';
 import { CheckboxField, Field, NumberField, SelectField, TextField } from '../components/fields';
 import { CreatureThumb } from '../creatureTypes/CreatureThumb';
 import { Button, Dialog, Tabs, type TabSpec } from '../kit';
-import { openAuroraImport } from '../library/compendiumUi';
+import { openAuroraImport, openDndApiImport } from '../library/compendiumUi';
 import { PictureLibraryDialog } from '../library/PictureLibraryDialog';
 import { DifficultyBadge } from './EncounterDifficulty';
 import { useEncounterUi } from './encounterUiStore';
@@ -86,7 +86,13 @@ function FromLibrary() {
         {matches.length > MAX_MATCHES && (
           <span className="muted small">{matches.length - MAX_MATCHES} more, refine the search</span>
         )}
-        {matches.length === 0 && <span className="muted small">No creature matches.</span>}
+        {entries.length === 0 && (
+          <div className="row">
+            <span className="muted small grow">No monsters yet: the app ships none.</span>
+            <Button icon="download" label="Import from the D&D 5e API…" onClick={openDndApiImport} />
+          </div>
+        )}
+        {entries.length > 0 && matches.length === 0 && <span className="muted small">No creature matches.</span>}
       </div>
       <NumberField label="Count" min={1} max={30} value={count} onChange={(v) => setCount(Math.round(v))} />
       <SelectField label="Side" value={side} options={sideSchema.options} onChange={setSide} />
@@ -238,12 +244,65 @@ function PlayerCharacters() {
   );
 }
 
-/** "+ Add" of the initiative strip: creatures from the compendium or a player character. */
+/** Every member of the campaign's party who is not in the encounter yet, as seeing player characters. */
+function AddParty() {
+  const repository = useAppStore((s) => s.repository);
+  const reportError = useAppStore((s) => s.reportError);
+  const notify = useAppStore((s) => s.notify);
+  const update = useEncounterStore((s) => s.update);
+  const campaignId = useEncounterStore((s) => s.encounter?.campaignId);
+  const combatants = useEncounterStore((s) => s.encounter)?.combatants ?? [];
+  const entries = useLibraryStore((s) => s.listings.creature.entries);
+  const [party, setParty] = useState<PartyMember[] | null>(null);
+
+  useEffect(() => {
+    repository
+      .listCampaigns()
+      .then(({ campaigns }) => setParty(campaigns.find((c) => c.id === campaignId)?.party ?? []), reportError);
+  }, [repository, campaignId, reportError]);
+
+  // By creature id only: a user override keeps the pack character's id.
+  const members = (party ?? []).flatMap((member) => {
+    const creature = entries.find((e) => e.ref.id === member.creature.id)?.doc;
+    return creature ? [{ member, creature }] : [];
+  });
+  const present = new Set(combatants.map((c) => c.id));
+  const joining = members.filter((m) => !present.has(m.member.id));
+  const missing = (party?.length ?? 0) - members.length;
+  const names = joining.map((m) => m.creature.name).join(', ');
+  const status =
+    party === null
+      ? 'Loading the party…'
+      : party.length === 0
+        ? "The campaign has no party yet; pick it on the campaign's Party tab."
+        : joining.length === 0
+          ? 'The whole party is in this encounter.'
+          : `Party: ${names}`;
+
+  const add = () => {
+    update((d) => void addParty(d, members), 'Add the party');
+    notify(`Added ${names}`);
+    close();
+  };
+
+  return (
+    <div className="row">
+      <span className="muted grow">
+        {status}
+        {missing > 0 && ` (${missing} no longer in the compendium)`}
+      </span>
+      <Button icon="users" label="Add party" disabled={joining.length === 0} onClick={add} />
+    </div>
+  );
+}
+
+/** "+ Add" of the initiative strip: the campaign's party, creatures from the compendium or a player character. */
 export function AddCombatantsDialog() {
   const [tab, setTab] = useState<AddTab>('library');
   return (
     <Dialog title="Add combatants" onClose={close} width={480}>
       <div className="col">
+        <AddParty />
         <Tabs tabs={ADD_TABS} value={tab} onChange={setTab} label="Add from" />
         {tab === 'library' ? <FromLibrary /> : <PlayerCharacters />}
       </div>

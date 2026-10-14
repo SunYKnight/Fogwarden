@@ -73,7 +73,7 @@ type TokenSource = Pick<Combatant, 'token' | 'creature'>;
 /** Picture on a combatant's token; the creature is looked up live, so new pictures show at once. */
 export function combatantToken(combatant: TokenSource, library: Pick<LibraryState, 'listings'>): AssetRef | null {
   const id = combatant.creature?.id;
-  // By id only: a user override keeps the id of the shipped creature.
+  // By id only: a user override keeps the id of the pack creature.
   const creature = id === undefined ? null : library.listings.creature.entries.find((e) => e.ref.id === id);
   return resolveTokenAsset(combatant.token, creature?.doc ?? null);
 }

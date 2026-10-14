@@ -2,7 +2,7 @@ import { creatureIconOf, type CreatureIconKey } from '@/core/creatureTypeIcon';
 import type { Combatant, Creature, DocRef } from '@/core/model';
 import { packName, useLibraryStore } from '@/state/libraryStore';
 
-// By id only: a user override keeps the id of the shipped creature it replaces.
+// By id only: a user override keeps the id of the pack creature it replaces.
 function find(entries: { ref: DocRef; doc: Creature }[], ref: DocRef | null): Creature | null {
   return (ref && entries.find((e) => e.ref.id === ref.id)?.doc) ?? null;
 }

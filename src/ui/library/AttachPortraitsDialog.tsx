@@ -1,6 +1,5 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { useMemo, useState } from 'react';
-import { completeOnboardingStep } from '@/ui/home/onboarding';
 import { matchPortraits } from '@/core/import/portraitMatch';
 import { downloadApiPictures, listApiPictures } from '@/data/dnd5eapiPictures';
 import { MY_CONTENT_SOURCE } from '@/data/packs';
@@ -62,9 +61,6 @@ async function attach(source: PortraitSource, plan: PlannedPortrait[], onProgres
           onProgress,
         );
   await useLibraryStore.getState().refresh('creature');
-  if (source.kind === 'api') {
-    await completeOnboardingStep('monsterPictures');
-  }
   const missed = lacking.length > 0 ? `; the API had no picture for ${lacking.length}` : '';
   notify(`Attached ${pictures(plan.length - lacking.length)}${missed}`);
 }
@@ -84,8 +80,8 @@ const SOURCE_TEXT: Record<PortraitSource['kind'], { title: string; intro: string
     title: 'Download pictures from the D&D 5e API',
     intro:
       'dnd5eapi.co has one painted picture per SRD 5.1 monster, for your own use; they are matched to the ' +
-      'shipped SRD monsters, downloaded (about 1.7 MB each), shrunk to 768 px and saved in My content on this ' +
-      'computer.',
+      'SRD monsters in your library (imported from the D&D 5e API), downloaded (about 1.7 MB each), shrunk to ' +
+      '768 px and saved in My content on this computer.',
   },
 };
 

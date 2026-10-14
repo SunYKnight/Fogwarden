@@ -1,3 +1,4 @@
+import { SRD_ID_PREFIX } from '@/core/import/dnd5eApi';
 import {
   createEncounter,
   defaultAtmosphere,
@@ -26,7 +27,7 @@ export const SAMPLE_ENCOUNTER_ID = 'sample-goblin-ambush';
 export const SAMPLE_NIGHT_ID = 'sample-night-vigil';
 export const SAMPLE_PREPARED_ID = 'sample-midnight-rite';
 
-/** SRD creatures of the sample encounters, besides the goblin. */
+/** SRD creatures of the sample encounters, besides the goblin; ids of the D&D 5e API import. */
 const SRD = {
   skeleton: { area: 'content', id: 'srd-skeleton' },
   ghoul: { area: 'content', id: 'srd-ghoul' },
@@ -37,6 +38,11 @@ const SRD = {
 } as const satisfies Record<string, DocRef>;
 
 type SampleCreature = keyof typeof SRD;
+
+/** D&D 5e API indexes of the sample's monsters, which the API import brings into the data folder. */
+export const SAMPLE_MONSTER_INDEXES = [SAMPLE_GOBLIN, ...Object.values(SRD)].map((ref) =>
+  ref.id.slice(SRD_ID_PREFIX.length),
+);
 
 /** Library documents the sample encounters are built from. */
 export interface SampleLibrary {
