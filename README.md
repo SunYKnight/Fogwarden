@@ -11,15 +11,15 @@ players a fog-of-war view on a second screen or in any browser on the local netw
   doors, measuring; encounter difficulty, area saves with resistances, timed effects and concentration, monster
   resources (legendary, recharge, slots), death saves, carried torches, XP and loot at the end of combat. Play's
   **Change map…** gives an encounter another map.
-- **Libraries**: creatures (SRD 5.1 monsters, spells, magic items and equipment from the D&D 5e API import, stat
-  block import from text), player characters, items, spells, area markers, maps, random tables (names, loot,
-  rumours as editable text), a picture library, campaigns; Aurora Builder characters, items, spells and portraits
-  import into a local pack. The app ships no monsters; **Import from the D&D 5e API** in the Compendium brings them.
+- **Libraries**: monsters (stat blocks, also imported from text), player characters, items, spells, area templates,
+  maps, random tables (names, loot, rumours as editable text), a picture library and campaigns. The app ships no
+  monsters: **Import from the D&D 5e API** in the Compendium brings the SRD 5.1 monsters, spells, items and
+  equipment; Aurora Builder characters (and optionally its items, spells and portraits) import into a local pack.
 - **Campaigns**: a party, encounters, a session journal that Play fills with combat events, people and places with
   pictures, quests, and an in-game calendar with rests. Put your group's characters into the campaign's **Party**
   tab (Compendium > Players lists them; Import from Aurora Builder fills it); **+ Add > Add party** then adds them
   to each encounter. Campaigns export to one `.zip` with the maps, creatures and pictures of My content they use,
-  for another computer or a co-DM; packs they use are named, not copied. "Open the sample encounter" on Home sets
+  for another computer or a co-DM; packs they use are named, not copied. "Try the sample encounter" on Home sets
   up a sample campaign around a ruined chapel that shows all of this, including a night encounter with vision,
   light and fog of war; it imports its monsters from the D&D 5e API first, so it needs internet once.
 - **Player view**: second window or a browser on the local network; each screen sees through one character's eyes
@@ -37,7 +37,19 @@ characters, create a campaign, create a map from an image; the sample encounter 
 Background and design: [`PLAN.md`](PLAN.md). Code layout and module contracts:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## Requirements
+## Install
+
+1. Download `Fogwarden_<version>_x64-setup-<revision>.exe` from the
+   [latest release](https://github.com/SunYKnight/Fogwarden/releases/latest) and run it; it installs for your
+   Windows user (Windows 10/11 with WebView2). The installer has no code-signing certificate, so Windows SmartScreen
+   may say "Windows protected your PC": choose _More info > Run anyway_.
+2. Follow Home's first steps. Your data goes to `%APPDATA%/io.github.sunyknight.fogwarden/` unless you pick another
+   folder in Settings > Data.
+3. For players on phones or tablets in your network, start LAN in the rail's **Players** popover and allow Fogwarden
+   through the Windows firewall when Windows asks.
+4. Updates: Settings > About checks for a new version (also once a day on start) and installs it.
+
+## Requirements for development
 
 - Windows 10/11 with WebView2
 - Node 24+, pnpm 10
@@ -98,8 +110,7 @@ start unless switched off there) and installs only installers signed with the ke
   the same way.
 - New pair (asks for a password; add `--ci` for none):
   `pnpm tauri signer generate -w data-local/signing/fogwarden.key`, then put the content of
-  `data-local/signing/fogwarden.key.pub` into `plugins.updater.pubkey`. The current key has no password; replacing
-  it with a password-protected pair costs nothing before the first release.
+  `data-local/signing/fogwarden.key.pub` into `plugins.updater.pubkey`.
 
 ## Play over the internet
 
@@ -128,12 +139,11 @@ an outdated relay and asks you to run the setup again.
 
 In Settings > Players > LAN and in the rail's Players popover, _Link for_ picks a view: **Party** shows what all
 characters see and have explored, each player character's link only what that character sees and remembers. Every
-party member of the open campaign has a link, also when the character is not in the open encounter. The links stay
-valid across restarts and work for LAN and relay alike (with the respective address); **New link** replaces a view's
-link and disconnects everyone still using the old one. Player links of party members stay the same for the whole
-campaign; hand each player their link or QR code once. Characters added by hand in an
-encounter get a link for that encounter only. The player window picks its view under Settings > Players > _Shows_;
-Esc closes it.
+party member of the open campaign has a link, also when the character is not in the open encounter; it stays the
+same for the whole campaign and across restarts, so hand each player their link or QR code once. Characters added by
+hand in an encounter get a link for that encounter only. **New link** replaces a view's link and disconnects
+everyone still using the old one. The player window picks its view under Settings > Players > _Shows_; Esc closes
+it.
 
 On a character's link players see their sheet (hit points, AC, speed, conditions, death saves, spell slots) with
 dice you roll and log for them, a "Your turn" banner (phones vibrate), and can hold the map to ping a spot; you ping
