@@ -1,14 +1,7 @@
 import type { Onboarding, OnboardingStep } from '@/core/model';
-import { campaignPath, encounterPath } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
-import {
-  createSampleCampaign,
-  createSampleEncounter,
-  SAMPLE_CAMPAIGN_ID,
-  SAMPLE_ENCOUNTER_ID,
-  SAMPLE_GOBLIN,
-  SAMPLE_MAP,
-} from './sampleContent';
+import { ensureSampleCampaign } from './sampleCampaign';
+import { SAMPLE_CAMPAIGN_ID, SAMPLE_ENCOUNTER_ID } from './sampleContent';
 
 async function updateOnboarding(change: (onboarding: Onboarding) => Onboarding): Promise<void> {
   const { settings, setSettings } = useAppStore.getState();
@@ -29,19 +22,10 @@ export function dismissFirstSteps(): Promise<void> {
   return updateOnboarding((o) => ({ ...o, dismissed: true }));
 }
 
-/** Creates the sample campaign and encounter on first use, then shows the encounter on the Play page. */
+/** Creates the missing parts of the sample campaign, then shows its goblin ambush on the Play page. */
 export async function openSampleEncounter(): Promise<void> {
   const { repository, openEncounter } = useAppStore.getState();
-  if (!(await repository.storage.exists('data', campaignPath(SAMPLE_CAMPAIGN_ID)))) {
-    await repository.saveCampaign(createSampleCampaign());
-  }
-  if (!(await repository.storage.exists('data', encounterPath(SAMPLE_CAMPAIGN_ID, SAMPLE_ENCOUNTER_ID)))) {
-    const [map, goblin] = await Promise.all([
-      repository.load('map', SAMPLE_MAP),
-      repository.load('creature', SAMPLE_GOBLIN),
-    ]);
-    await repository.saveEncounter(createSampleEncounter(map, goblin));
-  }
+  await ensureSampleCampaign(repository);
   await completeOnboardingStep('sampleEncounter');
   await openEncounter({ campaignId: SAMPLE_CAMPAIGN_ID, encounterId: SAMPLE_ENCOUNTER_ID });
 }

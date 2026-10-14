@@ -32,7 +32,7 @@ const STEPS: StepSpec[] = [
     id: 'sampleEncounter',
     icon: 'play',
     title: 'Open the sample encounter',
-    text: 'Four goblins ambush two heroes at a ruined chapel: a ready-made fight on a 3D map.',
+    text: 'Four goblins ambush two heroes at a ruined chapel, part of a sample campaign with journal and quests.',
     action: 'Open sample',
   },
 ];

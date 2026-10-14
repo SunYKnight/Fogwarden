@@ -1,12 +1,23 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { calendarSchema } from '../src/core/campaign/calendar';
 import { imageSize } from '../src/core/imageSize';
-import { encounterSchema } from '../src/core/model';
+import { campaignSchema, defaultSettings, encounterSchema } from '../src/core/model';
 import { HeightField } from '../src/core/terrain/heightfield';
-import { Repository } from '../src/data/repository';
+import { CampaignFiles, CAST, JOURNAL, QUESTS } from '../src/data/campaignFiles';
+import { campaignPath, Repository } from '../src/data/repository';
 import { StorageError } from '../src/data/storage';
-import { createSampleEncounter, SAMPLE_GOBLIN, SAMPLE_MAP } from '../src/ui/home/sampleContent';
+import { ensureSampleCampaign } from '../src/ui/home/sampleCampaign';
+import {
+  createSampleEncounter,
+  SAMPLE_CAMPAIGN_ID,
+  SAMPLE_ENCOUNTER_ID,
+  SAMPLE_GOBLIN,
+  SAMPLE_MAP,
+  SAMPLE_NIGHT_ID,
+  SAMPLE_PREPARED_ID,
+} from '../src/ui/home/sampleContent';
 import { CONTENT_ROOT, PROJECT_ROOT } from './cli';
 import { NodeStorage } from './nodeStorage';
 
@@ -85,6 +96,72 @@ describe('shipped sample map', () => {
       expect(position!.y).toBeLessThan(map.grid.squaresY * map.grid.feetPerSquare);
       expect(position!.elevationFt).toBeCloseTo(terrain.sample(position!.x, position!.y), 6);
     }
+  });
+});
+
+describe('sample campaign', () => {
+  const repository = new Repository(new NodeStorage(mkdtempSync(join(scratch, 'sample-')), CONTENT_ROOT));
+  const files = new CampaignFiles(repository.storage, SAMPLE_CAMPAIGN_ID);
+  const encounterIds = [SAMPLE_ENCOUNTER_ID, SAMPLE_PREPARED_ID, SAMPLE_NIGHT_ID];
+
+  it('creates every document so that it parses with its schema', async () => {
+    await ensureSampleCampaign(repository);
+    const { campaigns, problems } = await repository.listCampaigns();
+    expect(problems).toEqual([]);
+    expect(campaigns.map((c) => campaignSchema.parse(c).id)).toEqual([SAMPLE_CAMPAIGN_ID]);
+    expect(campaigns[0]!.notes).toContain('## Premise');
+    const [journal, quests, cast] = await Promise.all([files.list(JOURNAL), files.list(QUESTS), files.list(CAST)]);
+    expect([...journal.problems, ...quests.problems, ...cast.problems]).toEqual([]);
+    expect(journal.docs.map((d) => d.session).sort()).toEqual([1, 2]);
+    expect(new Set(quests.docs.map((d) => d.status))).toEqual(new Set(['open', 'done', 'failed']));
+    expect(new Set(cast.docs.map((d) => d.kind))).toEqual(new Set(['person', 'place']));
+    const calendar = calendarSchema.parse(await files.loadCalendar());
+    expect(calendar.events.length).toBeGreaterThan(0);
+    const listed = await repository.listEncounters(SAMPLE_CAMPAIGN_ID);
+    expect(listed.problems).toEqual([]);
+    expect(listed.encounters.map((e) => encounterSchema.parse(e).id).sort()).toEqual(encounterIds.sort());
+    expect(listed.encounters.every((e) => e.map?.id === SAMPLE_MAP.id)).toBe(true);
+  });
+
+  it('shows light, a hidden monster, an area and timed effects at night', async () => {
+    const night = await repository.loadEncounter(SAMPLE_CAMPAIGN_ID, SAMPLE_NIGHT_ID);
+    const players = night.combatants.filter((c) => c.side === 'player');
+    expect(night.atmosphere.minute).toBeGreaterThanOrEqual(20 * 60);
+    expect(players.filter((c) => c.light !== null)).toHaveLength(1);
+    expect(players.filter((c) => (c.senses.darkvision ?? 0) > 0).length).toBeGreaterThanOrEqual(2);
+    expect(night.combatants.filter((c) => c.hiddenFromPlayers).map((c) => c.side)).toEqual(['enemy']);
+    expect(night.markers.map((m) => m.templateId)).toEqual(['srd-moonbeam']);
+    const effects = night.combatants.flatMap((c) => c.effects);
+    expect(effects.length).toBeGreaterThan(0);
+    expect(effects.every((e) => e.expires !== null)).toBe(true);
+    expect(night.combatants.every((c) => c.position !== null)).toBe(true);
+    const prepared = await repository.loadEncounter(SAMPLE_CAMPAIGN_ID, SAMPLE_PREPARED_ID);
+    expect(prepared.combatants.length).toBeGreaterThan(0);
+    expect(prepared.combatants.every((c) => c.position === null)).toBe(true);
+  });
+
+  it('later only brings back the goblin ambush and keeps what the DM changed or deleted', async () => {
+    const quest = await files.load(QUESTS, 'find-tomas');
+    await files.save(QUESTS, { ...quest, notes: 'Edited by the DM' });
+    await repository.storage.remove('campaigns/sample-campaign/journal/2026-10-03-session-2.md');
+    await repository.removeEncounter(SAMPLE_CAMPAIGN_ID, SAMPLE_NIGHT_ID);
+    await repository.removeEncounter(SAMPLE_CAMPAIGN_ID, SAMPLE_ENCOUNTER_ID);
+    const before = await repository.listFiles('data', 'campaigns');
+    await ensureSampleCampaign(repository);
+    const after = await repository.listFiles('data', 'campaigns');
+    const added = after.filter((path) => !before.includes(path));
+    expect(before.every((path) => after.includes(path))).toBe(true);
+    expect(added).toContain(`campaigns/${SAMPLE_CAMPAIGN_ID}/encounters/${SAMPLE_ENCOUNTER_ID}/encounter.json`);
+    expect(added.every((path) => path.includes(`/encounters/${SAMPLE_ENCOUNTER_ID}/`))).toBe(true);
+    expect((await files.load(QUESTS, 'find-tomas')).notes).toBe('Edited by the DM');
+    expect((await repository.listCampaigns()).campaigns).toHaveLength(1);
+  });
+
+  it('asks to enable the Sample map pack when it is hidden', async () => {
+    const hidden = new Repository(new NodeStorage(mkdtempSync(join(scratch, 'hidden-')), CONTENT_ROOT));
+    await hidden.saveSettings({ ...defaultSettings(), packs: { order: [], disabled: ['sample-map'] } });
+    await expect(ensureSampleCampaign(hidden)).rejects.toThrow('"Sample map"; enable it under Settings > Content');
+    expect(await hidden.storage.exists('data', campaignPath(SAMPLE_CAMPAIGN_ID))).toBe(false);
   });
 });
 
