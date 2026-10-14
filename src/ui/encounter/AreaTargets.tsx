@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ABILITIES, DAMAGE_TYPES, type AreaMarker, type Encounter } from '@/core/model';
+import { countOf } from '@/core/plural';
 import { formatModifier } from '@/core/rules/abilities';
 import { combatantsInArea, damageResponse, saveBonus, type DamageResponse } from '@/core/rules/areaEffects';
 import { rollDice } from '@/core/rules/dice';
@@ -68,7 +69,7 @@ export function AreaTargets({ marker, encounter }: { marker: AreaMarker; encount
         owed = applyAreaDamage(d, label, roll.total, damageType, half, hits);
       }, `${label} damage`);
       queueConcentrationChecks(owed);
-      notify(`${label}: ${roll.total} ${damageType} damage to ${targets.length} targets`);
+      notify(`${label}: ${roll.total} ${damageType} damage to ${countOf(targets.length, 'target')}`);
     } catch (error) {
       reportError(error);
     }
@@ -132,7 +133,6 @@ export function AreaTargets({ marker, encounter }: { marker: AreaMarker; encount
         <Button
           icon="swords"
           label="Apply damage"
-          variant="primary"
           disabled={targets.length === 0 || damage.trim() === ''}
           onClick={applyDamage}
         />

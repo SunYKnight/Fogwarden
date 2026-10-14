@@ -20,6 +20,7 @@ import {
 } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { confirmDialog } from '../kit';
+import { COMBAT_ENDED_TEXT } from '../library/encounterStatus';
 import { dexScore, findCreature } from './creatureLookup';
 import { queueConcentrationChecks, type HpChange } from './encounterUiStore';
 
@@ -28,7 +29,7 @@ import { queueConcentrationChecks, type HpChange } from './encounterUiStore';
  * Each is one labelled undo step.
  */
 
-export type CombatantRecipe = (combatant: Draft<Combatant>, encounter: Draft<Encounter>) => void;
+type CombatantRecipe = (combatant: Draft<Combatant>, encounter: Draft<Encounter>) => void;
 
 function nameOf(id: string): string {
   return useEncounterStore.getState().encounter?.combatants.find((c) => c.id === id)?.name ?? 'combatant';
@@ -160,7 +161,7 @@ export function endCombat(xp: string | null, loot: readonly string[]): void {
     d.round = 0;
     d.turnIndex = 0;
     d.turnStart = null;
-    addLog(d, 'turn', 'Combat ended');
+    addLog(d, 'turn', COMBAT_ENDED_TEXT);
   }, 'End combat');
 }
 

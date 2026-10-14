@@ -89,6 +89,10 @@ function placeToken(id: string, point: MapPoint): void {
   useEncounterUi.setState({ placingId: next?.id ?? null, placingAll: next !== undefined });
 }
 
+function samePoint(a: MapPoint | null, b: MapPoint): boolean {
+  return a !== null && a.x === b.x && a.y === b.y && a.elevationFt === b.elevationFt;
+}
+
 function selectPointer(event: MapPointerEvent): void {
   const ui = useEncounterUi.getState();
   const store = useEncounterStore.getState();
@@ -106,14 +110,15 @@ function selectPointer(event: MapPointerEvent): void {
   } else if (primaryDown) {
     store.select(null);
   } else if (event.type === 'move' && point && ui.drag) {
+    // Moves inside one square snap to the same spot; no re-render for those.
     const to = snapFor(ui.drag.combatantId, point, ui.drag.from);
-    if (to) useEncounterUi.setState({ drag: { ...ui.drag, to } });
+    if (to && !samePoint(ui.drag.to, to)) useEncounterUi.setState({ drag: { ...ui.drag, to } });
   } else if (event.type === 'move' && point && ui.placingId) {
     useEncounterUi.setState({ pointer: point });
   } else if (event.type === 'up' && ui.drag) {
     const { combatantId, from, to } = ui.drag;
     const name = store.encounter?.combatants.find((c) => c.id === combatantId)?.name;
-    if (from.x !== to.x || from.y !== to.y || from.elevationFt !== to.elevationFt) {
+    if (!samePoint(from, to)) {
       store.update((d) => void (d.combatants.find((c) => c.id === combatantId)!.position = to), `Move ${name}`);
     }
     useEncounterUi.setState({ drag: null });
@@ -140,7 +145,7 @@ export function handleEncounterPointer(event: MapPointerEvent): void {
   if (ui.placement && event.type === 'down' && event.button === 0 && aim) {
     placeMarker(aim);
   } else if (ui.placement && event.type === 'move' && aim) {
-    useEncounterUi.setState({ pointer: aim });
+    if (!samePoint(ui.pointer, aim)) useEncounterUi.setState({ pointer: aim });
   } else if (!ui.placement && ui.tool === 'measure') {
     measurePointer(event);
   } else if (!ui.placement) {

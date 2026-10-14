@@ -117,7 +117,7 @@ export function createSampleEncounter(map: BattleMap, goblin: Creature): Encount
  * Night in the unlit nave: darkvision and a torch against undead, a shadow the players cannot see yet,
  * Moonbeam on the ghoul, Bless and Turn Undead running with their durations.
  */
-export function createNightEncounter(library: SampleLibrary): Encounter {
+function createNightEncounter(library: SampleLibrary): Encounter {
   const at = squarePlacer(library.map);
   const { creatures } = library;
   const thorin = partyMember(PARTY.thorin, at([9, 9]));
@@ -176,7 +176,7 @@ export function createNightEncounter(library: SampleLibrary): Encounter {
 }
 
 /** Brother Aldric's rite, prepared with nobody on the map, for the set-up bar's placing. */
-export function createPreparedEncounter(library: SampleLibrary): Encounter {
+function createPreparedEncounter(library: SampleLibrary): Encounter {
   const { creatures } = library;
   const [aldric] = spawnGroup(creatures.cultFanatic, SRD.cultFanatic, 'enemy', 1).map((c) => ({
     ...c,

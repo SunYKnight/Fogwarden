@@ -2,6 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useState } from 'react';
 import type { RemoteSettings } from '@/core/model';
+import { countOf } from '@/core/plural';
 import { useAppStore } from '@/state/appStore';
 import { useRelayStore, type RelayLink } from '@/state/relayStore';
 import { RELAY_LINK_PARAM } from '@/sync/relayApi';
@@ -119,16 +120,22 @@ function ServerSetupDialog({ remote, onClose }: { remote: RemoteSettings; onClos
 export function OnlineSection({ remote }: { remote: RemoteSettings }) {
   const reportError = useAppStore((s) => s.reportError);
   const notify = useAppStore((s) => s.notify);
-  const { link, players, baseUrl, lastError } = useRelayStore();
+  const link = useRelayStore((s) => s.link);
+  const players = useRelayStore((s) => s.players);
+  const baseUrl = useRelayStore((s) => s.baseUrl);
+  const lastError = useRelayStore((s) => s.lastError);
   const [testing, setTesting] = useState(false);
   const [settingUp, setSettingUp] = useState(false);
-  const ready = remote.url.trim() !== '' && remote.dmKey.trim() !== '';
+  // The DM key travels with every request; plain http would expose it.
+  const insecure = remote.url.trim() !== '' && !remote.url.trim().startsWith('https://');
+  const ready = remote.url.trim() !== '' && remote.dmKey.trim() !== '' && !insecure;
 
   const test = () => {
     setTesting(true);
     testRelay(remote.url, remote.dmKey)
       .then(
-        (session) => notify(`Server reachable and DM key accepted; ${session.players} players connected`, 'info'),
+        (session) =>
+          notify(`Server reachable and DM key accepted; ${countOf(session.players, 'player')} connected`, 'info'),
         reportError,
       )
       .finally(() => setTesting(false));
@@ -146,6 +153,7 @@ export function OnlineSection({ remote }: { remote: RemoteSettings }) {
         placeholder="https://fogwarden.example.org"
         onChange={(url) => saveRemote((r) => ({ ...r, url })).catch(reportError)}
       />
+      {insecure && <p className="error-text small">The server URL has to start with https://.</p>}
       <TextField
         label="DM key"
         value={remote.dmKey}
@@ -163,7 +171,7 @@ export function OnlineSection({ remote }: { remote: RemoteSettings }) {
       )}
       <p className="small" role="status">
         {LINK_TEXT[link]}
-        {link === 'online' && ` · ${players} ${players === 1 ? 'player' : 'players'}`}
+        {link === 'online' && ` · ${countOf(players, 'player')}`}
       </p>
       {lastError && <p className="error-text small">{lastError}</p>}
       {baseUrl && <PlayerLinks linkOf={(token) => `${baseUrl}/?${RELAY_LINK_PARAM}=${token}`} />}

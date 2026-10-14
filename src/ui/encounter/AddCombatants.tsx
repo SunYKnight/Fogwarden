@@ -24,7 +24,6 @@ const ADD_TABS: TabSpec<AddTab>[] = [
   { id: 'pc', label: 'Player character', icon: 'user' },
 ];
 
-// Module-level so the dialog's focus effect, keyed on `onClose`, runs once.
 const close = () => useEncounterUi.setState({ addDialogOpen: false });
 
 function FromLibrary() {
@@ -68,8 +67,10 @@ function FromLibrary() {
       />
       <div className="list add-matches">
         {matches.slice(0, MAX_MATCHES).map((e) => (
-          <div
+          <button
+            type="button"
             key={e.ref.id}
+            aria-pressed={e.ref.id === pickedId}
             className={e.ref.id === pickedId ? 'list-item selected' : 'list-item'}
             onClick={() => {
               setPickedId(e.ref.id);
@@ -81,7 +82,7 @@ function FromLibrary() {
             <span className="muted small">
               CR {formatCr(e.doc.challenge)} · {e.doc.xp} XP
             </span>
-          </div>
+          </button>
         ))}
         {matches.length > MAX_MATCHES && (
           <span className="muted small">{matches.length - MAX_MATCHES} more, refine the search</span>
@@ -158,13 +159,7 @@ function PlayerCharacterForm() {
       </Field>
       {libraryOpen && <PictureLibraryDialog onPick={setToken} onClose={() => setLibraryOpen(false)} />}
       <div className="dialog-actions">
-        <Button
-          icon="plus"
-          label="Add player character"
-          variant="primary"
-          disabled={name.trim() === ''}
-          onClick={add}
-        />
+        <Button icon="plus" label="Add player character" disabled={name.trim() === ''} onClick={add} />
       </div>
     </div>
   );
@@ -206,8 +201,10 @@ function PlayerCharacters() {
       </div>
       <div className="list add-matches">
         {characters.map((e) => (
-          <div
+          <button
+            type="button"
             key={e.ref.id}
+            aria-pressed={e.ref.id === pickedId}
             className={e.ref.id === pickedId ? 'list-item selected' : 'list-item'}
             onClick={() => setPickedId(e.ref.id)}
           >
@@ -218,7 +215,7 @@ function PlayerCharacters() {
               {e.doc.hitPoints.average}
               {inEncounter.has(e.ref.id) ? ' · in this encounter' : ''}
             </span>
-          </div>
+          </button>
         ))}
         {characters.length === 0 && (
           <span className="muted small">

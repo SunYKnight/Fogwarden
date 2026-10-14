@@ -17,12 +17,12 @@ import { CarriedLightField, DeathSaves, EffectsSection, ResourcesSection } from 
 import type { HeldPack } from './creatureLookup';
 import { startPlacing, useEncounterUi } from './encounterUiStore';
 
-const ROLL_MODE_LABEL: Record<RollMode, string> = {
+export const ROLL_MODE_LABEL: Record<RollMode, string> = {
   normal: 'Normal',
   advantage: 'Advantage',
   disadvantage: 'Disadvantage',
 };
-const ROLL_MODES = Object.keys(ROLL_MODE_LABEL) as RollMode[];
+export const ROLL_MODES = Object.keys(ROLL_MODE_LABEL) as RollMode[];
 
 export type Attack = (action: CreatureAction) => void;
 

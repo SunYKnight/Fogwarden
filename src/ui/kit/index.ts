@@ -1,8 +1,8 @@
 export { Button, ToolButton, Toolbar, type ButtonVariant } from './Button';
 export { ConfirmHost, Dialog, choiceDialog, confirmDialog, type Choice, type ConfirmOptions } from './Dialog';
-export { Icon, ICON_PATHS, type IconName } from './icons';
+export { Icon, type IconName } from './icons';
 export { PageHeader, type Crumb } from './PageHeader';
 export { ContextMenuHost, Popover, openContextMenu, type MenuItem } from './Popover';
-export { EmptyState, Panel, Section, StatusBar, Tabs, type TabSpec } from './Section';
-export { ShortcutHost, matchesKeys, useShortcuts, type Shortcut } from './shortcuts';
+export { EmptyState, Section, StatusBar, Tabs, type TabSpec } from './Section';
+export { ShortcutHost, useShortcuts, type Shortcut } from './shortcuts';
 export { ToastHost } from './Toasts';

@@ -195,7 +195,7 @@ function FogPanel() {
         onChange={setBrushRadius}
       />
       <div className="row">
-        <Button icon="undo" label="Reset explored" onClick={() => setResetting(true)} />
+        <Button icon="undo" label="Reset explored…" onClick={() => setResetting(true)} />
         <div className="spacer" />
         <span className="muted small">Visibility {computeMs === null ? '…' : `${Math.round(computeMs)} ms`}</span>
       </div>

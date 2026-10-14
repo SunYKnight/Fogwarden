@@ -34,6 +34,8 @@ function PaletteDialog({ settings }: { settings: Settings }) {
   const lanRunning = useLanStore((s) => s.info !== null);
   const creatures = useLibraryStore((s) => s.listings.creature.listed);
   const maps = useLibraryStore((s) => s.listings.map.entries);
+  const spells = useLibraryStore((s) => s.listings.spell.listed);
+  const items = useLibraryStore((s) => s.listings.item.listed);
   const [campaigns, setCampaigns] = useState<CampaignEncounters[]>([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -41,19 +43,26 @@ function PaletteDialog({ settings }: { settings: Settings }) {
 
   // Encounters are not kept in a store; read them fresh each time the palette opens.
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       const { campaigns: list } = await repository.listCampaigns();
       const lists = await Promise.all(list.map((c) => repository.listEncounters(c.id)));
-      setCampaigns(list.map((campaign, i) => ({ campaign, encounters: lists[i]!.encounters })));
+      if (!cancelled) setCampaigns(list.map((campaign, i) => ({ campaign, encounters: lists[i]!.encounters })));
     };
     load().catch(reportError);
+    return () => {
+      cancelled = true;
+    };
   }, [repository, reportError]);
 
   const context: CommandContext = useMemo(
     () => ({ route, settings, encounter, playerWindowOpen, lanRunning }),
     [route, settings, encounter, playerWindowOpen, lanRunning],
   );
-  const library = useMemo(() => libraryCommands(creatures, maps, campaigns), [creatures, maps, campaigns]);
+  const library = useMemo(
+    () => libraryCommands({ creatures, maps, spells, items, campaigns }),
+    [creatures, maps, spells, items, campaigns],
+  );
   const results = useMemo(() => {
     const pool = query.trim() === '' ? ACTION_COMMANDS : [...ACTION_COMMANDS, ...library];
     return rankCommands(
@@ -86,7 +95,7 @@ function PaletteDialog({ settings }: { settings: Settings }) {
         type="text"
         className="palette-input"
         value={query}
-        placeholder="Command, creature, map, campaign or encounter"
+        placeholder="Command, creature, spell, item, map, campaign or encounter"
         role="combobox"
         aria-label="Search commands"
         aria-expanded="true"
@@ -124,6 +133,8 @@ function PaletteDialog({ settings }: { settings: Settings }) {
 export function CommandPalette() {
   const open = useCommandPaletteStore((s) => s.open);
   const settings = useAppStore((s) => s.settings);
-  useShortcuts('App', [{ keys: 'Ctrl+K', label: 'Search commands and library', run: openCommandPalette }]);
+  useShortcuts('App', [
+    { keys: 'Ctrl+K', label: 'Search commands and library', run: openCommandPalette, inInputs: true },
+  ]);
   return open && settings ? <PaletteDialog settings={settings} /> : null;
 }

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { create } from 'zustand';
 import { useAppStore } from '@/state/appStore';
 import { flushEncounter } from '@/state/autosave';
 import { useEncounterStore } from '@/state/encounterStore';
@@ -9,6 +10,9 @@ import { useLibraryStore } from '@/state/libraryStore';
 let session = 0;
 let flushing: Promise<void> = Promise.resolve();
 
+/** Encounter whose files failed to load, so Play stops waiting for it. */
+export const useEncounterLoadFailure = create<{ failedId: string | null }>(() => ({ failedId: null }));
+
 async function loadActive(current: number, campaignId: string | null, encounterId: string | null): Promise<void> {
   const { repository, reportError } = useAppStore.getState();
   await flushing;
@@ -17,7 +21,10 @@ async function loadActive(current: number, campaignId: string | null, encounterI
   } else {
     // Stat blocks, spawning and marker templates read the library listings.
     useLibraryStore.getState().refreshAll().catch(reportError);
-    const encounter = await repository.loadEncounter(campaignId, encounterId);
+    const encounter = await repository.loadEncounter(campaignId, encounterId).catch((error: unknown) => {
+      if (current === session) useEncounterLoadFailure.setState({ failedId: encounterId });
+      throw error;
+    });
     // A missing map (deleted, or in a disabled pack: the error says which)
     // is reported; the encounter still runs as a tracker.
     const map = encounter.map
@@ -26,7 +33,10 @@ async function loadActive(current: number, campaignId: string | null, encounterI
           return null;
         })
       : null;
-    if (current === session) useEncounterStore.getState().open(encounter, map);
+    if (current === session) {
+      useEncounterLoadFailure.setState({ failedId: null });
+      useEncounterStore.getState().open(encounter, map);
+    }
   }
 }
 

@@ -1,10 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
 import { Icon, type IconName } from './icons';
 
-export function Panel({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={className ? `panel ${className}` : 'panel'}>{children}</div>;
-}
-
 interface SectionProps {
   title: string;
   children: ReactNode;
@@ -26,7 +22,7 @@ export function Section({ title, children, actions, collapsible = false, default
             type="button"
             className="section-toggle"
             aria-expanded={open}
-            aria-controls={bodyId}
+            aria-controls={open ? bodyId : undefined}
             onClick={() => setOpen(!open)}
           >
             <Icon name={open ? 'chevronDown' : 'chevronRight'} size={16} />

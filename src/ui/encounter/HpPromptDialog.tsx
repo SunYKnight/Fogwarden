@@ -4,7 +4,6 @@ import { Button, Dialog } from '../kit';
 import { changeHp, HP_CHANGE_LABEL } from './combatantCommands';
 import { useEncounterUi, type HpChange } from './encounterUiStore';
 
-// Module-level so the dialog's focus effect, keyed on `onClose`, runs once.
 const close = () => useEncounterUi.setState({ hpPrompt: null });
 
 function HpPrompt({ combatantId, change }: { combatantId: string; change: HpChange }) {

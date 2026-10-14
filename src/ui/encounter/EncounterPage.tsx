@@ -4,8 +4,9 @@ import { useFogViewStore } from '@/render/fog/fogViewStore';
 import { useAppStore } from '@/state/appStore';
 import { currentCombatant } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
-import { Button, PageHeader, useShortcuts } from '../kit';
+import { Button, EmptyState, openContextMenu, PageHeader, useShortcuts } from '../kit';
 import { AddCombatantsDialog } from './AddCombatants';
+import { ChangeMapDialog } from './ChangeMapDialog';
 import { removeFromMap, stepTurn } from './combatantCommands';
 import { ConcentrationDialog } from './ConcentrationDialog';
 import { CreatureDock } from './CreatureDock';
@@ -16,6 +17,7 @@ import { HpPromptDialog } from './HpPromptDialog';
 import { InitiativeStrip } from './InitiativeStrip';
 import { Inspector } from './Inspector';
 import { PlayViewport } from './PlayViewport';
+import { reloadActiveEncounter, useEncounterLoadFailure } from './useActiveEncounter';
 
 type CombatStep = 'setup' | 'combat' | 'wrapup';
 
@@ -48,31 +50,25 @@ function removeSelectedFromMap(): void {
   if (selected?.position) removeFromMap(selected.id);
 }
 
+// Dialogs register as layers, and the shortcut host ignores keys behind them.
 function usePlayShortcuts(): void {
-  const dialogOpen = useEncounterUi(
-    (s) => s.addDialogOpen || s.hpPrompt !== null || s.endCombatOpen || s.concentrationChecks.length > 0,
-  );
-  useShortcuts(
-    'Play',
-    [
-      { keys: 'Space', label: 'Next turn (starts combat)', run: () => stepTurn('next') },
-      { keys: 'Shift+Space', label: 'Previous turn', run: () => stepTurn('previous') },
-      { keys: 'Ctrl+Z', label: 'Undo', run: () => historyStep('undo') },
-      { keys: 'Ctrl+Y', label: 'Redo', run: () => historyStep('redo') },
-      { keys: 'Ctrl+Shift+Z', label: 'Redo', run: () => historyStep('redo') },
-      { keys: 'Escape', label: 'Cancel, stop brush, deselect, back to Select', run: escape },
-      { keys: 'S', label: 'Select tool', run: () => chooseTool('select') },
-      { keys: 'M', label: 'Measure tool', run: () => chooseTool('measure') },
-      {
-        keys: 'F',
-        label: 'Fog menu',
-        run: () => useEncounterUi.setState((s) => ({ fogMenuOpen: !s.fogMenuOpen })),
-      },
-      { keys: 'Delete', label: 'Remove selected token from the map', run: removeSelectedFromMap },
-      { keys: 'Backspace', label: 'Remove selected token from the map', run: removeSelectedFromMap },
-    ],
-    !dialogOpen,
-  );
+  useShortcuts('Play', [
+    { keys: 'Space', label: 'Next turn (starts combat)', run: () => stepTurn('next') },
+    { keys: 'Shift+Space', label: 'Previous turn', run: () => stepTurn('previous') },
+    { keys: 'Ctrl+Z', label: 'Undo', run: () => historyStep('undo') },
+    { keys: 'Ctrl+Y', label: 'Redo', run: () => historyStep('redo') },
+    { keys: 'Ctrl+Shift+Z', label: 'Redo', run: () => historyStep('redo') },
+    { keys: 'Escape', label: 'Cancel, stop brush, deselect, back to Select', run: escape },
+    { keys: 'S', label: 'Select tool', run: () => chooseTool('select') },
+    { keys: 'M', label: 'Measure tool', run: () => chooseTool('measure') },
+    {
+      keys: 'F',
+      label: 'Fog menu',
+      run: () => useEncounterUi.setState((s) => ({ fogMenuOpen: !s.fogMenuOpen })),
+    },
+    { keys: 'Delete', label: 'Remove selected token from the map', run: removeSelectedFromMap },
+    { keys: 'Backspace', label: 'Remove selected token from the map', run: removeSelectedFromMap },
+  ]);
 }
 
 /** Where the fight stands: set up, combat or wrap up, the current one marked. */
@@ -115,7 +111,7 @@ function PlayHeader({ encounter, campaignName }: { encounter: Encounter; campaig
         }}
       />
       {started && (
-        <Button icon="check" label="End combat" onClick={() => useEncounterUi.setState({ endCombatOpen: true })} />
+        <Button icon="check" label="End combat…" onClick={() => useEncounterUi.setState({ endCombatOpen: true })} />
       )}
       <Button
         icon="undo"
@@ -133,6 +129,22 @@ function PlayHeader({ encounter, campaignName }: { encounter: Encounter; campaig
         disabled={!canRedo}
         onClick={() => historyStep('redo')}
       />
+      <Button
+        icon="more"
+        label="More encounter actions"
+        iconOnly
+        variant="ghost"
+        onClick={(e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          openContextMenu(box.left, box.bottom + 4, [
+            {
+              label: encounter.map ? 'Change map…' : 'Choose map…',
+              icon: 'map',
+              run: () => useEncounterUi.setState({ mapDialogOpen: true }),
+            },
+          ]);
+        }}
+      />
     </PageHeader>
   );
 }
@@ -143,6 +155,7 @@ function PlayLayout({ campaignName }: { campaignName: string }) {
   const terrain = useEncounterStore((s) => s.terrain);
   const addDialogOpen = useEncounterUi((s) => s.addDialogOpen);
   const endCombatOpen = useEncounterUi((s) => s.endCombatOpen);
+  const mapDialogOpen = useEncounterUi((s) => s.mapDialogOpen);
   usePlayShortcuts();
   return (
     encounter && (
@@ -153,7 +166,21 @@ function PlayLayout({ campaignName }: { campaignName: string }) {
           {map && terrain ? (
             <PlayViewport map={map} terrain={terrain} />
           ) : (
-            <div className="play-viewport waiting">No map for this encounter: initiative tracker only.</div>
+            <div className="play-viewport waiting">
+              <EmptyState
+                icon="map"
+                title="No map for this encounter."
+                action={
+                  <Button
+                    icon="map"
+                    label="Choose map…"
+                    onClick={() => useEncounterUi.setState({ mapDialogOpen: true })}
+                  />
+                }
+              >
+                The initiative tracker works without one.
+              </EmptyState>
+            </div>
           )}
           <Inspector encounter={encounter} hasMap={map !== null} />
           <CreatureDock encounter={encounter} hasMap={map !== null} />
@@ -161,6 +188,7 @@ function PlayLayout({ campaignName }: { campaignName: string }) {
         {addDialogOpen && <AddCombatantsDialog />}
         <HpPromptDialog />
         {endCombatOpen && <EndCombatDialog encounter={encounter} />}
+        {mapDialogOpen && <ChangeMapDialog />}
         <ConcentrationDialog />
       </div>
     )
@@ -175,6 +203,7 @@ export function EncounterPage({ campaignId, encounterId }: { campaignId: string;
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
   const loadedId = useEncounterStore((s) => s.encounter?.id);
+  const failed = useEncounterLoadFailure((s) => s.failedId === encounterId);
   const [campaignName, setCampaignName] = useState('Campaign');
 
   useEffect(() => {
@@ -188,14 +217,33 @@ export function EncounterPage({ campaignId, encounterId }: { campaignId: string;
   useEffect(
     () => () => {
       cancelInteraction();
-      useEncounterUi.setState({ addDialogOpen: false, hpPrompt: null, endCombatOpen: false });
+      useEncounterUi.setState({ addDialogOpen: false, hpPrompt: null, endCombatOpen: false, mapDialogOpen: false });
     },
     [],
   );
 
-  return loadedId === encounterId ? (
-    <PlayLayout campaignName={campaignName} />
-  ) : (
-    <div className="waiting">Loading encounter…</div>
-  );
+  let page = <div className="waiting">Loading encounter…</div>;
+  if (loadedId === encounterId) {
+    page = <PlayLayout campaignName={campaignName} />;
+  } else if (failed) {
+    page = (
+      <div className="page-frame">
+        <EmptyState
+          icon="alert"
+          title="This encounter could not be loaded."
+          action={
+            <div className="row">
+              <Button icon="undo" label="Try again" onClick={() => reloadActiveEncounter().catch(reportError)} />
+              <Button
+                icon="swords"
+                label="Go to campaigns"
+                onClick={() => useAppStore.getState().navigate({ page: 'campaigns', campaignId })}
+              />
+            </div>
+          }
+        />
+      </div>
+    );
+  }
+  return page;
 }

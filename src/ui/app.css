@@ -985,7 +985,7 @@ h3 {
   gap: 2px;
 }
 
-.area-templates .list-item {
+button.list-item {
   width: 100%;
   text-align: left;
   background: transparent;

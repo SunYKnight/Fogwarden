@@ -11,7 +11,7 @@ export function ToastHost() {
   return (
     <div className="toasts" role="log" aria-live="polite">
       {notices.map((n) => (
-        <div key={n.id} className={`toast toast-${n.kind}`}>
+        <div key={n.id} className={`toast toast-${n.kind}`} role={n.kind === 'error' ? 'alert' : undefined}>
           <Icon name={NOTICE_ICON[n.kind]} />
           <span style={{ flex: 1 }}>{n.message}</span>
           <Button icon="close" label="Dismiss" iconOnly variant="ghost" onClick={() => dismiss(n.id)} />

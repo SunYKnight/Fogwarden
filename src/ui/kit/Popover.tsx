@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { create } from 'zustand';
 import { Icon, type IconName } from './icons';
+import { useLayer } from './layers';
 
 type Placement = 'below' | 'right';
 
@@ -44,22 +45,14 @@ export function Popover({ trigger, children, placement = 'below', label }: Popov
     return () => observer.disconnect();
   }, [open, placement]);
 
+  useLayer(open, () => setOpen(false));
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const target = e.target as Node;
       if (!panel.current?.contains(target) && !anchor.current?.contains(target)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    if (open) {
-      window.addEventListener('mousedown', onDown);
-      window.addEventListener('keydown', onKey);
-    }
-    return () => {
-      window.removeEventListener('mousedown', onDown);
-      window.removeEventListener('keydown', onKey);
-    };
+    if (open) window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
   }, [open]);
 
   const close = () => setOpen(false);
@@ -97,10 +90,24 @@ export function openContextMenu(x: number, y: number, items: MenuItem[]): void {
   useContextMenuStore.setState({ menu: items.length > 0 ? { x, y, items } : null });
 }
 
+const MENU_STEP: Record<string, number> = { ArrowDown: 1, ArrowUp: -1 };
+
+/** Up and Down move between the enabled items, wrapping at the ends. */
+function moveInMenu(event: KeyboardEvent<HTMLDivElement>): void {
+  const step = MENU_STEP[event.key];
+  const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+  if (step !== undefined && items.length > 0) {
+    event.preventDefault();
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    items[(index + step + items.length) % items.length]!.focus();
+  }
+}
+
 export function ContextMenuHost() {
   const menu = useContextMenuStore((s) => s.menu);
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: 0, top: 0 });
+  useLayer(menu !== null, () => useContextMenuStore.setState({ menu: null }));
 
   // Menus opened near the window edge flip inside instead of overflowing.
   useLayoutEffect(() => {
@@ -113,30 +120,29 @@ export function ContextMenuHost() {
     }
   }, [menu]);
 
+  // Focus moves into the menu for the arrow keys and back when it closes.
   useEffect(() => {
+    const previous = document.activeElement;
     const close = (e: Event) => {
       if (!(e instanceof MouseEvent && box.current?.contains(e.target as Node))) {
         useContextMenuStore.setState({ menu: null });
       }
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') useContextMenuStore.setState({ menu: null });
-    };
     if (menu) {
+      box.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
       window.addEventListener('mousedown', close);
-      window.addEventListener('keydown', onKey);
       window.addEventListener('blur', close);
     }
     return () => {
       window.removeEventListener('mousedown', close);
-      window.removeEventListener('keydown', onKey);
       window.removeEventListener('blur', close);
+      if (menu && previous instanceof HTMLElement && previous.isConnected) previous.focus();
     };
   }, [menu]);
 
   return menu
     ? createPortal(
-        <div ref={box} className="context-menu" role="menu" style={pos}>
+        <div ref={box} className="context-menu" role="menu" style={pos} onKeyDown={moveInMenu}>
           {menu.items.map((item) => (
             <button
               key={item.label}

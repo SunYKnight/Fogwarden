@@ -19,13 +19,15 @@ function QrCode({ text }: { text: string }) {
 }
 
 /**
- * Player links, one per view (the party and each player character): pick a view, then copy its link, scan
- * it as QR code or replace it with a new one.
+ * Player links, one per view (the party and each player character of the encounter, the campaign's party and
+ * this session): pick a view, then copy its link, scan it as QR code or replace it with a new one.
  */
 export function PlayerLinks({ linkOf }: { linkOf: (token: string) => string }) {
   const reportError = useAppStore((s) => s.reportError);
   const notify = useAppStore((s) => s.notify);
-  const views = useViewLinksStore((s) => s.views);
+  // Linked, not only the encounter's views: a party member sitting out still
+  // needs a link to copy or rotate.
+  const views = useViewLinksStore((s) => s.linked);
   const tokens = useViewLinksStore((s) => s.tokens);
   const [chosen, setChosen] = useState(PARTY_VIEW);
   const view = views.find((v) => v.id === chosen) ?? views[0]!;
@@ -65,7 +67,9 @@ export function PlayerLinks({ linkOf }: { linkOf: (token: string) => string }) {
               label="Copy link"
               iconOnly
               variant="ghost"
-              onClick={() => navigator.clipboard.writeText(url).then(() => notify('Link copied', 'info'), reportError)}
+              onClick={() =>
+                navigator.clipboard.writeText(url).then(() => notify('Link copied', 'success'), reportError)
+              }
             />
           </div>
           <QrCode text={url} />

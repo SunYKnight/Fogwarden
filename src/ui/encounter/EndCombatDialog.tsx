@@ -8,7 +8,6 @@ import { Button, Dialog, Section } from '../kit';
 import { endCombat } from './combatantCommands';
 import { useEncounterUi } from './encounterUiStore';
 
-// Module-level so the dialog's focus effect, keyed on `onClose`, runs once.
 const close = () => useEncounterUi.setState({ endCombatOpen: false });
 
 /** Item rarities in the order of their value; others (artifact variants, homebrew) follow by name. */

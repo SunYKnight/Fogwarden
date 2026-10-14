@@ -1,3 +1,4 @@
+import { countOf } from '@/core/plural';
 import { formatModifier } from '@/core/rules/abilities';
 import { saveBonus } from '@/core/rules/areaEffects';
 import { useAppStore } from '@/state/appStore';
@@ -20,12 +21,6 @@ function settle(answered: { combatantId: string; dc: number }): void {
     ),
   }));
 }
-
-// Module-level so the dialog's focus effect, keyed on `onClose`, runs once.
-const dismiss = () => {
-  const first = useEncounterUi.getState().concentrationChecks[0];
-  if (first) settle(first);
-};
 
 /** Constitution save a concentrating combatant owes after taking damage: rolled, or answered by the DM. */
 export function ConcentrationDialog() {
@@ -56,7 +51,7 @@ export function ConcentrationDialog() {
   return check && combatant ? (
     <Dialog
       title="Concentration"
-      onClose={dismiss}
+      onClose={() => settle(check)}
       width={380}
       footer={
         <>
@@ -74,7 +69,7 @@ export function ConcentrationDialog() {
       <p>
         {combatant.name} took damage while concentrating: Constitution save <strong>DC {check.dc}</strong>.
       </p>
-      {checks.length > 1 && <p className="muted small">{checks.length - 1} more checks waiting.</p>}
+      {checks.length > 1 && <p className="muted small">{countOf(checks.length - 1, 'more check')} waiting.</p>}
     </Dialog>
   ) : null;
 }

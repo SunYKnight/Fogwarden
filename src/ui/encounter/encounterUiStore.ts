@@ -40,6 +40,7 @@ interface EncounterUiState {
   /** Concentration saves owed after damage, oldest first. */
   concentrationChecks: { combatantId: string; dc: number }[];
   endCombatOpen: boolean;
+  mapDialogOpen: boolean;
   /** Placed area whose targets the Areas tab lists. */
   areaTargetsId: string | null;
 }
@@ -63,6 +64,7 @@ export const useEncounterUi = create<EncounterUiState>(() => ({
   hpPrompt: null,
   concentrationChecks: [],
   endCombatOpen: false,
+  mapDialogOpen: false,
   areaTargetsId: null,
 }));
 

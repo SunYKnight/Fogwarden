@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AssetRef, Campaign, DocRef, Encounter, EncounterLocator } from '@/core/model';
+import { countOf } from '@/core/plural';
 import { QUESTS } from '@/data/campaignFiles';
 import { useAppStore } from '@/state/appStore';
 import { currentCombatant } from '@/state/encounterActions';
@@ -60,6 +61,7 @@ function ContinueCard({ campaign, encounter }: { campaign: Campaign; encounter: 
   const reportError = useAppStore((s) => s.reportError);
   const image = useMapImage(encounter.map);
   const turn = currentCombatant(encounter);
+  const status = encounterStatus(encounter);
   const locator: EncounterLocator = { campaignId: campaign.id, encounterId: encounter.id };
   return (
     <section className="home-card continue-card" aria-label="Continue">
@@ -68,8 +70,9 @@ function ContinueCard({ campaign, encounter }: { campaign: Campaign; encounter: 
         <span className="muted">Continue · {campaign.name}</span>
         <h2>{encounter.name}</h2>
         <span>
-          {encounter.round > 0 ? `Round ${encounter.round}` : 'Not started'}
-          {turn && ` · ${turn.name}'s turn`} · {encounter.combatants.length} combatants
+          {statusLabel(status)}
+          {status.kind === 'running' && turn && ` · ${turn.name}'s turn`} ·{' '}
+          {countOf(encounter.combatants.length, 'combatant')}
         </span>
         <div className="row">
           <Button
@@ -94,7 +97,7 @@ function UpcomingEncounter({ encounter, primary }: { encounter: Encounter; prima
       <AssetImage asset={image} alt="" className="encounter-thumb" />
       <div className="encounter-info">
         <strong>{encounter.name}</strong>
-        <span className="muted">{encounter.combatants.length} combatants</span>
+        <span className="muted">{countOf(encounter.combatants.length, 'combatant')}</span>
       </div>
       <span className={`status-chip ${status.kind}`}>{statusLabel(status)}</span>
       <Button
@@ -305,7 +308,7 @@ export function HomePage() {
         <ImportButton />
       </PageHeader>
       <div className="page-body home">
-        <FirstSteps />
+        <FirstSteps campaigns={loaded?.campaigns ?? null} />
         {campaign && loaded ? (
           <CampaignDashboard
             key={campaign.id}

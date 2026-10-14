@@ -6,7 +6,17 @@ import { createElement, type ReactNode } from 'react';
  * italic, links (shown, not followed). Rendered as React elements, so text from files never becomes HTML.
  */
 
-const INLINE = /(\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g;
+// Underscores inside a word (snake_case_names) are text, not emphasis.
+const UNDERSCORE_EM = String.raw`(?<![\p{L}\p{N}])_[^_\s][^_]*_(?![\p{L}\p{N}])`;
+const INLINE_PARTS = [
+  String.raw`\*\*[^*]+\*\*`,
+  '__[^_]+__',
+  String.raw`\*[^*\s][^*]*\*`,
+  UNDERSCORE_EM,
+  '`[^`]+`',
+  String.raw`\[[^\]]+\]\([^)\s]+\)`,
+];
+const INLINE = new RegExp(`(${INLINE_PARTS.join('|')})`, 'gu');
 const HEADING = /^(#{1,6})\s+(.*)$/;
 const BULLET = /^\s*[-*+]\s+(.*)$/;
 const NUMBERED = /^\s*\d+[.)]\s+(.*)$/;

@@ -67,7 +67,7 @@ export function ShowPanel({ campaignId }: { campaignId: string }) {
   return (
     <div className="show-panel">
       <div className="row">
-        <Button icon="upload" label="Add files" onClick={() => input.current?.click()} />
+        <Button icon="upload" label="Add files…" onClick={() => input.current?.click()} />
         <input
           ref={input}
           type="file"

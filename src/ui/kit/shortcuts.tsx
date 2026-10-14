@@ -1,13 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { create } from 'zustand';
 import { Dialog } from './Dialog';
+import { isLayerOpen } from './layers';
 
 export interface Shortcut {
   /** Key combination such as "Ctrl+Z", "Shift+Delete", "Space", "Escape", "?" or "v". */
   keys: string;
   label: string;
   run: (event: KeyboardEvent) => void;
-  /** Also fire while a text field has focus (e.g. Escape). */
+  /** Also fire while a text field has focus (e.g. Ctrl+K). */
   inInputs?: boolean;
 }
 
@@ -33,7 +34,7 @@ function normalizeKey(key: string): string {
 }
 
 /** Whether `keys` describes this event; symbols like "?" ignore Shift because layouts differ. */
-export function matchesKeys(keys: string, event: KeyboardEvent): boolean {
+function matchesKeys(keys: string, event: KeyboardEvent): boolean {
   const parts = keys.split('+').map((p) => p.trim().toLowerCase());
   const key = normalizeKey(parts[parts.length - 1]!);
   const wantCtrl = parts.includes('ctrl');
@@ -49,11 +50,17 @@ export function matchesKeys(keys: string, event: KeyboardEvent): boolean {
   );
 }
 
+// Checkboxes, sliders and buttons take no text, so shortcuts still apply.
+const TEXT_INPUT = 'input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="color"])';
+
 function isTyping(target: EventTarget | null): boolean {
   return (
-    target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+    target instanceof HTMLElement && (target.isContentEditable || target.matches(`${TEXT_INPUT}, textarea, select`))
   );
 }
+
+/** Space on a focused button or option presses that control, not a page shortcut. */
+const SPACE_CONTROL = 'button, a[href], [role="button"], [role="tab"], [role="option"], [role="menuitem"]';
 
 /**
  * Registers keyboard shortcuts while the calling component is mounted. Later registrations win, so a dialog or
@@ -78,8 +85,14 @@ export function useShortcuts(scope: string, shortcuts: Shortcut[], enabled = tru
 
 function findShortcut(event: KeyboardEvent): Shortcut | undefined {
   const typing = isTyping(event.target);
+  const pressesControl =
+    event.key === ' ' && event.target instanceof Element && event.target.closest(SPACE_CONTROL) !== null;
+  // Held keys repeat: one turn per press, not a run of skipped turns.
+  const ignored = event.repeat || pressesControl || isLayerOpen();
   const registrations = [...useShortcutStore.getState().registrations].reverse();
-  return registrations.flatMap((r) => r.shortcuts).find((s) => (!typing || s.inInputs) && matchesKeys(s.keys, event));
+  return ignored
+    ? undefined
+    : registrations.flatMap((r) => r.shortcuts).find((s) => (!typing || s.inInputs) && matchesKeys(s.keys, event));
 }
 
 /** Global key dispatcher and the "?" overlay; mounted once by the app shell. */
@@ -90,7 +103,11 @@ export function ShortcutHost() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const shortcut = findShortcut(event);
-      const help = !isTyping(event.target) && matchesKeys('?', event);
+      // The list is a dialog itself: "?" closes it, opens it only over a page.
+      const help =
+        !isTyping(event.target) &&
+        matchesKeys('?', event) &&
+        (useShortcutStore.getState().overlayOpen || !isLayerOpen());
       if (shortcut) {
         event.preventDefault();
         shortcut.run(event);

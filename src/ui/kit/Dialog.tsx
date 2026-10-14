@@ -1,7 +1,8 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { create } from 'zustand';
 import { Button } from './Button';
+import { useLayer } from './layers';
 
 interface DialogProps {
   title: string;
@@ -11,37 +12,50 @@ interface DialogProps {
   width?: number;
 }
 
-/** Open dialogs, innermost last: Esc closes only the dialog on top. */
-const openDialogs: object[] = [];
+const FOCUSABLE =
+  'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), ' +
+  'a[href], [tabindex]:not([tabindex="-1"])';
 
-/** Modal dialog: Esc and the backdrop close it, focus moves into it on open. */
+/** Keeps Tab inside the dialog: from the last element to the first and back. */
+function trapTab(event: KeyboardEvent<HTMLDivElement>): void {
+  const items = [...event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE)];
+  const edge = event.shiftKey ? items[0] : items.at(-1);
+  if (event.key === 'Tab' && edge && document.activeElement === edge) {
+    event.preventDefault();
+    (event.shiftKey ? items.at(-1) : items[0])?.focus();
+  }
+}
+
+/** Modal dialog: Esc and the backdrop close it, focus moves into it on open and back on close. */
 export function Dialog({ title, onClose, children, footer, width = 520 }: DialogProps) {
   const box = useRef<HTMLDivElement>(null);
-  const token = useRef({});
+  useLayer(true, onClose);
+  // Once per mount: callers pass inline `onClose` closures, so a dependency on
+  // it would pull focus back on every parent render.
   useEffect(() => {
-    const own = token.current;
-    openDialogs.push(own);
-    return () => void openDialogs.splice(openDialogs.indexOf(own), 1);
-  }, []);
-  useEffect(() => {
-    // Fields first: the header's Close button comes first in document order.
+    const previous = document.activeElement;
+    // Fields first, then the primary button; Cancel only when there is none.
     const root = box.current;
     const first =
       root?.querySelector<HTMLElement>('.dialog-body input, .dialog-body select, .dialog-body textarea') ??
-      root?.querySelector<HTMLElement>('button.btn-primary, .dialog-foot button');
+      root?.querySelector<HTMLElement>('.dialog-foot .btn-primary') ??
+      root?.querySelector<HTMLElement>('.dialog-foot button');
     first?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && openDialogs.at(-1) === token.current) {
-        e.stopPropagation();
-        onClose();
-      }
+    return () => {
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  }, []);
   return createPortal(
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={box} className="dialog" role="dialog" aria-modal="true" aria-label={title} style={{ width }}>
+      <div
+        ref={box}
+        className="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        style={{ width }}
+        onKeyDown={trapTab}
+      >
         <div className="dialog-head">
           <h2>{title}</h2>
           <Button icon="close" label="Close" iconOnly variant="ghost" onClick={onClose} />

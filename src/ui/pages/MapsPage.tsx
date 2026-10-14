@@ -2,6 +2,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { useState } from 'react';
 import type { LibraryKind } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
+import { useLibraryStore } from '@/state/libraryStore';
 import { LoadProblems } from '../components/LoadProblems';
 import { Button, Icon, PageHeader } from '../kit';
 import { DaFolderImportDialog, pickDaFolder, type FolderPlan } from '../library/DaFolderImport';
@@ -15,6 +16,8 @@ export function MapsPage() {
   const reportError = useAppStore((s) => s.reportError);
   const [filter, setFilter] = useState('');
   const [folderPlan, setFolderPlan] = useState<FolderPlan | null>(null);
+  // The empty library shows its own "New map": one primary button per screen.
+  const empty = useLibraryStore((s) => s.listings.map.entries.length === 0);
   const { dragging, handlers } = useFileDrop((files) => {
     if (files.some(isMapSourceFile)) {
       openNewMapWizard(files);
@@ -45,7 +48,7 @@ export function MapsPage() {
             onClick={() => pickDaFolder().then(setFolderPlan, reportError)}
           />
         )}
-        <Button icon="plus" label="New map" variant="primary" onClick={() => openNewMapWizard()} />
+        {!empty && <Button icon="plus" label="New map" variant="primary" onClick={() => openNewMapWizard()} />}
       </PageHeader>
       <div className="page-body">
         <LoadProblems kinds={KINDS} />

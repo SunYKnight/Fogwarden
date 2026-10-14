@@ -16,7 +16,8 @@ import { TableActions, TableLibrary } from '../library/TableLibrary';
 interface CompendiumTabSpec extends TabSpec<CompendiumTab> {
   /** Library kinds whose unreadable files the tab lists above its body. */
   kinds: LibraryKind[];
-  Body: ComponentType;
+  /** `entryId` is shown selected where the tab supports it (items, spells). */
+  Body: ComponentType<{ entryId?: string }>;
   /** Tab-specific actions, shown after the tab bar. */
   Actions: ComponentType;
 }
@@ -40,7 +41,7 @@ function CreatureActions() {
           { label: 'Everything from the D&D 5e API…', icon: 'download', run: openDndApiImport },
           { label: 'Stat block from text…', icon: 'upload', run: () => openCreatureImport('') },
           {
-            label: desktop ? 'Characters from Aurora Builder…' : 'Characters from Aurora Builder… (desktop app)',
+            label: desktop ? 'Characters from Aurora Builder…' : 'Characters from Aurora Builder (desktop app)…',
             icon: 'users',
             disabled: !desktop,
             run: openAuroraImport,
@@ -51,7 +52,7 @@ function CreatureActions() {
             run: () => attachPortraitsFromApi().catch(reportError),
           },
           {
-            label: desktop ? 'Pictures from a folder…' : 'Pictures from a folder… (desktop app)',
+            label: desktop ? 'Pictures from a folder…' : 'Pictures from a folder (desktop app)…',
             icon: 'image',
             disabled: !desktop,
             run: () => attachPortraitsFromFolder().catch(reportError),
@@ -63,7 +64,7 @@ function CreatureActions() {
 }
 
 /** Tabs in display order; a new tab adds its `CompendiumTab` id and one entry here. */
-export const COMPENDIUM_TABS: CompendiumTabSpec[] = [
+const COMPENDIUM_TABS: CompendiumTabSpec[] = [
   {
     id: 'creatures',
     label: 'Creatures',
@@ -93,7 +94,7 @@ export const COMPENDIUM_TABS: CompendiumTabSpec[] = [
   { id: 'tables', label: 'Tables', icon: 'dice', kinds: ['table'], Body: TableLibrary, Actions: TableActions },
 ];
 
-export function CompendiumPage({ tab }: { tab: CompendiumTab }) {
+export function CompendiumPage({ tab, entryId }: { tab: CompendiumTab; entryId?: string }) {
   const navigate = useAppStore((s) => s.navigate);
   const spec = COMPENDIUM_TABS.find((t) => t.id === tab) ?? COMPENDIUM_TABS[0]!;
   const { Body, Actions } = spec;
@@ -114,7 +115,7 @@ export function CompendiumPage({ tab }: { tab: CompendiumTab }) {
       </div>
       <div className="page-body">
         <LoadProblems kinds={spec.kinds} />
-        <Body />
+        <Body key={entryId} entryId={entryId} />
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import { createCalendar, type Calendar } from '@/core/campaign/calendar';
 import type { JournalEntry } from '@/core/campaign/journal';
 import type { CastEntry } from '@/core/campaign/people';
 import type { Quest } from '@/core/campaign/quests';
-import { createCampaign, type Campaign } from '@/core/model';
+import { createCampaign } from '@/core/model';
 import { CampaignFiles, CAST, JOURNAL, QUESTS } from '@/data/campaignFiles';
 import { importApiMonsters } from '@/data/dnd5eApiImport';
 import { campaignPath, encounterPath, type Repository } from '@/data/repository';
@@ -39,10 +39,6 @@ road, but the real threat is Brother Aldric, the chapel's former priest, who wak
 - **Encounters**: the goblin ambush by day; the night vigil with darkvision, a torch, a shadow hidden from the
   players, a Moonbeam area and timed effects; the midnight rite, prepared but not yet placed on the map.
 `;
-
-export function createSampleCampaign(): Campaign {
-  return { ...createCampaign('The chapel in the woods (sample)'), id: SAMPLE_CAMPAIGN_ID, notes: NOTES };
-}
 
 const JOURNAL_ENTRIES: JournalEntry[] = [
   {
@@ -240,6 +236,7 @@ export async function ensureSampleCampaign(repository: Repository): Promise<void
       files.saveCalendar(createSampleCalendar()),
     ]);
     // Written last: after a failed first run the next one starts over.
-    await repository.saveCampaign(createSampleCampaign());
+    const name = 'The chapel in the woods (sample)';
+    await repository.saveCampaign({ ...createCampaign(name), id: SAMPLE_CAMPAIGN_ID, notes: NOTES });
   }
 }

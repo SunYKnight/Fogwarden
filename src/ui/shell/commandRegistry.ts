@@ -1,7 +1,9 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { create } from 'zustand';
 import { PHASE_MINUTE } from '@/core/atmosphere/timeOfDay';
+import { itemSubtitle } from '@/core/items';
 import { WEATHERS, type Campaign, type Encounter, type Settings } from '@/core/model';
+import { spellSubtitle } from '@/core/spells';
 import type { LibraryEntry } from '@/data/repository';
 import { useAppStore, type Route, type SettingsSection } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
@@ -74,7 +76,7 @@ export const ACTION_COMMANDS: Command[] = [
     keywords: SETTINGS_KEYWORDS[section.id],
     run: () => useAppStore.getState().navigate({ page: 'settings', section: section.id }),
   })),
-  { id: 'create:campaign', label: 'New campaign', group: 'Create', keywords: [], run: openNewCampaign },
+  { id: 'create:campaign', label: 'New campaign…', group: 'Create', keywords: [], run: openNewCampaign },
   {
     id: 'campaign:import',
     label: 'Import campaign…',
@@ -96,14 +98,14 @@ export const ACTION_COMMANDS: Command[] = [
   },
   {
     id: 'create:map',
-    label: 'New map',
+    label: 'New map…',
     group: 'Create',
     keywords: ['image', 'battlemap', 'import'],
     run: () => openNewMapWizard(),
   },
   {
     id: 'create:encounter',
-    label: 'New encounter',
+    label: 'New encounter…',
     group: 'Create',
     keywords: ['fight', 'combat'],
     run: (c) => openNewEncounter(c.route.page === 'campaigns' ? c.route.campaignId : null),
@@ -173,13 +175,24 @@ export const ACTION_COMMANDS: Command[] = [
   },
   {
     id: 'play:end-combat',
-    label: 'End combat',
+    label: 'End combat…',
     group: 'Play',
     keywords: ['xp', 'loot', 'finish'],
     available: inCombat,
     run: () => {
       useAppStore.getState().navigate({ page: 'play' });
       useEncounterUi.setState({ endCombatOpen: true });
+    },
+  },
+  {
+    id: 'play:change-map',
+    label: 'Change map…',
+    group: 'Play',
+    keywords: ['battlemap', 'choose', 'switch'],
+    available: inEncounter,
+    run: () => {
+      useAppStore.getState().navigate({ page: 'play' });
+      useEncounterUi.setState({ mapDialogOpen: true });
     },
   },
   {
@@ -241,12 +254,17 @@ export const ACTION_COMMANDS: Command[] = [
   },
 ];
 
-/** One command per creature, map, campaign and encounter; the palette offers them once something is typed. */
-export function libraryCommands(
-  creatures: readonly LibraryEntry<'creature'>[],
-  maps: readonly LibraryEntry<'map'>[],
-  campaigns: readonly CampaignEncounters[],
-): Command[] {
+/** Library lists the palette searches once something is typed. */
+interface PaletteLibrary {
+  creatures: readonly LibraryEntry<'creature'>[];
+  maps: readonly LibraryEntry<'map'>[];
+  spells: readonly LibraryEntry<'spell'>[];
+  items: readonly LibraryEntry<'item'>[];
+  campaigns: readonly CampaignEncounters[];
+}
+
+/** One command per creature, spell, item, map, campaign and encounter. */
+export function libraryCommands({ creatures, maps, spells, items, campaigns }: PaletteLibrary): Command[] {
   const { navigate, openEncounter } = useAppStore.getState();
   return [
     ...creatures.map(({ ref, doc }) => ({
@@ -255,6 +273,20 @@ export function libraryCommands(
       group: 'Creature',
       keywords: [doc.type, 'stat block'],
       run: () => navigate({ page: 'creature-editor', ref }),
+    })),
+    ...spells.map(({ ref, doc }) => ({
+      id: `spell:${ref.area}:${ref.id}`,
+      label: doc.name,
+      group: 'Spell',
+      keywords: [spellSubtitle(doc)],
+      run: () => navigate({ page: 'compendium', tab: 'spells', entryId: ref.id }),
+    })),
+    ...items.map(({ ref, doc }) => ({
+      id: `item:${ref.area}:${ref.id}`,
+      label: doc.name,
+      group: 'Item',
+      keywords: [itemSubtitle(doc)],
+      run: () => navigate({ page: 'compendium', tab: 'items', entryId: ref.id }),
     })),
     ...maps.map(({ ref, doc }) => ({
       id: `map:${ref.area}:${ref.id}`,

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Encounter } from '@/core/model';
+import { useAppStore } from '@/state/appStore';
 import { addLog } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { Button, confirmDialog } from '../kit';
@@ -45,12 +46,14 @@ export function LogPanel({ encounter }: { encounter: Encounter }) {
           variant="ghost"
           disabled={encounter.log.length === 0}
           onClick={() => {
-            void confirmDialog({
+            confirmDialog({
               title: 'Clear log',
               message: 'All log entries of this encounter are deleted. This cannot be undone.',
               confirmLabel: 'Clear log',
               danger: true,
-            }).then((ok) => ok && update((d) => void (d.log = [])));
+            })
+              .then((ok) => ok && update((d) => void (d.log = [])))
+              .catch(useAppStore.getState().reportError);
           }}
         />
       </div>

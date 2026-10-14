@@ -6,6 +6,7 @@ import { GridFields } from '@/editor/tools/terrain/calibrate';
 import { useAppStore } from '@/state/appStore';
 import { useEditorStore, type MapSettingsTab } from '@/state/editorStore';
 import { ColorField, NumberField, SelectField, TextField } from '../components/fields';
+import { ListField } from '../creature/creatureFields';
 import { Button, Dialog, Section, Tabs, type TabSpec } from '../kit';
 
 const SETTINGS_TABS: TabSpec<MapSettingsTab>[] = [
@@ -82,9 +83,6 @@ function BattlemapFields() {
   );
 }
 
-// Stable identity: the dialog re-focuses its first field when onClose changes.
-const close = () => useEditorStore.getState().setSettingsOpen(false);
-
 function MapFields() {
   const map = useEditorStore((s) => s.map);
   const edit = useEditorStore((s) => s.edit);
@@ -94,19 +92,7 @@ function MapFields() {
   return (
     <>
       <TextField label="Name" value={map.name} onChange={(v) => edit('Rename map', (d) => void (d.name = v))} />
-      <TextField
-        label="Tags"
-        value={map.tags.join(', ')}
-        placeholder="comma separated"
-        onChange={(v) =>
-          edit('Edit tags', (d) => {
-            d.tags = v
-              .split(',')
-              .map((t) => t.trim())
-              .filter((t) => t.length > 0);
-          })
-        }
-      />
+      <ListField label="Tags" value={map.tags} onChange={(v) => edit('Edit tags', (d) => void (d.tags = v))} />
       <TextField
         label="Notes"
         multiline
@@ -169,6 +155,7 @@ export function MapSettingsDialog() {
   const tab = useEditorStore((s) => s.settingsTab);
   const setTab = useEditorStore((s) => s.setSettingsTab);
   const Body = TAB_BODIES[tab];
+  const close = () => useEditorStore.getState().setSettingsOpen(false);
   return (
     <Dialog
       title="Map settings"

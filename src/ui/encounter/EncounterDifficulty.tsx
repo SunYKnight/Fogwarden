@@ -1,4 +1,5 @@
 import type { Combatant } from '@/core/model';
+import { countOf } from '@/core/plural';
 import {
   encounterDifficulty,
   type Difficulty,
@@ -15,13 +16,7 @@ const DIFFICULTY_LABEL: Record<Difficulty, string> = {
   deadly: 'Deadly',
 };
 
-const THRESHOLD_LABEL: Record<keyof XpThresholds, string> = {
-  easy: 'Easy',
-  medium: 'Medium',
-  hard: 'Hard',
-  deadly: 'Deadly',
-};
-const THRESHOLDS = Object.keys(THRESHOLD_LABEL) as (keyof XpThresholds)[];
+const THRESHOLDS: (keyof XpThresholds)[] = ['easy', 'medium', 'hard', 'deadly'];
 
 const xp = (n: number) => n.toLocaleString('en-US');
 
@@ -58,7 +53,7 @@ function useRating(combatants: readonly Combatant[], extraXp: readonly number[])
   if (unknown.length > 0) {
     rating = {
       label: 'Difficulty: set PC levels',
-      title: `Level missing for ${unknown.join(', ')} (Creature tab).`,
+      title: `Level missing for ${unknown.join(', ')} (Stats tab of the creature dock).`,
       tone: 'none',
       report: null,
     };
@@ -70,8 +65,8 @@ function useRating(combatants: readonly Combatant[], extraXp: readonly number[])
       report,
       title:
         `${xp(report.adjustedXp)} adjusted XP (${xp(report.baseXp)} × ${report.multiplier} for ` +
-        `${monsterXp.length} monsters, ${party.length} characters)\n` +
-        `Easy ${xp(t.easy)} · Medium ${xp(t.medium)} · Hard ${xp(t.hard)} · Deadly ${xp(t.deadly)}`,
+        `${countOf(monsterXp.length, 'monster')}, ${countOf(party.length, 'character')})\n` +
+        THRESHOLDS.map((key) => `${DIFFICULTY_LABEL[key]} ${xp(t[key])}`).join(' · '),
     };
   }
   return rating;
@@ -116,7 +111,7 @@ export function DifficultyBreakdown({ combatants }: { combatants: readonly Comba
           <ul className="difficulty-thresholds">
             {THRESHOLDS.map((key) => (
               <li key={key} className={report.adjustedXp >= report.thresholds[key] ? 'reached' : ''}>
-                <span>{THRESHOLD_LABEL[key]}</span>
+                <span>{DIFFICULTY_LABEL[key]}</span>
                 <span>{xp(report.thresholds[key])}</span>
               </li>
             ))}

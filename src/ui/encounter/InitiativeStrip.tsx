@@ -16,9 +16,10 @@ interface RowProps {
   selected: boolean;
   onDragStart: () => void;
   onDrop: () => void;
+  onDragEnd: () => void;
 }
 
-function StripRow({ c, current, selected, onDragStart, onDrop }: RowProps) {
+function StripRow({ c, current, selected, onDragStart, onDrop, onDragEnd }: RowProps) {
   const classes = ['strip-row', current ? 'current' : '', selected ? 'selected' : '', c.hp.current <= 0 ? 'down' : ''];
   return (
     <div
@@ -29,7 +30,16 @@ function StripRow({ c, current, selected, onDragStart, onDrop }: RowProps) {
       className={classes.join(' ')}
       onClick={() => useEncounterStore.getState().select(c.id)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') useEncounterStore.getState().select(c.id);
+        // Keys typed into the initiative box stay there.
+        const own = e.target === e.currentTarget;
+        const box = e.currentTarget.getBoundingClientRect();
+        if (own && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          useEncounterStore.getState().select(c.id);
+        } else if (own && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) {
+          e.preventDefault();
+          openCombatantMenu(c.id, box.left, box.bottom);
+        }
       }}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -38,6 +48,7 @@ function StripRow({ c, current, selected, onDragStart, onDrop }: RowProps) {
       onDragStart={onDragStart}
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
+      onDragEnd={onDragEnd}
       title={`${c.name} · ${c.side} · AC ${c.armorClass} · right-click for actions, drag to reorder`}
     >
       <span className="turn-marker">{current && <Icon name="play" size={12} title="Current turn" />}</span>
@@ -60,6 +71,7 @@ function StripRow({ c, current, selected, onDragStart, onDrop }: RowProps) {
       <OptionalNumberInput
         className="init-input"
         placeholder="init"
+        label={`Initiative of ${c.name}`}
         value={c.initiative ?? undefined}
         onChange={(v) => patchCombatant(c.id, `Initiative of ${c.name}`, (d) => void (d.initiative = v ?? null))}
       />
@@ -139,6 +151,7 @@ export function InitiativeStrip({ encounter }: { encounter: Encounter }) {
               if (dragIndex !== null && dragIndex !== i) update((d) => moveCombatant(d, dragIndex, i), 'Reorder');
               setDragIndex(null);
             }}
+            onDragEnd={() => setDragIndex(null)}
           />
         ))}
         {empty && <p className="muted small strip-empty">Add creatures and player characters to start.</p>}

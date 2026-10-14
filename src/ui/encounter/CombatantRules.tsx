@@ -71,7 +71,7 @@ export function DeathSaves({ c }: { c: Combatant }) {
         <Pips label="Failure" total={3} used={failures} tone="bad" onChange={(v) => set('failures', v)} />
       </div>
       <div className="row">
-        <Button icon="dice" label="Roll death save" variant="primary" disabled={status !== 'Dying'} onClick={roll} />
+        <Button icon="dice" label="Roll death save" disabled={status !== 'Dying'} onClick={roll} />
         <Button
           icon="heart"
           label="Stabilize"

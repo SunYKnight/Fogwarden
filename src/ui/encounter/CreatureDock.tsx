@@ -2,15 +2,29 @@ import { useState } from 'react';
 import { CONDITIONS, type Combatant, type CreatureAction, type Encounter } from '@/core/model';
 import { SIDE_COLORS } from '@/render/tokens/tokenMaterials';
 import { useAppStore } from '@/state/appStore';
-import { currentCombatant, movedThisTurnFt } from '@/state/encounterActions';
+import { currentCombatant, movedThisTurnFt, type AttackResult } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { Button, Popover, Tabs, type TabSpec } from '../kit';
-import { changeHp, rollAction, rollInitiativeFor, stepTurn, toggleCondition } from './combatantCommands';
+import { attackOutcome, type AttackOutcome } from './attacks';
+import { changeHp, rollAction, toggleCondition } from './combatantCommands';
 import { useCreature, useHeldPackOf } from './creatureLookup';
 import { ActionsTab, EffectsTab, NotesTab, StatsTab, TokenTab } from './DockTabs';
 import { useEncounterUi, type DockTab, type HpChange } from './encounterUiStore';
 import { HpBar } from './HpBar';
 import { UnplacedChip } from './UnplacedChip';
+
+/** Last attack roll, waiting for the DM to select its target. */
+interface PendingAttack {
+  attackerId: string;
+  result: AttackResult;
+}
+
+const OUTCOME_TEXT: Record<AttackOutcome, string> = {
+  critical: 'critical hit',
+  hit: 'hit',
+  miss: 'miss',
+  fumble: 'natural 1, miss',
+};
 
 /** Active conditions as chips (click removes); the picker holds all of them. */
 function ConditionPicker({ c }: { c: Combatant }) {
@@ -77,17 +91,24 @@ interface SummaryProps extends AmountProps {
   /** Grid distance moved since its turn began; null when it isn't its turn. */
   moved: number | null;
   walk: number | undefined;
+  /** Where a rolled attack stands: waiting for its target, or hit or miss against this one. */
+  attackHint: string | null;
+  /** The attacker itself, while its rolled damage waits for the target. */
+  damageBlocked: boolean;
+  onDamage: () => void;
 }
 
 /** Always visible part of the dock: who it is, hit points, quick damage and healing, conditions. */
-function CreatureSummary({ c, moved, walk, amount, setAmount }: SummaryProps) {
+function CreatureSummary(props: SummaryProps) {
+  const { c, moved, walk, amount, setAmount, attackHint, damageBlocked, onDamage } = props;
   const value = Math.round(Number(amount));
   const valid = amount.trim() !== '' && Number.isFinite(value) && value > 0;
 
   const apply = (change: HpChange) => {
-    if (valid) {
+    if (valid && !(change === 'damage' && damageBlocked)) {
       changeHp(c.id, change, value);
       setAmount('');
+      if (change === 'damage') onDamage();
     }
   };
 
@@ -111,6 +132,11 @@ function CreatureSummary({ c, moved, walk, amount, setAmount }: SummaryProps) {
         )}
       </div>
       <HpBar hp={c.hp} />
+      {attackHint && (
+        <p className="muted small" role="status">
+          {attackHint}
+        </p>
+      )}
       <div className="row">
         <input
           type="number"
@@ -129,7 +155,7 @@ function CreatureSummary({ c, moved, walk, amount, setAmount }: SummaryProps) {
           label="Damage"
           iconOnly
           variant="danger"
-          disabled={!valid}
+          disabled={!valid || damageBlocked}
           onClick={() => apply('damage')}
         />
         <Button icon="plus" label="Heal" iconOnly disabled={!valid} onClick={() => apply('heal')} />
@@ -145,10 +171,14 @@ interface CreatureViewProps extends AmountProps {
   hasMap: boolean;
   isCurrent: boolean;
   result: string | null;
-  setResult: (result: string) => void;
+  onRolled: (result: AttackResult) => void;
+  attackHint: string | null;
+  damageBlocked: boolean;
+  onDamage: () => void;
 }
 
-function CreatureView({ c, hasMap, isCurrent, amount, setAmount, result, setResult }: CreatureViewProps) {
+function CreatureView(props: CreatureViewProps) {
+  const { c, hasMap, isCurrent, amount, setAmount, result, onRolled, attackHint, damageBlocked, onDamage } = props;
   const reportError = useAppStore((s) => s.reportError);
   const rule = useAppStore((s) => s.settings?.diagonalRule ?? '5-5-5');
   const rollMode = useEncounterUi((s) => s.rollMode);
@@ -163,10 +193,7 @@ function CreatureView({ c, hasMap, isCurrent, amount, setAmount, result, setResu
   const attack = (action: CreatureAction) => {
     try {
       const rolled = rollAction(c, action, rollMode);
-      if (rolled) {
-        setResult(rolled.text);
-        setAmount(String(rolled.damage.reduce((sum, d) => sum + d.total, 0)));
-      }
+      if (rolled) onRolled(rolled);
     } catch (error) {
       reportError(error);
     }
@@ -187,7 +214,16 @@ function CreatureView({ c, hasMap, isCurrent, amount, setAmount, result, setResu
 
   return (
     <>
-      <CreatureSummary c={c} moved={moved} walk={creature?.speeds.walk} amount={amount} setAmount={setAmount} />
+      <CreatureSummary
+        c={c}
+        moved={moved}
+        walk={creature?.speeds.walk}
+        amount={amount}
+        setAmount={setAmount}
+        attackHint={attackHint}
+        damageBlocked={damageBlocked}
+        onDamage={onDamage}
+      />
       <div className="dock-main">
         <Tabs tabs={tabs} value={tab} onChange={(id) => useEncounterUi.setState({ dockTab: id })} label="Creature" />
         <div className="dock-body" role="tabpanel">
@@ -204,27 +240,22 @@ function CreatureView({ c, hasMap, isCurrent, amount, setAmount, result, setResu
   );
 }
 
-/** Nothing to show: set-up actions before the fight, a hint otherwise. */
+/** Nothing to show: set-up hints before the fight (rolling and starting live in the initiative list). */
 function EmptyDock({ encounter, hasMap }: { encounter: Encounter; hasMap: boolean }) {
   const empty = encounter.combatants.length === 0;
+  let hint = 'Select a creature on the map or in the initiative list to see it here.';
+  if (empty) {
+    hint = 'Add creatures and player characters to start.';
+  } else if (encounter.round === 0) {
+    const start = 'roll initiative and start combat in the initiative list.';
+    hint = hasMap ? `Place the tokens, then ${start}` : `To begin, ${start}`;
+  }
   return (
     <div className="dock-empty">
-      <p className="muted">
-        {empty
-          ? 'Add creatures and player characters to start.'
-          : 'Select a creature on the map or in the initiative list to see it here.'}
-      </p>
-      {encounter.round === 0 && (
+      <p className="muted">{hint}</p>
+      {encounter.round === 0 && hasMap && (
         <div className="row wrap">
-          {hasMap && <UnplacedChip />}
-          <Button
-            icon="dice"
-            label="Roll initiative"
-            disabled={empty}
-            title="Roll initiative for everyone and sort the order"
-            onClick={() => rollInitiativeFor(null)}
-          />
-          <Button icon="next" label="Start combat" shortcut="Space" disabled={empty} onClick={() => stepTurn('next')} />
+          <UnplacedChip />
         </div>
       )}
     </div>
@@ -243,6 +274,48 @@ interface ContentProps {
 function DockContent({ encounter, hasMap, shown, current, collapsed }: ContentProps) {
   const [amount, setAmount] = useState('');
   const [result, setResult] = useState<string | null>(null);
+  const [pending, setPending] = useState<PendingAttack | null>(null);
+  const [prefilledFor, setPrefilledFor] = useState<string | null>(null);
+  const target = pending && shown && shown.id !== pending.attackerId ? shown : null;
+  const outcome = pending && target ? attackOutcome(pending.result, target.armorClass) : null;
+  const hits = outcome === 'hit' || outcome === 'critical';
+  const damage = pending?.result.damage.reduce((sum, d) => sum + d.total, 0) ?? 0;
+  // Prefilled once per target, so the DM can still change the amount. Coming
+  // back from a target to the attacker means the attack is dealt with.
+  if ((target?.id ?? null) !== prefilledFor) {
+    setPrefilledFor(target?.id ?? null);
+    setAmount(hits ? String(damage) : '');
+    if (target === null) setPending(null);
+  }
+  const attacker = pending && encounter.combatants.find((c) => c.id === pending.attackerId);
+  let attackHint: string | null = null;
+  if (pending && target && outcome) {
+    const vs = `${attacker?.name ?? 'Attack'} vs AC ${target.armorClass}: ${OUTCOME_TEXT[outcome]}`;
+    attackHint = hits && damage > 0 ? `${vs}, ${damage} damage ready` : vs;
+  } else if (pending) {
+    attackHint =
+      damage > 0
+        ? `Select the target on the map or in the initiative list to apply ${damage} damage.`
+        : 'Select the target on the map or in the initiative list to see hit or miss.';
+  }
+  const view = shown && (
+    <CreatureView
+      c={shown}
+      hasMap={hasMap}
+      isCurrent={shown.id === current?.id}
+      amount={amount}
+      setAmount={setAmount}
+      result={result}
+      onRolled={(rolled) => {
+        setResult(rolled.text);
+        setPending({ attackerId: shown.id, result: rolled });
+        setAmount('');
+      }}
+      attackHint={attackHint}
+      damageBlocked={pending !== null && target === null}
+      onDamage={() => setPending(null)}
+    />
+  );
   return collapsed ? (
     <div className="dock-bar">
       {shown ? (
@@ -255,18 +328,8 @@ function DockContent({ encounter, hasMap, shown, current, collapsed }: ContentPr
         <span className="muted">No creature selected</span>
       )}
     </div>
-  ) : shown ? (
-    <CreatureView
-      c={shown}
-      hasMap={hasMap}
-      isCurrent={shown.id === current?.id}
-      amount={amount}
-      setAmount={setAmount}
-      result={result}
-      setResult={setResult}
-    />
   ) : (
-    <EmptyDock encounter={encounter} hasMap={hasMap} />
+    (view ?? <EmptyDock encounter={encounter} hasMap={hasMap} />)
   );
 }
 

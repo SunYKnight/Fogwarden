@@ -1,5 +1,6 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { useState, type ReactNode } from 'react';
+import { countOf } from '@/core/plural';
 import { useAppStore } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLanStore } from '@/state/lanStore';
@@ -10,7 +11,7 @@ import { LINK_TEXT, ONLINE_PLAY_AVAILABLE, RelayButton } from '../server/OnlineS
 import { LanButton, LanLinks } from './LanControls';
 
 /** Short status of how players see the game right now, e.g. "Window on DISPLAY2 · LAN 2 players". */
-export function usePlayersStatus(): string {
+function usePlayersStatus(): string {
   const playerWindow = usePlayerWindowStore((s) => s);
   const lan = useLanStore((s) => s.info);
   const remoteLink = useRelayStore((s) => s.link);
@@ -18,8 +19,8 @@ export function usePlayersStatus(): string {
   const parts = [
     playerWindow.open && playerWindow.monitor ? `Window on ${monitorLabel(playerWindow.monitor)}` : null,
     playerWindow.open && !playerWindow.monitor ? 'Window' : null,
-    lan ? `LAN ${lan.players} ${lan.players === 1 ? 'player' : 'players'}` : null,
-    remoteLink === 'online' ? `Remote ${remotePlayers} ${remotePlayers === 1 ? 'player' : 'players'}` : null,
+    lan ? `LAN ${countOf(lan.players, 'player')}` : null,
+    remoteLink === 'online' ? `Remote ${countOf(remotePlayers, 'player')}` : null,
     remoteLink === 'connecting' || remoteLink === 'reconnecting' ? 'Remote connecting' : null,
   ].filter((p) => p !== null);
   return parts.length > 0 ? parts.join(' · ') : 'Off';
@@ -97,11 +98,7 @@ function LanLine() {
   // Open by default: the QR code is what phones need to join.
   const [showLinks, setShowLinks] = useState(true);
   const desktop = isTauri();
-  const status = !desktop
-    ? 'Needs the desktop app'
-    : info
-      ? `On · ${info.players} ${info.players === 1 ? 'player' : 'players'}`
-      : 'Off';
+  const status = !desktop ? 'Needs the desktop app' : info ? `On · ${countOf(info.players, 'player')}` : 'Off';
   return (
     <>
       <PlayersLine
@@ -191,7 +188,7 @@ export function PlayersMenu() {
           <div className="row">
             <Button
               icon="settings"
-              label="Player settings…"
+              label="Player settings"
               variant="ghost"
               onClick={() => {
                 close();

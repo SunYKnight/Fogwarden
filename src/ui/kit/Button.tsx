@@ -16,7 +16,7 @@ interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'chi
 }
 
 export function Button(props: ButtonProps) {
-  const { icon, label, iconOnly = false, variant = 'default', active = false, shortcut, className, ...rest } = props;
+  const { icon, label, iconOnly = false, variant = 'default', active, shortcut, className, ...rest } = props;
   const classes = ['btn', `btn-${variant}`, active ? 'active' : '', iconOnly ? 'btn-icon' : '', className ?? '']
     .filter((c) => c.length > 0)
     .join(' ');
@@ -27,7 +27,7 @@ export function Button(props: ButtonProps) {
       className={classes}
       title={iconOnly || shortcut ? tip : rest.title}
       aria-label={iconOnly ? label : undefined}
-      aria-pressed={active || undefined}
+      aria-pressed={active}
       {...rest}
     >
       {icon && <Icon name={icon} />}

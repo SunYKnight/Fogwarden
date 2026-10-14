@@ -86,25 +86,31 @@ export function DeployDialog({ remote, onClose }: { remote: RemoteSettings; onCl
   const pickKey = () =>
     open({ title: 'Private SSH key file' }).then((picked) => picked !== null && setKeyPath(picked), reportError);
 
+  // Running from the first click: a second one must not start another deploy.
   const deploy = async () => {
-    const hostId = `${host}:${port}`;
-    const fingerprint = await invoke<string>('deploy_host_key', { host, port });
+    setPhase('running');
+    const target = host.trim();
+    const login = user.trim();
+    const hostId = `${target}:${port}`;
+    const fingerprint = await invoke<string>('deploy_host_key', { host: target, port });
     const trusted = await trustHostKey(remote, hostId, fingerprint);
     if (trusted) {
-      await saveRemote((r) => ({ ...r, ssh: { host, port, user, keyPath: usePassword ? null : keyPath } }));
+      await saveRemote((r) => ({
+        ...r,
+        ssh: { host: target, port, user: login, keyPath: usePassword ? null : keyPath },
+      }));
       setLog([]);
-      setPhase('running');
       const events = new Channel<DeployLine>();
       events.onmessage = (line) => setLog((lines) => [...lines, line]);
       const auth: DeployAuth = usePassword
         ? { kind: 'password', password: secret }
         : { kind: 'key', path: keyPath ?? '', passphrase: secret === '' ? null : secret };
-      const request: DeployRequest = { host, port, user, auth, fingerprint, setup: remote.setup };
+      const request: DeployRequest = { host: target, port, user: login, auth, fingerprint, setup: remote.setup };
       const result = await invoke<{ dmKey: string }>('deploy_run', { request, events });
       await saveRemote((r) => ({ ...r, url: `https://${remote.setup.domain}`, dmKey: result.dmKey }));
       setDmKey(result.dmKey);
-      setPhase('done');
     }
+    setPhase(trusted ? 'done' : 'form');
   };
 
   const start = () =>

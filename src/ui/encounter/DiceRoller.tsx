@@ -3,14 +3,11 @@ import { DiceError, rollDice, type RollMode } from '@/core/rules/dice';
 import { useAppStore } from '@/state/appStore';
 import { addLog, describeRoll } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
+import { Button } from '../kit';
+import { ROLL_MODE_LABEL, ROLL_MODES } from './DockTabs';
 import { useEncounterUi } from './encounterUiStore';
 
 const QUICK_DICE = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'];
-const MODES: { mode: RollMode; label: string }[] = [
-  { mode: 'normal', label: 'Normal' },
-  { mode: 'advantage', label: 'Advantage' },
-  { mode: 'disadvantage', label: 'Disadvantage' },
-];
 
 /** Free dice expressions and quick dice; the advantage mode also applies to attack buttons. */
 export function DiceRoller() {
@@ -48,27 +45,22 @@ export function DiceRoller() {
             if (e.key === 'Enter') roll(expression, rollMode);
           }}
         />
-        <button className="primary" onClick={() => roll(expression, rollMode)}>
-          Roll
-        </button>
+        <Button icon="dice" label="Roll" onClick={() => roll(expression, rollMode)} />
       </div>
       <div className="row wrap dice-buttons">
         {QUICK_DICE.map((die) => (
           // Advantage only exists for d20 rolls.
-          <button key={die} onClick={() => roll(`1${die}`, die === 'd20' ? rollMode : 'normal')}>
-            {die}
-          </button>
+          <Button key={die} label={die} onClick={() => roll(`1${die}`, die === 'd20' ? rollMode : 'normal')} />
         ))}
       </div>
-      <div className="row wrap">
-        {MODES.map(({ mode, label }) => (
-          <button
+      <div className="row wrap" role="group" aria-label="Roll mode">
+        {ROLL_MODES.map((mode) => (
+          <Button
             key={mode}
-            className={rollMode === mode ? 'active' : ''}
+            label={ROLL_MODE_LABEL[mode]}
+            active={rollMode === mode}
             onClick={() => useEncounterUi.setState({ rollMode: mode })}
-          >
-            {label}
-          </button>
+          />
         ))}
       </div>
       {problem && <div className="error-text">{problem}</div>}

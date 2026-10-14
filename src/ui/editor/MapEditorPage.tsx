@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { BattleMap, DocRef } from '@/core/model';
 import type { HeightField } from '@/core/terrain/heightfield';
 import { SELECTION_PANELS } from '@/editor/selectionPanels';
@@ -13,8 +13,10 @@ import { MapView } from '@/render/MapView';
 import { useAppStore } from '@/state/appStore';
 import { flushMap } from '@/state/autosave';
 import { LAYERS, useEditorStore, type LayerId } from '@/state/editorStore';
+import { useLibraryStore } from '@/state/libraryStore';
 import {
   Button,
+  EmptyState,
   openContextMenu,
   PageHeader,
   Popover,
@@ -114,17 +116,13 @@ const EDITOR_SHORTCUTS: Shortcut[] = [
   ...s,
   run: (event: KeyboardEvent) => {
     try {
-      // Keys in the settings or export dialog must not edit the map.
-      const { settingsOpen, exportOpen } = useEditorStore.getState();
-      if (!settingsOpen && !exportOpen) s.run(event);
+      s.run(event);
     } catch (error) {
       useAppStore.getState().reportError(error);
     }
   },
 }));
 
-// Stable identities: the dialog re-focuses its first field when onClose changes.
-const closeExport = () => useEditorStore.getState().setExportOpen(false);
 // The export shows the map as edited, saved or not.
 const loadEditedMap = async () => {
   const { map, terrain } = useEditorStore.getState();
@@ -148,7 +146,7 @@ function EditorHeader({ map }: { map: BattleMap }) {
     >
       <Button icon="undo" label="Undo" iconOnly shortcut="Ctrl+Z" disabled={!canUndo} onClick={undo} />
       <Button icon="redo" label="Redo" iconOnly shortcut="Ctrl+Y" disabled={!canRedo} onClick={redo} />
-      <Button icon="settings" label="Map settings" onClick={() => setSettingsOpen(true)} />
+      <Button icon="settings" label="Map settings…" onClick={() => setSettingsOpen(true)} />
       <div className="segmented" role="group" aria-label="Camera">
         <Button icon="map" label="Top" shortcut="T" active={camera === 'top'} onClick={() => setCamera('top')} />
         <Button
@@ -383,13 +381,21 @@ function EditorLayout({ map, terrain }: { map: BattleMap; terrain: HeightField }
       </div>
       <EditorStatus hint={tool.hint} terrain={terrain} />
       {settingsOpen && <MapSettingsDialog />}
-      {exportOpen && <MapExportDialog name={map.name} load={loadEditedMap} onClose={closeExport} />}
+      {exportOpen && (
+        <MapExportDialog
+          name={map.name}
+          load={loadEditedMap}
+          onClose={() => useEditorStore.getState().setExportOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
 // Mount counter: a late cleanup must not close a newer mount's map.
 let editorSession = 0;
+// The last mount's final save; a new mount opens its map only after it.
+let leaving: Promise<void> = Promise.resolve();
 
 /** Opens a library map; shipped maps are saved as a user copy with the same id on the first edit. */
 export function MapEditorPage({ mapRef }: { mapRef: DocRef }) {
@@ -398,27 +404,43 @@ export function MapEditorPage({ mapRef }: { mapRef: DocRef }) {
   const map = useEditorStore((s) => s.map);
   const terrain = useEditorStore((s) => s.terrain);
   const { area, id } = mapRef;
+  const [failedId, setFailedId] = useState<string | null>(null);
 
   useEffect(() => {
     const session = ++editorSession;
-    repository
-      .load('map', { area, id })
-      .then((loaded) => {
+    Promise.all([repository.load('map', { area, id }), leaving])
+      .then(([loaded]) => {
         if (session === editorSession) useEditorStore.getState().open(loaded);
       })
-      .catch(reportError);
+      .catch((error: unknown) => {
+        if (session === editorSession) setFailedId(id);
+        reportError(error);
+      });
     return () => {
-      flushMap()
-        .catch(reportError)
-        .finally(() => {
+      // A failed save leaves the map open; the save on window close retries.
+      leaving = flushMap()
+        .then(() => {
           if (session === editorSession) useEditorStore.getState().close();
-        });
+          return useLibraryStore.getState().refresh('map');
+        })
+        .catch(reportError);
     };
   }, [area, id, repository, reportError]);
 
-  return map && terrain && map.id === id ? (
-    <EditorLayout map={map} terrain={terrain} />
-  ) : (
-    <div className="waiting">Loading map…</div>
-  );
+  let page: ReactNode = <div className="waiting">Loading map…</div>;
+  if (map && terrain && map.id === id) {
+    page = <EditorLayout map={map} terrain={terrain} />;
+  } else if (failedId === id) {
+    page = (
+      <div className="page-frame">
+        <PageHeader crumbs={[{ label: 'Maps', route: { page: 'maps' } }, { label: 'Map not loaded' }]} />
+        <EmptyState
+          icon="alert"
+          title="This map could not be opened."
+          action={<Button label="Back to maps" onClick={() => useAppStore.getState().navigate({ page: 'maps' })} />}
+        />
+      </div>
+    );
+  }
+  return page;
 }
