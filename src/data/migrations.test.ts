@@ -112,6 +112,24 @@ describe('settings migration', () => {
     const migrated = settingsSchema.parse(migrate('settings', v11));
     expect(migrated.packs).toEqual({ order: ['mm', 'srd'], disabled: ['srd'], hiddenKinds: {}, hideDuplicates: true });
   });
+
+  it('adds the former fixed texture, shadow, antialias and frame rate values to v12 graphics settings', () => {
+    const v12 = {
+      ...defaultSettings(),
+      version: 12,
+      graphics: { shadowedLights: 0, resolutionScale: 0.5, propShadows: false },
+    };
+    const migrated = settingsSchema.parse(migrate('settings', v12));
+    expect(migrated.graphics).toEqual({
+      shadowedLights: 0,
+      resolutionScale: 0.5,
+      propShadows: false,
+      textureSizePx: 4096,
+      shadowMapSizePx: 512,
+      antialias: true,
+      maxFps: null,
+    });
+  });
 });
 
 describe('encounter migration', () => {

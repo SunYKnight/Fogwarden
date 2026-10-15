@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { LinearMipmapLinearFilter, type Texture } from 'three';
 import { isVideoAsset } from '@/core/atmosphere/media';
-import type { BattleMap } from '@/core/model';
+import { defaultGraphicsSettings, type BattleMap } from '@/core/model';
 import { useAppStore } from '@/state/appStore';
 import {
   createProjectionUniforms,
@@ -15,12 +15,15 @@ import { worldToUvMatrix } from './projection';
 
 /**
  * Keeps one map's shared projection uniforms in sync with its document; loads the battlemap texture, a
- * looping video texture when the battlemap is an MP4/WebM.
+ * looping video texture when the battlemap is an MP4/WebM. A new texture size setting loads it again.
  */
 export function useProjectionUniforms(map: BattleMap, fogMode: FogMode): ProjectionUniforms {
   const uniforms = useMemo(() => createProjectionUniforms(), []);
   const repository = useAppStore((s) => s.repository);
   const reportError = useAppStore((s) => s.reportError);
+  // Player windows load no settings and keep the defaults.
+  const textureSizePx =
+    useAppStore((s) => s.settings?.graphics.textureSizePx) ?? defaultGraphicsSettings().textureSizePx;
   const { grid, image, terrain } = map;
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export function useProjectionUniforms(map: BattleMap, fogMode: FogMode): Project
       const video = isVideoAsset(image.asset);
       repository.storage
         .assetUrl(image.asset)
-        .then((url) => (video ? loadVideoTexture(url) : loadImageTexture(url, image)))
+        .then((url) => (video ? loadVideoTexture(url) : loadImageTexture(url, image, textureSizePx)))
         .then((texture) => {
           // Video frames arrive without mipmaps; only pictures get them.
           if (!video) texture.minFilter = LinearMipmapLinearFilter;
@@ -59,7 +62,16 @@ export function useProjectionUniforms(map: BattleMap, fogMode: FogMode): Project
     };
     // The player store parses a fresh map per revision; reload only on asset change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [image?.asset.area, image?.asset.path, image?.widthPx, image?.heightPx, repository, reportError, uniforms]);
+  }, [
+    image?.asset.area,
+    image?.asset.path,
+    image?.widthPx,
+    image?.heightPx,
+    textureSizePx,
+    repository,
+    reportError,
+    uniforms,
+  ]);
 
   useEffect(() => {
     if (image) {

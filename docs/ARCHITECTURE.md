@@ -445,6 +445,14 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   `SCENE_LAYERS` (`src/render/layers.ts`) as children; a layer reads `useMapRender()`:
   `{ map, terrain, terrainVersion, uniforms, mode }` and decides from `mode` (`'editor' | 'dm' | 'player'`)
   what to draw. Register a layer by appending `{ id, Component }` to `SCENE_LAYERS`.
+- Graphics settings (`settings.graphics`, Settings > Graphics; player windows without settings use
+  `defaultGraphicsSettings()`): `MapView` sets the Canvas `dpr` from `resolutionScale`, `gl.antialias` from
+  `antialias` (the Canvas is keyed by it, since WebGL fixes antialiasing at context creation) and, with
+  `maxFps` 30, `frameloop="demand"` plus `FrameRateCap`, which invalidates at most 30 times a second; prop changes
+  and orbit-control moves still invalidate at once. `textureSizePx` (1024/2048/4096) caps battlemap textures
+  (`useProjectionUniforms`), token pictures (`tokenTextureEdgePx`: half of it, at most 1024 px) and glTF textures
+  (`useModel`); each cache key includes the size, so a change reloads them. `shadowMapSizePx` sizes each shadowed
+  light's cube map (lights are keyed by it, as three never resizes a cube shadow map).
 - Projected material: `createProjectedMaterial(uniforms, { side, sideFromSlopeDeg, sideTint })`
   (`src/render/materials/projectedMaterial.ts`). Every surface that should show the battlemap from above uses it with
   the shared `uniforms` from the render context, so calibration, grid and fog changes apply everywhere.
@@ -461,15 +469,18 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   and filled by door/pane/bars; players see shut secret doors as wall), `RoomLayer` (floors, roofs peeled per room in
   play views while the camera or a token is inside), `RegionLayer` (draped polygons; players only see non-hidden
   hazard/note regions, discarded in unknown fog), `LightLayer` (point lights, the first `graphics.shadowedLights`
-  (default 4) cast shadows, carried lights
+  (default 4) cast shadows with `graphics.shadowMapSizePx` maps, carried lights
   follow their combatant, also those combatants carry themselves via `useCarriedLights`; editor gizmos), `PropLayer`
-  (glTF/GLB via `useModel`, optional battlemap projection).
+  (glTF/GLB via `useModel`: one parse per file and texture size, images above `graphics.textureSizePx` replaced by
+  scaled `createImageBitmap` copies before upload, parses of another size freed once no prop shows them; exports
+  call `loadGltf(storage, asset, null)` for the stored textures; optional battlemap projection).
   Editor `layers` toggles apply in mode `'editor'` only (`useLayerVisible`). Live door states: `useOpeningStates()`
   (`src/render/useOpeningStates.ts`). `MapLight.dimFt` is dim light beyond the bright radius (5e torch 20/20).
 - Labels in the scene: `TextLabel` (`src/render/TextLabel.tsx`), a screen-sized canvas-texture sprite. drei `<Html>`
   is not used: its DOM roots throw on unmount under React 19 and would not appear in the rendered player image.
-- Images: `loadImageTexture(url, sizePx)` (`src/render/loadImageTexture.ts`) decodes off the main thread and scales
-  battlemaps above `MAX_TEXTURE_PX` (4096) down while decoding; huge exports otherwise freeze the UI for seconds.
+- Images: `loadImageTexture(url, sizePx, maxEdgePx)` (`src/render/loadImageTexture.ts`) decodes off the main thread
+  and scales images above `maxEdgePx` down while decoding (battlemaps: `graphics.textureSizePx`); huge exports
+  otherwise freeze the UI for seconds. `MAX_TEXTURE_PX` (4096) caps stored battlemaps and exported pictures.
 
 ## Shared geometry
 
@@ -589,7 +600,7 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   (`raycastToBase`) and DM tokens ignore the pointer while a token is dragged or placed. `settings.tokenStandees`
   (DM) and `PlayerEncounter.standees` (players) choose standees. Geometry and materials are shared
   (`tokenMaterials.ts`; per-texture materials die with the texture); `useAssetTexture` reference-counts one texture
-  per asset, decoded at most 1024 px.
+  per asset and size, decoded at most `tokenTextureEdgePx(graphics.textureSizePx)` (1024 px, 512 px at 1024).
 - Creature type icons: `creatureTypeIcon(type, typeText)` / `creatureIconOf(creature)` (`src/core/creatureTypeIcon.ts`)
   map a creature to one of 14 type icons or `swarm` (tag or text "swarm"; unknown → humanoid). The SVGs
   (game-icons.net, CC BY 3.0, `src/ui/creatureTypes/icons/LICENSE.md`, shown in Settings > About) are bundled; their
