@@ -39,21 +39,39 @@ Background and design: [`PLAN.md`](PLAN.md). Code layout and module contracts:
 
 ## Install
 
-1. Download `Fogwarden_<version>_x64-setup-<revision>.exe` from the
-   [latest release](https://github.com/SunYKnight/Fogwarden/releases/latest) and run it; it installs for your
-   Windows user (Windows 10/11 with WebView2). The installer has no code-signing certificate, so Windows SmartScreen
-   may say "Windows protected your PC": choose _More info > Run anyway_.
-2. Follow Home's first steps. Your data goes to `%APPDATA%/io.github.sunyknight.fogwarden/` unless you pick another
-   folder in Settings > Data.
+1. Download from the [latest release](https://github.com/SunYKnight/Fogwarden/releases/latest):
+   - **Windows 10/11** (with WebView2): `Fogwarden_<version>_x64-setup-<revision>.exe`, run it; it installs for your
+     Windows user. The installer has no code-signing certificate, so Windows SmartScreen may say "Windows protected
+     your PC": choose _More info > Run anyway_.
+   - **Linux** (x86_64, glibc 2.35 or newer, e.g. Ubuntu 22.04+, Debian 12+, Fedora 36+):
+     `Fogwarden_<version>_amd64-<revision>.AppImage`, make it executable (`chmod +x Fogwarden_*.AppImage`) and start
+     it; it updates itself. On Debian and Ubuntu, `Fogwarden_<version>_amd64-<revision>.deb` installs it system-wide
+     instead (`sudo apt install ./Fogwarden_*.deb`); its updates ask for your password.
+2. Follow Home's first steps. Your data goes to `%APPDATA%/io.github.sunyknight.fogwarden/` (Windows) or
+   `~/.local/share/io.github.sunyknight.fogwarden/` (Linux) unless you pick another folder in Settings > Data.
 3. For players on phones or tablets in your network, start LAN in the rail's **Players** popover and allow Fogwarden
-   through the Windows firewall when Windows asks.
+   through the Windows firewall when Windows asks. On Linux with a firewall such as `ufw`, allow the TCP port from
+   Settings > Players > LAN.
 4. Updates: Settings > About checks for a new version (also once a day on start) and installs it.
+
+On Linux under Wayland, apps cannot place their windows, so the player window opens where the desktop puts it; start
+Fogwarden with `GDK_BACKEND=x11` to have it open on the monitor chosen in Settings. An empty white window on some
+NVIDIA drivers goes away with `WEBKIT_DISABLE_DMABUF_RENDERER=1`.
 
 ## Requirements for development
 
-- Windows 10/11 with WebView2
 - Node 24+, pnpm 10
-- Rust (MSVC toolchain), Visual Studio Build Tools with the C++ workload and a Windows 10/11 SDK
+- Windows 10/11 with WebView2; Rust (MSVC toolchain), Visual Studio Build Tools with the C++ workload and a Windows
+  10/11 SDK
+- Or Linux (Ubuntu 22.04+ or Debian 12+ for WebKitGTK 4.1) with Rust ([rustup](https://rustup.rs)) and:
+
+  ```sh
+  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev \
+    libayatana-appindicator3-dev librsvg2-dev patchelf \
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+  ```
+
+  The GStreamer plugins play music, sounds and videos and go into the AppImage `pnpm package` builds.
 
 ## Develop
 
@@ -71,7 +89,7 @@ GUI smoke tests can drive the real WebView2 over its DevTools port:
 ## Build
 
 ```sh
-pnpm package        # signed release build: installer, its .sig and latest.json in artifacts/
+pnpm package        # signed release build for this OS: installers, their .sig files and latest.json in artifacts/
 pnpm build:server   # internet relay only: dist-server/relay.mjs (part of pnpm build)
 ```
 
@@ -94,18 +112,32 @@ into `develop`. A release merges `develop` into `main` and is built from `main`.
    shows, and `pnpm package` stops unless the newest `## ` heading is exactly `## <version>`. Commit, merge `develop`
    into `main` (`git checkout main && git merge --no-ff develop`) and tag it `v0.2.0`, so the installer's revision is
    the release commit without `-dirty`.
-3. `pnpm package` builds and writes to `artifacts/`: `Fogwarden_0.2.0_x64-setup-<revision>.exe`, the same name with
-   `.sig`, and `latest.json` (version, notes, date, signature and the download URL of the installer in the release
-   `v0.2.0`).
-4. On GitHub, create the release with tag `v0.2.0` (published, not a draft or pre-release, so it is "latest") and
-   upload these three files unrenamed. With the GitHub CLI:
-   `gh release create v0.2.0 artifacts/Fogwarden_0.2.0_x64-setup-<revision>.exe* artifacts/latest.json`.
+3. Push `main` and the tag (`git push origin main v0.2.0`). The workflow _Release_ (`.github/workflows/release.yml`)
+   runs `pnpm package` on Windows and Linux, merges their manifests into one `latest.json` (`pnpm release:manifest`)
+   and creates the published GitHub release `v0.2.0` with the changelog section as notes and these assets:
+   - `Fogwarden_0.2.0_x64-setup-<revision>.exe` (Windows installer)
+   - `Fogwarden_0.2.0_amd64-<revision>.AppImage` and `Fogwarden_0.2.0_amd64-<revision>.deb` (Linux)
+   - a `.sig` file next to each, and `latest.json` (version, notes, date, and signature and download URL per
+     platform: `windows-x86_64`, `linux-x86_64` for the AppImage, `linux-x86_64-deb` for the .deb)
+
+   _Actions > Release > Run workflow_ builds the same assets from any branch as the workflow artifact `release`
+   (a leading `## Unreleased` changelog section is headed with the version for that run, so the revision ends in
+   `-dirty`); with **publish** ticked it builds the branch as it is and creates the release `v<version>` (version
+   from `package.json`), tagging the run's commit if the tag does not exist yet. GitHub offers the button once the
+   workflow is on the default branch.
+
+Without the workflow, `pnpm package` on one OS writes that OS's installers, their `.sig` files,
+`latest-<platform>.json` and a `latest.json` for that platform alone, which is enough for a release of that OS
+(`gh release create v0.2.0 artifacts/Fogwarden_0.2.0_*-<revision>.* artifacts/latest.json`). For both OSes, copy
+the other OS's `artifacts/` files into the same folder and run `pnpm release:manifest`: it merges every
+`latest-*.json` there into `latest.json` and stops if their versions or notes differ.
 
 ### The signing key
 
 `pnpm package` takes the private key from `TAURI_SIGNING_PRIVATE_KEY` (key text) or else from
 `data-local/signing/fogwarden.key`, and its password from `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty if unset).
-`data-local/` is gitignored; the key never goes into the repository.
+`data-local/` is gitignored; the key never goes into the repository. The release workflow reads both from the
+repository secrets of the same names (_Settings > Secrets and variables > Actions_).
 
 - **Back up** `fogwarden.key` (and its password) outside the repository, e.g. in a password manager or on an
   encrypted drive. Installed apps accept only updates signed with this key: if it is lost, the next version needs a
@@ -158,12 +190,12 @@ camera and the turn order go to the players.
 
 ## Where things live
 
-| What                    | Where                                                                                                 |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| Source                  | `src/`, `src-tauri/`, `server/` (internet relay), `tools/`                                            |
-| Shipped content (packs) | `content/packs/` (five SRD 5.1 area templates, CC0 models, sample map)                                |
-| Build output            | `dist/`, `dist-server/`, `src-tauri/target/`, `artifacts/` (all gitignored)                           |
-| Your data               | `%APPDATA%/io.github.sunyknight.fogwarden/` by default; change it in Settings (e.g. a Dropbox folder) |
+| What                    | Where                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------- |
+| Source                  | `src/`, `src-tauri/`, `server/` (internet relay), `tools/`                                  |
+| Shipped content (packs) | `content/packs/` (five SRD 5.1 area templates, CC0 models, sample map)                      |
+| Build output            | `dist/`, `dist-server/`, `src-tauri/target/`, `artifacts/` (all gitignored)                 |
+| Your data               | the app data folder (see Install) by default; change it in Settings (e.g. a Dropbox folder) |
 
 ## Import stat blocks
 

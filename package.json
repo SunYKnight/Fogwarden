@@ -28,6 +28,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "package": "tsx tools/package.ts",
+    "release:manifest": "tsx tools/mergeManifests.ts",
     "set-version": "tsx tools/set-version.ts"
   },
   "dependencies": {
