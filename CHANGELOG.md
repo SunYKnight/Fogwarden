@@ -6,6 +6,10 @@
 
 - Play › Encounter tab: **Notes** for the encounter (setup, tactics, treasure; Markdown with Write/Preview), seen
   only by the DM. Encounter notes were stored before but not shown anywhere.
+- Settings › Graphics › Advanced: **texture size** (1024/2048/4096 px for battlemaps, token pictures and 3D model
+  textures; exports keep full size, with the graphics memory it saves), **shadow quality** (256/512/1024 px shadow
+  maps), **antialiasing** on/off and a **30 fps frame rate limit**. Low and Medium use 30 fps; Low turns
+  antialiasing off and uses 1024 px textures, Medium 2048 px.
 
 ## 0.1.0
 

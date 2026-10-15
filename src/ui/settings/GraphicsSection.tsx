@@ -1,15 +1,53 @@
-import type { GraphicsSettings, Settings } from '@/core/model';
-import { CheckboxField, SliderField } from '../components/fields';
+import {
+  graphicsSettingsSchema,
+  SHADOW_MAP_SIZES_PX,
+  TEXTURE_SIZES_PX,
+  type GraphicsSettings,
+  type Settings,
+} from '@/core/model';
+import { MAX_TEXTURE_PX } from '@/render/loadImageTexture';
+import { textureMemoryMiB } from '@/render/textureLimits';
+import { CheckboxField, SelectField, SliderField } from '../components/fields';
 import { Button, Section } from '../kit';
 
 const PRESET_NAMES = ['Low', 'Medium', 'High'] as const;
 type Preset = (typeof PRESET_NAMES)[number];
 
 const PRESETS: Record<Preset, GraphicsSettings> = {
-  Low: { shadowedLights: 0, resolutionScale: 0.5, propShadows: false },
-  Medium: { shadowedLights: 2, resolutionScale: 0.75, propShadows: true },
-  High: { shadowedLights: 8, resolutionScale: 1, propShadows: true },
+  Low: {
+    shadowedLights: 0,
+    resolutionScale: 0.5,
+    propShadows: false,
+    textureSizePx: 1024,
+    shadowMapSizePx: 256,
+    antialias: false,
+    maxFps: 30,
+  },
+  Medium: {
+    shadowedLights: 2,
+    resolutionScale: 0.75,
+    propShadows: true,
+    textureSizePx: 2048,
+    shadowMapSizePx: 512,
+    antialias: true,
+    maxFps: 30,
+  },
+  High: {
+    shadowedLights: 8,
+    resolutionScale: 1,
+    propShadows: true,
+    textureSizePx: 4096,
+    shadowMapSizePx: 512,
+    antialias: true,
+    maxFps: null,
+  },
 };
+
+const FRAME_RATES = ['unlimited', '30'] as const;
+type FrameRate = (typeof FRAME_RATES)[number];
+
+const MAX_FPS: Record<FrameRate, GraphicsSettings['maxFps']> = { unlimited: null, '30': 30 };
+const FRAME_RATE_LABEL: Record<FrameRate, string> = { unlimited: 'Unlimited', '30': '30 fps' };
 
 const INTEGRATED_GPU = /Intel|UHD|Iris|HD Graphics|Mali|Adreno|PowerVR|Apple GPU/i;
 
@@ -28,7 +66,7 @@ function gpuRenderer(): string | null {
   return detectedRenderer;
 }
 
-/** Shadow and resolution limits of the 3D views, with presets and one suggested for this GPU. */
+/** Render cost limits of the 3D views, with presets and one suggested for this GPU. */
 export function GraphicsSection({ settings, save }: { settings: Settings; save: (s: Settings) => void }) {
   const graphics = settings.graphics;
   const renderer = gpuRenderer();
@@ -72,6 +110,40 @@ export function GraphicsSection({ settings, save }: { settings: Settings; save: 
           value={graphics.propShadows}
           onChange={(propShadows) => update({ propShadows })}
         />
+        <SelectField
+          label="Texture size"
+          value={String(graphics.textureSizePx)}
+          options={TEXTURE_SIZES_PX.map(String)}
+          format={(v) => `${v} px`}
+          onChange={(v) => update({ textureSizePx: graphicsSettingsSchema.shape.textureSizePx.parse(Number(v)) })}
+        />
+        <p className="muted small">
+          Longest edge of battlemaps, token pictures and 3D model textures; exports keep full size. A square battlemap
+          saves about {Math.round(textureMemoryMiB(MAX_TEXTURE_PX) - textureMemoryMiB(graphics.textureSizePx))} MB of
+          graphics memory compared with {MAX_TEXTURE_PX} px.
+        </p>
+        <SelectField
+          label="Shadow quality"
+          value={String(graphics.shadowMapSizePx)}
+          options={SHADOW_MAP_SIZES_PX.map(String)}
+          format={(v) => `${v} px`}
+          onChange={(v) => update({ shadowMapSizePx: graphicsSettingsSchema.shape.shadowMapSizePx.parse(Number(v)) })}
+        />
+        <p className="muted small">Size of each light&apos;s shadow maps; smaller is faster but blurrier.</p>
+        <CheckboxField
+          label="Antialiasing"
+          value={graphics.antialias}
+          onChange={(antialias) => update({ antialias })}
+        />
+        <p className="muted small">Smooths jagged edges at some cost; the 3D view restarts when it changes.</p>
+        <SelectField
+          label="Frame rate limit"
+          value={graphics.maxFps === null ? 'unlimited' : '30'}
+          options={FRAME_RATES}
+          format={(v) => FRAME_RATE_LABEL[v]}
+          onChange={(v) => update({ maxFps: MAX_FPS[v] })}
+        />
+        <p className="muted small">30 fps halves the work of the graphics card on most screens.</p>
       </Section>
     </Section>
   );

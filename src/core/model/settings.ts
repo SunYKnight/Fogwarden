@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const SETTINGS_SCHEMA_VERSION = 12;
+export const SETTINGS_SCHEMA_VERSION = 13;
 
 /** View of all player characters together; any other view is one player character's combatant id. */
 export const PARTY_VIEW = 'party';
@@ -122,6 +122,11 @@ export function defaultUpdateSettings(): UpdateSettings {
   return { autoCheck: true, lastCheck: null };
 }
 
+/** Longest texture edges the 3D views may upload, in pixels. */
+export const TEXTURE_SIZES_PX = [1024, 2048, 4096] as const;
+/** Edge lengths of the depth maps of a shadow-casting light, in pixels. */
+export const SHADOW_MAP_SIZES_PX = [256, 512, 1024] as const;
+
 export const graphicsSettingsSchema = z.object({
   /** Map lights casting shadows; each one renders six depth maps a frame. */
   shadowedLights: z.number().int().min(0).max(8),
@@ -129,11 +134,27 @@ export const graphicsSettingsSchema = z.object({
   resolutionScale: z.number().min(0.5).max(1),
   /** Props cast shadows; they always receive them. */
   propShadows: z.boolean(),
+  /** Longest edge of battlemap, picture and model textures in the 3D views; exports keep full size. */
+  textureSizePx: z.literal(TEXTURE_SIZES_PX),
+  /** Edge of each shadow depth map of a light. */
+  shadowMapSizePx: z.literal(SHADOW_MAP_SIZES_PX),
+  /** Smoothed edges (multisampling); changing it recreates the 3D views. */
+  antialias: z.boolean(),
+  /** Frames per second the 3D views render at most; null renders every display frame. */
+  maxFps: z.literal(30).nullable(),
 });
 export type GraphicsSettings = z.infer<typeof graphicsSettingsSchema>;
 
 export function defaultGraphicsSettings(): GraphicsSettings {
-  return { shadowedLights: 4, resolutionScale: 1, propShadows: true };
+  return {
+    shadowedLights: 4,
+    resolutionScale: 1,
+    propShadows: true,
+    textureSizePx: 4096,
+    shadowMapSizePx: 512,
+    antialias: true,
+    maxFps: null,
+  };
 }
 
 export const settingsSchema = z.object({

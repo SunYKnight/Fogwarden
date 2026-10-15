@@ -8,7 +8,6 @@ import { useMapRender, type HitTag } from '../mapRenderContext';
 import { circlePoints, drapedPath } from './drape';
 import { noRaycast, useCarriedLights, useCombatantPositions, useLayerVisible } from './hooks';
 
-const SHADOW_MAP_SIZE = 512;
 const LIGHT_INTENSITY = 3;
 // Carried torches and lanterns sit at hand height above the token's feet.
 const CARRIED_HEIGHT_FT = 4;
@@ -69,7 +68,7 @@ export function LightLayer() {
   const combatants = useCombatantPositions();
   const carried = useCarriedLights();
   // Player windows load no settings and keep the defaults.
-  const { shadowedLights } = useAppStore((s) => s.settings?.graphics) ?? defaultGraphicsSettings();
+  const { shadowedLights, shadowMapSizePx } = useAppStore((s) => s.settings?.graphics) ?? defaultGraphicsSettings();
   const placed = [...map.lights, ...carried].flatMap((light) => {
     const carrier = light.attachedTo && mode !== 'editor' ? combatants[light.attachedTo] : undefined;
     const position: WorldPoint = carrier
@@ -86,14 +85,16 @@ export function LightLayer() {
         const range = Math.max(1, light.brightFt + light.dimFt);
         return (
           <pointLight
-            key={light.id}
+            // Three never resizes a point light's cube shadow map; a new
+            // light gets one at the new size.
+            key={`${light.id}@${shadowMapSizePx}`}
             position={position}
             color={light.color}
             intensity={LIGHT_INTENSITY}
             distance={range}
             decay={0}
             castShadow={i < shadowedLights}
-            shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
+            shadow-mapSize={[shadowMapSizePx, shadowMapSizePx]}
             shadow-bias={-0.002}
             shadow-camera-near={0.5}
             shadow-camera-far={range}
