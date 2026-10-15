@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Play › Encounter tab: **Notes** for the encounter (setup, tactics, treasure; Markdown with Write/Preview), seen
+  only by the DM. Encounter notes were stored before but not shown anywhere.
+
 ## 0.1.0
 
 First release. Fogwarden is a Windows desktop app for a 5e Dungeon Master:
