@@ -85,11 +85,15 @@ The desktop app looks for updates at
 start unless switched off there) and installs only installers signed with the key whose public half is
 `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
 
-1. `pnpm set-version 0.2.0` sets the version in `package.json`, `src-tauri/tauri.conf.json`,
+Branches: `main` holds releases only; daily work goes to `develop`, larger changes to `feature/<name>` branches merged
+into `develop`. A release merges `develop` into `main` and is built from `main`.
+
+1. On `develop`: `pnpm set-version 0.2.0` sets the version in `package.json`, `src-tauri/tauri.conf.json`,
    `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock`.
 2. In `CHANGELOG.md`, rename `## Unreleased` to `## 0.2.0`: the newest section becomes the release notes the app
-   shows, and `pnpm package` stops unless the newest `## ` heading is exactly `## <version>`. Commit, so the
-   installer's revision has no `-dirty`.
+   shows, and `pnpm package` stops unless the newest `## ` heading is exactly `## <version>`. Commit, merge `develop`
+   into `main` (`git checkout main && git merge --no-ff develop`) and tag it `v0.2.0`, so the installer's revision is
+   the release commit without `-dirty`.
 3. `pnpm package` builds and writes to `artifacts/`: `Fogwarden_0.2.0_x64-setup-<revision>.exe`, the same name with
    `.sig`, and `latest.json` (version, notes, date, signature and the download URL of the installer in the release
    `v0.2.0`).
@@ -368,10 +372,17 @@ creature untouched.
 ## Graphics quality
 
 A slow 3D view (integrated graphics such as Intel UHD) gets faster in **Settings > Graphics**: fewer lights with
-shadows (each costs six extra render passes), a lower resolution and props without shadows. The section names the
-graphics card and suggests a preset (Low for integrated graphics, else High); the presets only fill in the three
-values, which sit under _Advanced_. Changes apply at once to the DM's views; the player window on the same computer
-takes them when it opens, LAN/relay players use the defaults (4 lights, full resolution, prop shadows).
+shadows (each costs six extra render passes), a lower resolution, props without shadows, smaller textures
+(battlemaps, token pictures and 3D model textures at most 1024/2048/4096 px; exports keep full size), smaller shadow
+maps, no antialiasing and a frame limit (30 or 15 fps). The section names the graphics card and suggests a preset
+(Low for integrated graphics, else High); the presets only fill in these values, which sit under _Advanced_ with the
+graphics memory a smaller texture size saves. Low: no shadows, 50 % resolution, 1024 px textures, no antialiasing,
+15 fps.
+Medium: 2 shadowed lights, 75 %, prop shadows, 2048 px, 512 px shadow maps, antialiasing, 30 fps. High: 8 shadowed
+lights, full resolution, 4096 px, 512 px shadow maps, antialiasing, no frame limit. Changes apply at once to the
+DM's views (a new texture size reloads the textures, antialiasing restarts the 3D view); the player window on the
+same computer takes them when it opens, LAN/relay players use the defaults (4 lights, full resolution, prop
+shadows, 4096 px textures, 512 px shadow maps, antialiasing, no frame limit).
 
 ## License of shipped content
 

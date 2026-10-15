@@ -123,6 +123,12 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     (doc) => ({ ...doc, graphics: defaultGraphicsSettings() }),
     // v12: per-kind pack visibility and hidden name duplicates (on).
     (doc) => ({ ...doc, packs: { ...defaultPackSettings(), ...z.looseObject({ packs: fields }).parse(doc).packs } }),
+    // v13: texture size, shadow map size, antialiasing and frame rate limit
+    // at their former fixed values; the picked preset and sliders stay.
+    (doc) => ({
+      ...doc,
+      graphics: { ...defaultGraphicsSettings(), ...z.looseObject({ graphics: fields }).parse(doc).graphics },
+    }),
   ],
 };
 

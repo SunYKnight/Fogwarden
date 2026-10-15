@@ -1,4 +1,4 @@
-import { Canvas, type ThreeEvent } from '@react-three/fiber';
+import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Object3D } from 'three';
 import { daylight, skyTint } from '@/core/atmosphere/timeOfDay';
@@ -35,6 +35,34 @@ function useSettledVersion(version: number): number {
     return () => clearTimeout(timer);
   }, [version]);
   return settled;
+}
+
+// Display frames arrive a little early or late; without slack 30 fps on a
+// 60 Hz screen would often skip to every third frame.
+const FRAME_SLACK_MS = 4;
+
+/**
+ * Requests a frame of the demand frameloop at most `fps` times a second, so time-driven animations (pings,
+ * weather, videos, camera damping) keep running. React updates still render at once: r3f requests a frame
+ * for every changed prop and the orbit controls for every camera move.
+ */
+function FrameRateCap({ fps }: { fps: number }) {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const intervalMs = 1000 / fps;
+    let last = -Infinity;
+    let handle = 0;
+    const tick = (time: number) => {
+      if (time - last >= intervalMs - FRAME_SLACK_MS) {
+        last = time;
+        invalidate();
+      }
+      handle = requestAnimationFrame(tick);
+    };
+    handle = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(handle);
+  }, [fps, invalidate]);
+  return null;
 }
 
 /** Hit tag of the object or its nearest tagged ancestor. */
@@ -113,12 +141,16 @@ export function MapView(props: MapViewProps) {
   const graphics = useAppStore((s) => s.settings?.graphics) ?? defaultGraphicsSettings();
   return (
     <Canvas
+      // WebGL fixes antialiasing when the context is created.
+      key={graphics.antialias ? 'antialias' : 'aliased'}
       shadows="percentage"
       dpr={Math.min(window.devicePixelRatio, 2) * graphics.resolutionScale}
-      gl={{ antialias: true }}
+      gl={{ antialias: graphics.antialias }}
+      frameloop={graphics.maxFps === null ? 'always' : 'demand'}
       onContextMenu={(e) => e.preventDefault()}
       style={{ background: '#111318' }}
     >
+      {graphics.maxFps !== null && <FrameRateCap fps={graphics.maxFps} />}
       <MapRenderContext.Provider value={state}>
         <CameraRig
           mode={camera}

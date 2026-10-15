@@ -232,3 +232,6 @@ Agent and code rules: `~/.omp/agent/RULES.md` (loaded for every session). Projec
 - Comments explain why, English only; no change history in code or docs, only in `CHANGELOG.md`.
 - Errors are never swallowed: data layer throws typed errors, UI layer shows them; no catch-and-ignore.
 - Commits only on request; one logical change per commit.
+- Branches (from 0.1.0 on): `main` holds releases only, each a tagged merge (`v<version>`); work happens on
+  `develop`, larger changes on `feature/<name>` branches merged into `develop`. A release merges `develop` into `main`,
+  tags it and builds the installer from `main`.

@@ -1,5 +1,6 @@
 import type { Encounter } from '@/core/model';
 import { useEncounterStore } from '@/state/encounterStore';
+import { NotesEditor } from '../campaign/campaignUi';
 import { Section } from '../kit';
 import { DifficultyBreakdown } from './EncounterDifficulty';
 import { HpBar } from './HpBar';
@@ -37,6 +38,19 @@ export function EncounterOverview({ encounter }: { encounter: Encounter }) {
         <p className="small">
           {enemies.length === 0 ? 'No monsters yet.' : `${standing} of ${enemies.length} remaining`}
         </p>
+      </Section>
+      <Section title="Notes">
+        <NotesEditor
+          key={encounter.id}
+          value={encounter.notes}
+          label="Encounter notes"
+          placeholder="Setup, tactics, treasure: only you see these notes."
+          onCommit={async (text) => {
+            useEncounterStore.getState().update((d) => {
+              d.notes = text;
+            }, 'Edit encounter notes');
+          }}
+        />
       </Section>
     </div>
   );

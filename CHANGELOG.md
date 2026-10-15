@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.1
+
+### Added
+
+- Play › Encounter tab: **Notes** for the encounter (setup, tactics, treasure; Markdown with Write/Preview), seen
+  only by the DM. Encounter notes were stored before but not shown anywhere.
+- Settings › Graphics › Advanced: **texture size** (1024/2048/4096 px for battlemaps, token pictures and 3D model
+  textures; exports keep full size, with the graphics memory it saves), **shadow quality** (256/512/1024 px shadow
+  maps), **antialiasing** on/off and a **frame rate limit** (15 or 30 fps). Low uses 15 fps, no antialiasing and
+  1024 px textures; Medium 30 fps and 2048 px.
+
 ## 0.1.0
 
 First release. Fogwarden is a Windows desktop app for a 5e Dungeon Master:
