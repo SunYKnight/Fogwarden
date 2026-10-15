@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  # Pull requests that change packaging build every installer without
+  # publishing, so a broken bundle shows before it reaches a release.
+  pull_request:
+    paths:
+      - src-tauri/**
+      - tools/package.ts
+      - tools/updateManifest.ts
+      - tools/mergeManifests.ts
+      - .github/workflows/release.yml
+      - package.json
+      - pnpm-lock.yaml
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the GitHub release v<version>; off builds the assets only
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      # The oldest Ubuntu with WebKitGTK 4.1 keeps the AppImage's glibc
+      # requirement low. GStreamer plugins go into the AppImage for the
+      # app's music, sound effects and videos (MP3, Ogg, WAV, M4A, MP4, WebM).
+      - name: Install the Tauri build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      # Lets a dry run build a branch whose changelog starts with "## Unreleased";
+      # the changed file marks the assets' revision -dirty.
+      - name: Head the unreleased changelog section with the version
+        if: github.event_name != 'push' && !inputs.publish
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          sed -i "0,/^## Unreleased$/s//## $version/" CHANGELOG.md
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm package
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-${{ runner.os }}
+          path: artifacts/
+          if-no-files-found: error
+
+  release:
+    needs: package
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: package-*
+          path: artifacts
+          merge-multiple: true
+      - run: pnpm release:manifest
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: artifacts/
+      - name: Publish the GitHub release
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="$(jq -r .version artifacts/latest.json)"
+          tag="v$version"
+          # latest.json's download URLs point into the release named after the version.
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            echo "::error::The tag $GITHUB_REF_NAME does not match the version $version"
+            exit 1
+          fi
+          jq -r .notes artifacts/latest.json > "$RUNNER_TEMP/notes.md"
+          gh release create "$tag" --target "$GITHUB_SHA" --notes-file "$RUNNER_TEMP/notes.md" \
+            artifacts/*.exe artifacts/*.AppImage artifacts/*.deb artifacts/*.sig artifacts/latest.json
