@@ -141,7 +141,7 @@ export const graphicsSettingsSchema = z.object({
   /** Smoothed edges (multisampling); changing it recreates the 3D views. */
   antialias: z.boolean(),
   /** Frames per second the 3D views render at most; null renders every display frame. */
-  maxFps: z.literal(30).nullable(),
+  maxFps: z.union([z.literal(15), z.literal(30)]).nullable(),
 });
 export type GraphicsSettings = z.infer<typeof graphicsSettingsSchema>;
 
