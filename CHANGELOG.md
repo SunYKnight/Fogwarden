@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A settings.json the app cannot read (damaged, or written by a newer Fogwarden, e.g. after going back to an older
+  version) is no longer replaced by default settings on the next change, which lost the player link secret, pack
+  order and graphics choices. Changes are refused with a notice until the file is fixed or restored under Settings
+  › Data › Version history.
+
 ## 0.1.1
 
 ### Added

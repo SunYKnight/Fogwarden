@@ -296,6 +296,8 @@ export class Repository {
   layoutProblems: LoadProblem[] = [];
   /** Pack order and enabled state; follows the settings this repository loads and saves. */
   packSettings: PackSettings = defaultPackSettings();
+  // Why settings.json could not be read; null while it can be saved.
+  private unreadableSettings: string | null = null;
 
   constructor(readonly storage: Storage) {}
 
@@ -945,14 +947,32 @@ export class Repository {
   /** Also makes the loaded pack order and enabled state the ones listings use. */
   async loadSettings(): Promise<Settings> {
     const exists = await this.storage.exists('data', SETTINGS_PATH);
-    const settings = exists
-      ? await this.readJson('settings', settingsSchema, 'data', SETTINGS_PATH)
-      : defaultSettings();
-    this.packSettings = settings.packs;
-    return settings;
+    try {
+      const settings = exists
+        ? await this.readJson('settings', settingsSchema, 'data', SETTINGS_PATH)
+        : defaultSettings();
+      this.packSettings = settings.packs;
+      this.unreadableSettings = null;
+      return settings;
+    } catch (error) {
+      this.unreadableSettings = errorMessage(error);
+      throw error;
+    }
   }
 
+  /**
+   * Refuses while the existing settings.json could not be read (damaged, or written by a newer Fogwarden), so
+   * defaults never replace the DM's file; a successful load lifts the block.
+   */
   async saveSettings(settings: Settings): Promise<Settings> {
+    if (this.unreadableSettings !== null) {
+      throw new DataError(
+        `Settings are not saved while settings.json cannot be read (${this.unreadableSettings}); fix it or restore ` +
+          'it under Settings > Data > Version history',
+        'data',
+        SETTINGS_PATH,
+      );
+    }
     const parsed = settingsSchema.parse(settings);
     this.packSettings = parsed.packs;
     await this.writeJson(SETTINGS_PATH, parsed);
