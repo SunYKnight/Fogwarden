@@ -21,7 +21,7 @@ const PRESETS: Record<Preset, GraphicsSettings> = {
     textureSizePx: 1024,
     shadowMapSizePx: 256,
     antialias: false,
-    maxFps: 30,
+    maxFps: 15,
   },
   Medium: {
     shadowedLights: 2,
@@ -43,11 +43,11 @@ const PRESETS: Record<Preset, GraphicsSettings> = {
   },
 };
 
-const FRAME_RATES = ['unlimited', '30'] as const;
+const FRAME_RATES = ['unlimited', '30', '15'] as const;
 type FrameRate = (typeof FRAME_RATES)[number];
 
-const MAX_FPS: Record<FrameRate, GraphicsSettings['maxFps']> = { unlimited: null, '30': 30 };
-const FRAME_RATE_LABEL: Record<FrameRate, string> = { unlimited: 'Unlimited', '30': '30 fps' };
+const MAX_FPS: Record<FrameRate, GraphicsSettings['maxFps']> = { unlimited: null, '30': 30, '15': 15 };
+const FRAME_RATE_LABEL: Record<FrameRate, string> = { unlimited: 'Unlimited', '30': '30 fps', '15': '15 fps' };
 
 const INTEGRATED_GPU = /Intel|UHD|Iris|HD Graphics|Mali|Adreno|PowerVR|Apple GPU/i;
 
@@ -138,12 +138,14 @@ export function GraphicsSection({ settings, save }: { settings: Settings; save: 
         <p className="muted small">Smooths jagged edges at some cost; the 3D view restarts when it changes.</p>
         <SelectField
           label="Frame rate limit"
-          value={graphics.maxFps === null ? 'unlimited' : '30'}
+          value={FRAME_RATES.find((rate) => MAX_FPS[rate] === graphics.maxFps) ?? 'unlimited'}
           options={FRAME_RATES}
           format={(v) => FRAME_RATE_LABEL[v]}
           onChange={(v) => update({ maxFps: MAX_FPS[v] })}
         />
-        <p className="muted small">30 fps halves the work of the graphics card on most screens.</p>
+        <p className="muted small">
+          30 fps halves the work of the graphics card on most screens, 15 fps quarters it (moves look less smooth).
+        </p>
       </Section>
     </Section>
   );

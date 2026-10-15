@@ -374,9 +374,10 @@ creature untouched.
 A slow 3D view (integrated graphics such as Intel UHD) gets faster in **Settings > Graphics**: fewer lights with
 shadows (each costs six extra render passes), a lower resolution, props without shadows, smaller textures
 (battlemaps, token pictures and 3D model textures at most 1024/2048/4096 px; exports keep full size), smaller shadow
-maps, no antialiasing and a 30 fps limit. The section names the graphics card and suggests a preset (Low for
-integrated graphics, else High); the presets only fill in these values, which sit under _Advanced_ with the graphics
-memory a smaller texture size saves. Low: no shadows, 50 % resolution, 1024 px textures, no antialiasing, 30 fps.
+maps, no antialiasing and a frame limit (30 or 15 fps). The section names the graphics card and suggests a preset
+(Low for integrated graphics, else High); the presets only fill in these values, which sit under _Advanced_ with the
+graphics memory a smaller texture size saves. Low: no shadows, 50 % resolution, 1024 px textures, no antialiasing,
+15 fps.
 Medium: 2 shadowed lights, 75 %, prop shadows, 2048 px, 512 px shadow maps, antialiasing, 30 fps. High: 8 shadowed
 lights, full resolution, 4096 px, 512 px shadow maps, antialiasing, no frame limit. Changes apply at once to the
 DM's views (a new texture size reloads the textures, antialiasing restarts the 3D view); the player window on the
