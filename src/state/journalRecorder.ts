@@ -29,7 +29,8 @@ export function appendToJournal(
     const current = currentSession(docs, now);
     const created = current ? null : newJournalEntry(docs, now);
     const entry = current ?? { ...created!, id: await files.newId(JOURNAL, created!.id) };
-    const time = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    // The journal is a document: one 24-hour format whatever the system locale.
+    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const linked = encounterId === null || entry.encounters.includes(encounterId);
     const saved = await files.save(JOURNAL, {
       ...entry,

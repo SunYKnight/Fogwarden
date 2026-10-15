@@ -9,6 +9,11 @@
 - Releases are built and published by GitHub Actions for Windows and Linux; every push and pull request to
   `develop` and `main` runs the type check, lint and tests.
 
+### Fixed
+
+- Journal timeline times are always written as 24-hour `HH:MM`; they followed the system language before
+  (e.g. `05:10 PM`).
+
 ## 0.1.2
 
 ### Fixed
