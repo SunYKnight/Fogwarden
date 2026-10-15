@@ -286,4 +286,17 @@ describe('Repository settings', () => {
     expect(text(storage, 'settings.json')).toBe(first);
     expect(first).toContain('\n  "schema": "settings",\n');
   });
+
+  it('never overwrites a settings.json it could not read, until it reads again', async () => {
+    const { storage, repository } = setup();
+    const newer = JSON.stringify({ schema: 'settings', version: 999, secret: 'keep me' });
+    storage.files.data.set('settings.json', newer);
+    await expect(repository.loadSettings()).rejects.toThrow();
+    await expect(repository.saveSettings(defaultSettings())).rejects.toThrow(/not saved/);
+    expect(text(storage, 'settings.json')).toBe(newer);
+    storage.files.data.delete('settings.json');
+    await repository.loadSettings();
+    await repository.saveSettings(defaultSettings());
+    expect(text(storage, 'settings.json')).toContain('"schema": "settings"');
+  });
 });
