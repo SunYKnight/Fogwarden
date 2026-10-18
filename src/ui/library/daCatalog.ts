@@ -1,4 +1,5 @@
 import { isTauri } from '@tauri-apps/api/core';
+import { homeDir } from '@tauri-apps/api/path';
 import { gltfSize } from '@/core/gltfDocument';
 import {
   damStandIn,
@@ -19,7 +20,9 @@ import { readGltfJson } from '@/sync/relayClient';
 import { CC0_MODELS } from './daObjects';
 
 const DATABASE = 'Dungeon Alchemist_Data/StreamingAssets/Database';
-const STEAM_ROOTS = ['C:/Program Files (x86)/Steam', 'C:/Program Files/Steam'];
+const WINDOWS_STEAM_ROOTS = ['C:/Program Files (x86)/Steam', 'C:/Program Files/Steam'];
+// Native package, its usual symlink and the Flatpak; the game runs under Proton.
+const LINUX_STEAM_ROOTS = ['.steam/steam', '.local/share/Steam', '.var/app/com.valvesoftware.Steam/.local/share/Steam'];
 const STEAM_GAME = 'steamapps/common/Dungeon Alchemist';
 
 // Both files together are about 30 MB; read them once per folder and session.
@@ -27,11 +30,14 @@ const catalogs = new Map<string, Promise<DamCatalog | null>>();
 
 /** Steam library folders: the Steam roots and every library `libraryfolders.vdf` lists. */
 async function steamLibraries(): Promise<string[]> {
-  const lists = STEAM_ROOTS.map((root) => `${root}/steamapps/libraryfolders.vdf`);
+  const home = await homeDir();
+  // The other OS's roots are missing or not absolute here, so never a file.
+  const roots = [...WINDOWS_STEAM_ROOTS, ...LINUX_STEAM_ROOTS.map((root) => `${home}/${root}`)];
+  const lists = roots.map((root) => `${root}/steamapps/libraryfolders.vdf`);
   const present = await Promise.all(lists.map(isFile));
   const texts = await Promise.all(lists.filter((_list, i) => present[i]).map(readFileText));
   const listed = texts.flatMap((text) => [...text.matchAll(/"path"\s+"([^"]+)"/g)].map((m) => m[1]!));
-  return [...STEAM_ROOTS, ...listed.map((path) => path.replaceAll('\\\\', '/'))];
+  return [...roots, ...listed.map((path) => path.replaceAll('\\\\', '/'))];
 }
 
 /** Dungeon Alchemist's install folder: the located one, else the first Steam install found. */

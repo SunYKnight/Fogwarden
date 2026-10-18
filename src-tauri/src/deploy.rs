@@ -771,6 +771,12 @@ SUDO_USED=1 exec "$@"
         let bin = dir.join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         std::fs::write(bin.join("sudo"), FAKE_SUDO).unwrap();
+        // Unix only runs it from PATH when executable; else the real sudo runs.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(bin.join("sudo"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
         let path = std::env::var_os("PATH").unwrap();
         let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&path))).unwrap();
         let mut env = vec![("SUDO_PASSWORD", PASSWORD.to_owned())];
