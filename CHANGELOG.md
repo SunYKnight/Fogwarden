@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.3
+
+### Added
+
+- Linux: Fogwarden runs on x86_64 Linux (glibc 2.35+, e.g. Ubuntu 22.04) as a self-updating AppImage or a `.deb`.
+  Dungeon Alchemist is also found in Linux Steam libraries (native, `~/.local/share/Steam` and Flatpak).
+- Releases are built and published by GitHub Actions for Windows and Linux; every push and pull request to
+  `develop` and `main` runs the type check, lint and tests.
+
+### Fixed
+
+- Journal timeline times are always written as 24-hour `HH:MM`; they followed the system language before
+  (e.g. `05:10 PM`).
+
 ## 0.1.2
 
 ### Fixed

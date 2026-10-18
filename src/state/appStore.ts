@@ -106,7 +106,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   notify: (message, kind = 'success') => {
     const id = nextNoticeId++;
     set((s) => ({ notices: [...s.notices, { id, kind, message }] }));
-    window.setTimeout(() => get().dismissNotice(id), NOTICE_MS);
+    setTimeout(() => get().dismissNotice(id), NOTICE_MS);
   },
   dismissNotice: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
   // The store changes before the async save: edits made while a save is

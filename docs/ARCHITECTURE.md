@@ -869,15 +869,31 @@ no stubs/TODOs. Format with `pnpm format`; check with `pnpm typecheck`, `pnpm li
 
 - `tauri-plugin-updater` reads `latest.json` of the latest GitHub release (`plugins.updater` in `tauri.conf.json`:
   endpoint, public key, passive NSIS install); `tauri-plugin-process` restarts. Only the DM window has the
-  `updater:default` and `process:allow-restart` permissions.
+  `updater:default` and `process:allow-restart` permissions. On Linux it replaces the running AppImage, or installs
+  the `.deb` with `pkexec dpkg -i` when the app was installed from it: the plugin looks up
+  `<os>-<arch>-<bundle type>` (`linux-x86_64-deb`) before `<os>-<arch>` (`linux-x86_64`, the AppImage).
 - `src/core/updates.ts`: `autoCheckDecision(settings.updates, now, playing)` → `check` | `wait` | `skip` (switched
   off or checked within 24 h: skip; Play with combat running: wait).
 - `src/state/updateStore.ts`: `useUpdateStore` (`status`, `check()`, `install()`: flushes map and encounter, then
   `downloadAndInstall` and `relaunch`); check and install failures become a `failed` status with a plain message.
   `startAutoUpdateCheck()` (desktop, started in `DmApp`) decides once per app start, stamps
   `settings.updates.lastCheck` and reports a found version or a failure as a notice.
+- Bundles: `tauri.conf.json` builds the NSIS installer (`icons/icon.ico`); `tauri.linux.conf.json`, which Tauri
+  merges over it on Linux, builds an AppImage and a `.deb` with the PNG icons (the Linux window icon is the first
+  `.png`, so the build fails without one). The AppImage bundles GStreamer (`bundleMediaFramework`) because WebKitGTK
+  plays audio and video through it; the `.deb` recommends the GStreamer plugins instead. `createUpdaterArtifacts`
+  signs every bundle.
 - Release: `tools/package.ts` builds with the signing key (`TAURI_SIGNING_PRIVATE_KEY*` env or
-  `data-local/signing/fogwarden.key`) and writes installer, `.sig` and `latest.json` (`tools/updateManifest.ts`:
+  `data-local/signing/fogwarden.key`) for this OS (`windows-x86_64` or `linux-x86_64`, x64 only) and copies its
+  installers (`platformInstallers`) with their `.sig` to `artifacts/`, named with `-<revision>` before the
+  extension. It writes `latest-<platform>.json` and the same content as `latest.json` (`tools/updateManifest.ts`:
   notes = the newest `CHANGELOG.md` section, which must be headed `## <version>`, else packaging stops before the
-  build; URL = asset of release `v<version>`) to `artifacts/`; release builds ship without source maps.
+  build; URL = asset of release `v<version>`), so a one-OS release needs nothing else. `tools/mergeManifests.ts`
+  (`pnpm release:manifest`) merges every `latest-*.json` in `artifacts/` into `latest.json` (newest `pub_date`,
+  all platforms; differing versions or notes throw). Release builds ship without source maps.
   `tools/set-version.ts` sets the version in `package.json`, `tauri.conf.json`, `Cargo.toml` and `Cargo.lock`.
+- CI (`.github/workflows/`): `ci.yml` runs typecheck, lint, the Vitest suite and `cargo test --no-default-features`
+  on Ubuntu 22.04 for pushes and pull requests to `develop` and `main`. `release.yml` (tags `v*`, or by hand with
+  `publish` off for a dry run) runs `pnpm package` on `windows-latest` and `ubuntu-22.04` with the signing secrets,
+  merges the manifests and publishes the release `v<version>` with `gh release create`, the notes from
+  `latest.json`. Ubuntu 22.04 is the oldest base with WebKitGTK 4.1, which keeps the AppImage's glibc floor low.
