@@ -13,10 +13,6 @@ import { PlayerLinks } from '../shell/PlayerLinks';
 import { DeployDialog } from './DeployDialog';
 import { saveRemote, type ServerSetup } from './remoteSettings';
 
-// Online play through the relay has never been tried against a real server;
-// its settings and buttons stay hidden until it has (see PLAN.md).
-export const ONLINE_PLAY_AVAILABLE = false;
-
 export const LINK_TEXT: Record<RelayLink, string> = {
   off: 'Not connected',
   connecting: 'Connecting…',
@@ -86,8 +82,9 @@ function ServerSetupDialog({ remote, onClose }: { remote: RemoteSettings; onClos
       <div className="col">
         <p className="muted small">
           For an Ubuntu 22.04 or 24.04 server whose DNS name points to it, with ports 80 and 443 open. The install
-          script sets up Node.js, nginx, the relay service and, given an email, a Let&apos;s Encrypt certificate. Run it
-          again to update; the DM key stays.
+          script sets up Node.js, nginx, the relay service and, given an email, a Let&apos;s Encrypt certificate. On a
+          server run by nginx-manager it registers a site there and leaves nginx to it. Run it again to update; the DM
+          key stays.
         </p>
         <TextField
           label="Domain"

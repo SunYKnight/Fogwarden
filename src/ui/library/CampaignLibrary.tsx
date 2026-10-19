@@ -5,12 +5,14 @@ import { countOf } from '@/core/plural';
 import type { LoadProblem } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
+import { campaignSaved } from '@/sync/views';
 import { exportCampaignToZip, pickCampaignZip } from '../campaign/campaignArchiveUi';
 import { CalendarTab } from '../campaign/CalendarTab';
 import { NameDialog, NotesEditor, Problems, type CampaignTabProps } from '../campaign/campaignUi';
 import { CastTab } from '../campaign/CastTab';
 import { JournalTab } from '../campaign/JournalTab';
 import { PartyTab } from '../campaign/PartyTab';
+import { PlayerFeaturesSection } from '../campaign/PlayerFeatures';
 import { QuestsTab } from '../campaign/QuestsTab';
 import { AssetImage } from '../components/AssetImage';
 import { Button, confirmDialog, EmptyState, openContextMenu, PageHeader, Section, Tabs, type TabSpec } from '../kit';
@@ -293,6 +295,7 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
       const saved = await repository.saveCampaign(change(latest.current));
       latest.current = saved;
       setCampaign(saved);
+      campaignSaved(saved);
     });
 
   const remove = async (target: Campaign) => {
@@ -373,10 +376,20 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
           </>
         ) : tab === 'party' ? (
           campaign && (
-            <PartyTab
-              campaign={campaign}
-              onChange={(change) => updateCampaign((c) => ({ ...c, party: change(c.party) }))}
-            />
+            <>
+              <PartyTab
+                campaign={campaign}
+                onChange={(change) => updateCampaign((c) => ({ ...c, party: change(c.party) }))}
+              />
+              <PlayerFeaturesSection
+                features={campaign.playerFeatures}
+                onChange={(patch) =>
+                  updateCampaign((c) => ({ ...c, playerFeatures: { ...c.playerFeatures, ...patch } })).catch(
+                    reportError,
+                  )
+                }
+              />
+            </>
           )
         ) : (
           <>

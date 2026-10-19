@@ -8,7 +8,14 @@ import {
   type SyncPayload,
   type SyncTransport,
 } from './protocol';
-import { parseViewFrame, RELAY_LINK_REVOKED, relayStatusSchema, viewFrame, type RelayStatus } from './relayApi';
+import {
+  parseViewFrame,
+  RELAY_LINK_REVOKED,
+  relayNoticeSchema,
+  viewFrame,
+  type PlayerUpload,
+  type RelayStatus,
+} from './relayApi';
 import { accept, isPlayerRequest } from './transports';
 
 /** Waits before reconnect attempt 1, 2, 3, …; the last value repeats. */
@@ -32,7 +39,7 @@ type CreateSocket = (url: string) => WebSocket;
  * WebSocket that reconnects with backoff until closed, or until the server closes it because its link was
  * withdrawn. Text sent while disconnected is dropped.
  */
-class ReconnectingSocket {
+export class ReconnectingSocket {
   private readonly connectionHandlers = new Set<(open: boolean) => void>();
   private socket: WebSocket | null = null;
   private attempts = 0;
@@ -163,9 +170,11 @@ export class ViewSocketTransport implements DmTransport {
   private readonly requestHandlers = new Set<(view: string, request: PlayerRequest) => void>();
   private readonly viewHandlers = new Set<(views: ReadonlySet<string>) => void>();
   private readonly statusHandlers = new Set<(status: RelayCounts) => void>();
-  private readonly socket: ReconnectingSocket;
+  private readonly uploadHandlers = new Set<(uploads: readonly PlayerUpload[]) => void>();
+  protected readonly socket: ReconnectingSocket;
   private views: ReadonlySet<string> = new Set();
   private status: RelayCounts = { players: 0, views: {} };
+  private uploads: readonly PlayerUpload[] = [];
   private reconnected = false;
 
   constructor(url: string, createSocket: CreateSocket) {
@@ -178,11 +187,12 @@ export class ViewSocketTransport implements DmTransport {
     this.socket.watchConnection((open) => {
       if (!open) {
         this.setStatus({ players: 0, views: {} });
+        this.setUploads([]);
       }
     });
   }
 
-  private receive(data: string): void {
+  protected receive(data: string): void {
     const frame = parseViewFrame(data);
     const message = frame ? playerMessageSchema.parse(JSON.parse(frame.message)) : null;
     const payload = frame && message && accept(message, 'dm') ? message.payload : null;
@@ -193,8 +203,14 @@ export class ViewSocketTransport implements DmTransport {
         handler(frame.views[0]!, payload);
       }
     } else if (!frame) {
-      this.setStatus(relayStatusSchema.parse(JSON.parse(data)).relay);
-      if (this.reconnected) {
+      const notice = relayNoticeSchema.parse(JSON.parse(data));
+      if ('uploads' in notice) {
+        this.setUploads(notice.uploads);
+      } else {
+        this.setStatus(notice.relay);
+      }
+      // The status comes first after every connect.
+      if ('relay' in notice && this.reconnected) {
         this.reconnected = false;
         this.resend(null);
       }
@@ -213,6 +229,13 @@ export class ViewSocketTransport implements DmTransport {
     }
     for (const handler of this.statusHandlers) {
       handler(status);
+    }
+  }
+
+  private setUploads(uploads: readonly PlayerUpload[]): void {
+    this.uploads = uploads;
+    for (const handler of this.uploadHandlers) {
+      handler(uploads);
     }
   }
 
@@ -251,6 +274,13 @@ export class ViewSocketTransport implements DmTransport {
     this.statusHandlers.add(handler);
     handler(this.status);
     return () => this.statusHandlers.delete(handler);
+  }
+
+  /** Calls `handler` with the player uploads waiting on the server: now and whenever the server reports them. */
+  watchUploads(handler: (uploads: readonly PlayerUpload[]) => void): () => void {
+    this.uploadHandlers.add(handler);
+    handler(this.uploads);
+    return () => this.uploadHandlers.delete(handler);
   }
 
   watchConnection(handler: (open: boolean) => void): () => void {

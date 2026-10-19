@@ -9,6 +9,7 @@ import {
   SKILLS,
   type Ability,
   type AttackRoll,
+  type CharacterSheet,
   type Creature,
   type CreatureAction,
   type DamageType,
@@ -18,6 +19,7 @@ import {
 import { abilityModifier } from '../rules/abilities';
 import { childElements, descendants, firstChild, parseXml, textOf, type XmlElement } from '../xml';
 import type { AuroraIndex } from './aurora';
+import { auroraSheet } from './auroraSheet';
 import { slug } from './ids';
 
 /**
@@ -30,6 +32,8 @@ import { slug } from './ids';
 
 export interface AuroraCharacter {
   creature: Creature;
+  /** The full sheet, stored beside the creature. */
+  sheet: CharacterSheet;
   /** File name of the portrait in Aurora's `portraits/` folder, from the character's portrait path. */
   portraitFile: string | null;
   /** The portrait Aurora embeds in the character file (PNG), used when the folder lacks the file. */
@@ -434,18 +438,28 @@ export function auroraCharacter(text: string, fileName: string, index: AuroraInd
     Ability,
     number
   >;
-  const savingThrows = Object.fromEntries(
-    ABILITIES.filter((a) => build.idSet.has(`ID_PROFICIENCY_SAVINGTHROW_${ABILITY_NAMES[a].toUpperCase()}`)).map(
-      (a) => [a, abilityModifier(abilities[a]) + sheet.proficiency + sheet.sum(`${ABILITY_NAMES[a]}:save:misc`)],
-    ),
-  );
-  const skillBonus = (skill: Skill) => {
-    const expert = build.idSet.has(`ID_EXPERTISE_SKILL_${skillKey(skill)}`) ? 2 : 1;
-    const proficient = build.idSet.has(`ID_PROFICIENCY_SKILL_${skillKey(skill)}`) ? 1 : 0;
-    return abilityModifier(abilities[SKILL_ABILITY[skill]]) + proficient * expert * sheet.proficiency;
-  };
+  const saves = Object.fromEntries(
+    ABILITIES.map((a) => {
+      const proficient = build.idSet.has(`ID_PROFICIENCY_SAVINGTHROW_${ABILITY_NAMES[a].toUpperCase()}`);
+      const bonus =
+        abilityModifier(abilities[a]) +
+        (proficient ? sheet.proficiency : 0) +
+        sheet.sum(`${ABILITY_NAMES[a]}:save:misc`);
+      return [a, { proficient, bonus }];
+    }),
+  ) as CharacterSheet['savingThrows'];
+  const savingThrows = Object.fromEntries(ABILITIES.filter((a) => saves[a].proficient).map((a) => [a, saves[a].bonus]));
+  const checks = Object.fromEntries(
+    SKILLS.map((skill) => {
+      const proficient = build.idSet.has(`ID_PROFICIENCY_SKILL_${skillKey(skill)}`);
+      const expert = proficient && build.idSet.has(`ID_EXPERTISE_SKILL_${skillKey(skill)}`);
+      const bonus =
+        abilityModifier(abilities[SKILL_ABILITY[skill]]) + (proficient ? 1 : 0) * (expert ? 2 : 1) * sheet.proficiency;
+      return [skill, { proficiency: expert ? 'expertise' : proficient ? 'proficient' : 'none', bonus }];
+    }),
+  ) as CharacterSheet['skills'];
   const skills = Object.fromEntries(
-    SKILLS.filter((s) => build.idSet.has(`ID_PROFICIENCY_SKILL_${skillKey(s)}`)).map((s) => [s, skillBonus(s)]),
+    SKILLS.filter((s) => checks[s].proficiency !== 'none').map((s) => [s, checks[s].bonus]),
   );
   const senses: Senses = {};
   for (const id of build.idSet) {
@@ -510,7 +524,7 @@ export function auroraCharacter(text: string, fileName: string, index: AuroraInd
     savingThrows,
     skills,
     senses,
-    passivePerception: 10 + skillBonus('perception') + sheet.sum('perception:passive'),
+    passivePerception: 10 + checks.perception.bonus + sheet.sum('perception:passive'),
     languages,
     traits: spellcastingTraits(root, name, build.level),
     actions: attacks.map(attackAction),
@@ -520,6 +534,15 @@ export function auroraCharacter(text: string, fileName: string, index: AuroraInd
   };
   return {
     creature,
+    sheet: auroraSheet(root, index, {
+      race,
+      classes: `${className}${archetype ? ` (${archetype})` : ''}`,
+      background,
+      proficiencyBonus: sheet.proficiency,
+      abilities,
+      savingThrows: saves,
+      skills: checks,
+    }),
     portraitFile: portraitPath === '' ? null : baseName(portraitPath),
     portraitPng: embedded === '' ? null : base64ToBytes(embedded.replace(/\s+/g, '')),
   };

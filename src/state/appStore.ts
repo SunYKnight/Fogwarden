@@ -113,12 +113,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   // pending build on this value instead of the stale one and keep both.
   setSettings: async (settings) => {
     set({ settings });
-    const write = settingsWrites.then(() => get().repository.saveSettings(settings));
-    // The queue only orders writes; the caller still gets this write's error.
-    settingsWrites = write.catch(() => undefined);
-    const saved = await write;
-    if (get().settings === settings) {
-      set({ settings: saved });
+    // A remote DM's settings are the desktop's: the desktop saves them, and
+    // the encounter switch reaches it through the mirror.
+    if (get().repository.storage.kind !== 'remote-dm') {
+      const write = settingsWrites.then(() => get().repository.saveSettings(settings));
+      // The queue only orders writes; the caller still gets this write's error.
+      settingsWrites = write.catch(() => undefined);
+      const saved = await write;
+      if (get().settings === settings) {
+        set({ settings: saved });
+      }
     }
   },
   init: async () => {
@@ -130,10 +134,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     // A broken file must not keep the app from starting either: Settings >
     // Data > Version history, which can restore it, has to stay reachable.
+    // A remote DM leaves conversions to the desktop app, which ran them.
     try {
       // Packs move after the layout conversion, which works in the old places.
-      const layoutProblems = await migrateDataRoot(repository);
-      repository.layoutProblems = [...layoutProblems, ...(await migrateToPacks(repository))];
+      if (repository.storage.kind !== 'remote-dm') {
+        const layoutProblems = await migrateDataRoot(repository);
+        repository.layoutProblems = [...layoutProblems, ...(await migrateToPacks(repository))];
+      }
     } catch (error) {
       reportError(error);
     }

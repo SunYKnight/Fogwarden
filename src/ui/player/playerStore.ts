@@ -1,10 +1,12 @@
 import { create } from 'zustand';
-import type { AssetRef, BattleMap } from '@/core/model';
+import { CHAT_MAX_LINES, type AssetRef, type BattleMap, type SheetEdit } from '@/core/model';
 import { HeightField } from '@/core/terrain/heightfield';
 import type { CameraState } from '@/render/CameraRig';
 import { usePingStore } from '@/state/pingStore';
 import type {
+  CharacterDetails,
   PlayerAudio,
+  PlayerChatLine,
   PlayerEncounter,
   PlayerFog,
   PlayerHandout,
@@ -12,6 +14,7 @@ import type {
   PlayerScene,
   SyncPayload,
 } from '@/sync/protocol';
+import { addWaitingEdit, settleWaitingEdit, type WaitingEdits } from './waitingEdits';
 
 /** Roll results the sheet keeps, newest first. */
 const KEPT_ROLLS = 5;
@@ -22,11 +25,31 @@ interface Received<T> {
   atMs: number;
 }
 
+/** Full sheet content of this view's character as of `revision`. */
+export interface ReceivedDetails {
+  id: string;
+  revision: number;
+  content: CharacterDetails;
+}
+
+/** New sheet content, else the kept one while the character and its revision stay the same. */
+function receivedDetails(kept: ReceivedDetails | null, encounter: PlayerEncounter | null): ReceivedDetails | null {
+  const sheet = encounter?.sheet;
+  const details = sheet?.details;
+  return sheet && details?.content
+    ? { id: sheet.id, revision: details.revision, content: details.content }
+    : kept && sheet && kept.id === sheet.id && kept.revision === details?.revision
+      ? kept
+      : null;
+}
+
 interface PlayerState {
   map: BattleMap | null;
   mapRevision: number;
   terrain: HeightField | null;
   encounter: PlayerEncounter | null;
+  /** The character's full sheet, kept across encounter messages that carry only its revision. */
+  details: ReceivedDetails | null;
   fog: PlayerFog | null;
   camera: CameraState | null;
   /** Whose eyes this screen sees through, e.g. "Party"; null until the DM says. */
@@ -42,7 +65,20 @@ interface PlayerState {
   rolls: string[];
   /** What the DM shows this view over the map. */
   handout: PlayerHandout | null;
+  /** Chat lines this view may read, oldest first. */
+  chat: PlayerChatLine[];
+  /** Lines that arrived since the chat was last opened. */
+  chatUnread: number;
+  /** The character's notes as the DM stored them; null until the DM sends them. */
+  notes: string | null;
+  /** Latest news from the DM app; `seq` tells repeats of the same text apart. */
+  notice: { text: string; seq: number } | null;
+  /** The character's sheet edits the DM has not answered for good ('approve' mode). */
+  waitingEdits: WaitingEdits;
   receive(payload: SyncPayload): void;
+  markChatRead(): void;
+  /** Notes `edit`, sent while the sheet showed `confirmed` (the same value as an edit), as waiting for the DM. */
+  waitForEdit(edit: SheetEdit, confirmed: SheetEdit): void;
 }
 
 /** Everything the player view knows, built only from messages the DM sent. */
@@ -51,6 +87,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   mapRevision: 0,
   terrain: null,
   encounter: null,
+  details: null,
   fog: null,
   camera: null,
   viewName: null,
@@ -61,6 +98,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   effect: null,
   rolls: [],
   handout: null,
+  chat: [],
+  chatUnread: 0,
+  notes: null,
+  notice: null,
+  waitingEdits: {},
+  markChatRead: () => set({ chatUnread: 0 }),
+  waitForEdit: (edit, confirmed) => set({ waitingEdits: addWaitingEdit(get().waitingEdits, edit, confirmed) }),
   receive: (payload) => {
     switch (payload.type) {
       case 'map':
@@ -74,7 +118,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         }
         break;
       case 'encounter':
-        set({ encounter: payload.encounter });
+        set({ encounter: payload.encounter, details: receivedDetails(get().details, payload.encounter) });
         break;
       case 'fog':
         set({ fog: payload.fog });
@@ -82,9 +126,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       case 'camera':
         set({ camera: payload.camera });
         break;
-      case 'view':
-        set({ viewName: payload.name, viewCombatantId: payload.combatantId ?? null });
+      case 'view': {
+        const viewCombatantId = payload.combatantId ?? null;
+        // Edits of another character are not this sheet's.
+        const waitingEdits = viewCombatantId === get().viewCombatantId ? get().waitingEdits : {};
+        set({ viewName: payload.name, viewCombatantId, waitingEdits });
         break;
+      }
       case 'audio':
         set({ audio: { value: payload.audio, atMs: Date.now() } });
         break;
@@ -109,10 +157,30 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       case 'handout':
         set({ handout: payload.handout });
         break;
+      case 'chatLines': {
+        const kept = payload.reset ? [] : get().chat;
+        const unread = payload.reset ? 0 : get().chatUnread + payload.lines.length;
+        set({ chat: [...kept, ...payload.lines].slice(-CHAT_MAX_LINES), chatUnread: unread });
+        break;
+      }
+      case 'notes':
+        set({ notes: payload.text });
+        break;
+      case 'notice': {
+        const { waitingEdits } = get();
+        set({
+          notice: { text: payload.text, seq: (get().notice?.seq ?? 0) + 1 },
+          waitingEdits: payload.settles ? settleWaitingEdit(waitingEdits, payload.settles) : waitingEdits,
+        });
+        break;
+      }
       case 'hello':
       case 'roll':
       case 'point':
       case 'move':
+      case 'chat':
+      case 'note':
+      case 'sheetEdit':
         break;
     }
   },

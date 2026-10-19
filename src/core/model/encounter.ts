@@ -12,8 +12,8 @@ import { conditionSchema, sensesSchema, sizeSchema } from './creature';
 import { areaMarkerSchema } from './marker';
 import { openingStateSchema } from './map';
 
-export const ENCOUNTER_SCHEMA_VERSION = 7;
-export const CAMPAIGN_SCHEMA_VERSION = 3;
+export const ENCOUNTER_SCHEMA_VERSION = 8;
+export const CAMPAIGN_SCHEMA_VERSION = 4;
 
 export const sideSchema = z.enum(['player', 'ally', 'enemy', 'neutral']);
 export type Side = z.infer<typeof sideSchema>;
@@ -126,6 +126,26 @@ export const logEntrySchema = z.object({
 });
 export type LogEntry = z.infer<typeof logEntrySchema>;
 
+/** Chat lines an encounter keeps; older ones drop off the front. */
+export const CHAT_MAX_LINES = 200;
+export const CHAT_EVERYONE = 'all';
+export const CHAT_TO_DM = 'dm';
+
+export const chatLineSchema = z.object({
+  id: idSchema,
+  at: timestampSchema,
+  /** View that wrote it; null for the DM. */
+  from: idSchema.nullable(),
+  /** Name shown with the line: the character's name, or "DM". */
+  name: z.string(),
+  /** `CHAT_EVERYONE`, `CHAT_TO_DM` (a player's whisper) or the view the DM whispers to. */
+  to: idSchema,
+  /** `roll`: a roll its player shared with everyone. */
+  kind: z.enum(['say', 'roll']),
+  text: z.string(),
+});
+export type ChatLine = z.infer<typeof chatLineSchema>;
+
 export const fogSchema = z.object({
   /** Fog cells per grid square edge. */
   cellsPerSquare: z.number().int().min(1).max(8),
@@ -174,6 +194,8 @@ export const encounterSchema = z.object({
   openingStates: z.record(idSchema, openingStateSchema),
   fog: fogSchema,
   log: z.array(logEntrySchema),
+  /** Chat between the DM and the players' own links, at most `CHAT_MAX_LINES`. */
+  chat: z.array(chatLineSchema),
   notes: z.string(),
   atmosphere: atmosphereSchema,
   /** Players may drag their own character's token; each move reaches the DM as an undoable step. */
@@ -190,10 +212,38 @@ export const partyMemberSchema = z.object({
 });
 export type PartyMember = z.infer<typeof partyMemberSchema>;
 
+export const SHEET_EDIT_MODES = ['off', 'auto', 'approve'] as const;
+export type SheetEditMode = (typeof SHEET_EDIT_MODES)[number];
+
+/**
+ * What a campaign's players get on their own links beyond map and token; each is off until the DM turns it on,
+ * so a table group sees no change. The party view never shows any of it.
+ */
+export const playerFeaturesSchema = z.object({
+  /** Players may upload pictures for the DM to review. */
+  uploads: z.boolean(),
+  /** Players see their full character sheet. */
+  sheets: z.boolean(),
+  /** Players chat with everyone or whisper to the DM. */
+  chat: z.boolean(),
+  /** Players may show a roll to every character view and the chat. */
+  sharedRolls: z.boolean(),
+  /** Players keep private notes the DM stores and may read. */
+  playerNotes: z.boolean(),
+  /** Players change their sheet's play values: never, at once, or after the DM accepts. */
+  sheetEdits: z.enum(SHEET_EDIT_MODES),
+});
+export type PlayerFeatures = z.infer<typeof playerFeaturesSchema>;
+
+export function noPlayerFeatures(): PlayerFeatures {
+  return { uploads: false, sheets: false, chat: false, sharedRolls: false, playerNotes: false, sheetEdits: 'off' };
+}
+
 export const campaignSchema = z.object({
   ...docHeader('campaign'),
   notes: z.string(),
   party: z.array(partyMemberSchema),
+  playerFeatures: playerFeaturesSchema,
 });
 export type Campaign = z.infer<typeof campaignSchema>;
 

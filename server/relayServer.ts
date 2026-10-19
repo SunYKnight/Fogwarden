@@ -1,14 +1,20 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, rm, stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
+import { PARTY_VIEW } from '@/core/model';
 import { rebuildPlayerMessage } from '@/sync/protocol';
 import {
   fileExtension,
+  isPlayerUploadName,
   parseViewFrame,
+  PLAYER_UPLOAD_MAX_PENDING,
+  PLAYER_UPLOAD_TYPES,
+  playerUploadSchema,
   RELAY_API_VERSION,
   RELAY_ASSET_TYPES,
   RELAY_BUNDLE_TYPES,
@@ -20,8 +26,10 @@ import {
   RELAY_TOKEN_COOKIE,
   relayLinksSchema,
   relayMissingRequestSchema,
+  type PlayerUpload,
   type RelaySession,
   type RelayStatus,
+  type RelayUploads,
   viewFrame,
 } from '@/sync/relayApi';
 import { containedPath, FileStore, HttpError } from './store';
@@ -45,6 +53,8 @@ const CLOSE_POLICY = 1008;
 const CLOSE_UNSUPPORTED = 1003;
 const CLOSE_AGAIN = 1013;
 const LINKS_FILE = 'links.json';
+/** `<view>/<id>` holds a player's picture, `<view>/<id>.json` its `PlayerUpload` record. */
+const UPLOADS_DIR = 'player-uploads';
 
 /**
  * The single range of a `Range: bytes=…` header (Safari needs ranges to play audio and video); null without
@@ -140,6 +150,8 @@ function decodeSegment(segment: string): string {
  * uploads assets and the player bundle; the relay never sees anything the DM's player filter removed. Each
  * player link token shows one view; the DM addresses every frame to views and the relay forwards it only to
  * players of those views. The links live in `dataDir/links.json`, so players get in while the DM is away.
+ * Character views the DM allows may upload pictures; they wait in `dataDir/player-uploads/` for the DM app,
+ * which alone fetches and deletes them, so no player ever sees another player's upload through the relay.
  */
 export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Relay> {
   if (dmKey.length < 32) {
@@ -147,7 +159,13 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
   }
   const store = new FileStore(dataDir);
   const saved = await store.readText(LINKS_FILE);
-  let links = new Map(Object.entries(saved === null ? {} : relayLinksSchema.parse(JSON.parse(saved)).links));
+  const savedLinks = relayLinksSchema.parse(saved === null ? { links: {} } : JSON.parse(saved));
+  let links = new Map(Object.entries(savedLinks.links));
+  let uploadViews = new Set(savedLinks.uploads);
+  const uploads = await loadUploads(store);
+  // Uploads of a view still streaming in, counted against its limit.
+  const receiving = new Map<string, number>();
+  const uploadRates = new Map<string, () => boolean>();
   const dmSockets = new WebSocketServer({
     noServer: true,
     maxPayload: DM_MESSAGE_LIMIT,
@@ -170,12 +188,14 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
     }
   };
 
-  const tellDms = (status: RelayStatus | string) => {
-    const text = typeof status === 'string' ? status : JSON.stringify(status);
+  const tellDms = (notice: RelayStatus | RelayUploads | string) => {
+    const text = typeof notice === 'string' ? notice : JSON.stringify(notice);
     for (const dm of dmSockets.clients) {
       dm.send(text);
     }
   };
+
+  const uploadsFrame = (): RelayUploads => ({ uploads: [...uploads.values()].sort((a, b) => a.at - b.at) });
 
   const status = (): RelayStatus => {
     const views = new Map<string, number>();
@@ -186,8 +206,14 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
     return { relay: { players: players.size, views: Object.fromEntries(views) } };
   };
 
-  const replaceLinks = (next: Map<string, string>) => {
+  const replaceLinks = (next: Map<string, string>, nextUploads: Set<string>) => {
     links = next;
+    uploadViews = nextUploads;
+    for (const token of uploadRates.keys()) {
+      if (!links.has(token)) {
+        uploadRates.delete(token);
+      }
+    }
     for (const [socket, { token, view }] of players) {
       const current = links.get(token);
       if (current !== view) {
@@ -299,7 +325,7 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
     await store.writeText(LINKS_FILE, JSON.stringify(body));
     response.writeHead(204);
     response.end();
-    replaceLinks(new Map(Object.entries(body.links)));
+    replaceLinks(new Map(Object.entries(body.links)), new Set(body.uploads));
   };
 
   const missing: Handler = async ({ request, response }) => {
@@ -331,6 +357,73 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
       response.end();
     };
 
+  const pictureFile = (upload: PlayerUpload) => store.file(UPLOADS_DIR, upload.view, upload.id);
+
+  // One picture per request, streamed to disk; only its first bytes are
+  // read here, the DM app checks the picture itself.
+  const playerUpload: Handler = async ({ request, response, url, rest }) => {
+    const token = url.searchParams.get('token') ?? '';
+    requirePlayer(token);
+    const view = links.get(token)!;
+    const [name = ''] = rest;
+    const waiting = [...uploads.values()].filter((u) => u.view === view).length + (receiving.get(view) ?? 0);
+    const allowed = uploadRates.get(token) ?? playerRateLimit();
+    uploadRates.set(token, allowed);
+    // Every attempt counts against the rate, refused ones too.
+    const refusals: [boolean, number, string][] = [
+      [!allowed(), 429, 'too many uploads, wait a moment'],
+      [rest.length !== 1 || !isPlayerUploadName(name), 400, `invalid file name: ${rest.join('/')}`],
+      [view === PARTY_VIEW, 403, 'the party view cannot upload'],
+      [!uploadViews.has(view), 403, 'the DM does not take pictures from players'],
+      [waiting >= PLAYER_UPLOAD_MAX_PENDING, 429, `${PLAYER_UPLOAD_MAX_PENDING} pictures already wait for the DM`],
+    ];
+    const refused = refusals.find(([refuse]) => refuse);
+    if (refused) {
+      throw new HttpError(refused[1], refused[2]);
+    }
+    const id = randomBytes(16).toString('hex');
+    receiving.set(view, (receiving.get(view) ?? 0) + 1);
+    try {
+      const { type, size } = await store.receivePicture(request, store.file(UPLOADS_DIR, view, id));
+      const upload: PlayerUpload = { id, view, name, type, size, at: Date.now() };
+      await store.writeText(join(UPLOADS_DIR, view, `${id}.json`), JSON.stringify(upload));
+      uploads.set(id, upload);
+    } finally {
+      receiving.set(view, receiving.get(view)! - 1);
+    }
+    tellDms(uploadsFrame());
+    send(response, 201, JSON.stringify({ id }), 'application/json');
+  };
+
+  const uploadOf = (rest: string[]) => (rest.length === 1 ? uploads.get(rest[0]!) : undefined);
+
+  const fetchUpload: Handler = (req) => {
+    requireDm(req.request);
+    const upload = uploadOf(req.rest);
+    if (!upload) {
+      throw new HttpError(404, 'no such upload');
+    }
+    return serveFile(req, pictureFile(upload), {
+      'content-type': PLAYER_UPLOAD_TYPES[upload.type],
+      'cache-control': 'no-store',
+    });
+  };
+
+  // Repeating a delete whose answer got lost is no error.
+  const deleteUpload: Handler = async ({ request, response, rest }) => {
+    requireDm(request);
+    const upload = uploadOf(rest);
+    if (upload) {
+      uploads.delete(upload.id);
+      // The record goes first: a picture without one is removed on start.
+      await rm(store.file(UPLOADS_DIR, upload.view, `${upload.id}.json`), { force: true });
+      await rm(pictureFile(upload), { force: true });
+      tellDms(uploadsFrame());
+    }
+    response.writeHead(204);
+    response.end();
+  };
+
   // The DM app's connection test calls this cross-origin from its webview.
   const health: Handler = async ({ response }) => {
     response.setHeader('access-control-allow-origin', '*');
@@ -349,6 +442,9 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
     'POST /api/missing': { segments: 2, handler: missing },
     'PUT /api/asset': { segments: 2, handler: upload('asset') },
     'PUT /api/bundle': { segments: 2, handler: upload('bundle') },
+    'PUT /api/player-upload': { segments: 2, handler: playerUpload },
+    'GET /api/player-upload': { segments: 2, handler: fetchUpload },
+    'DELETE /api/player-upload': { segments: 2, handler: deleteUpload },
   };
 
   const dispatch = async (request: IncomingMessage, response: ServerResponse) => {
@@ -365,7 +461,7 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
     }
     if (api && method === 'OPTIONS') {
       response.writeHead(204, {
-        'access-control-allow-methods': 'GET, POST, PUT',
+        'access-control-allow-methods': 'GET, POST, PUT, DELETE',
         'access-control-allow-headers': `authorization, content-type, ${RELAY_HASH_HEADER}`,
         'access-control-max-age': '600',
       });
@@ -408,6 +504,7 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
   dmSockets.on('connection', (socket) => {
     watch(socket);
     socket.send(JSON.stringify(status()));
+    socket.send(JSON.stringify(uploadsFrame()));
     socket.on('message', (data: RawData, isBinary: boolean) => {
       // Only the view list is decoded; the message, up to several MB, goes
       // out as the very bytes received.
@@ -507,7 +604,27 @@ export async function createRelay({ dmKey, dataDir }: RelayOptions): Promise<Rel
   return { server, close };
 }
 
-/** Token bucket of one player socket: true while the player stays within its message rate. */
+/**
+ * The waiting player uploads, from their records in `player-uploads/<view>/`. A picture without a record is left
+ * over from a crash between writing the two and goes.
+ */
+async function loadUploads(store: FileStore): Promise<Map<string, PlayerUpload>> {
+  const found = new Map<string, PlayerUpload>();
+  for (const view of await store.list(store.file(UPLOADS_DIR))) {
+    const dir = store.file(UPLOADS_DIR, view);
+    const names = await store.list(dir);
+    const records = names.filter((name) => name.endsWith('.json'));
+    for (const record of records) {
+      const upload = playerUploadSchema.parse(JSON.parse(await readFile(join(dir, record), 'utf8')));
+      found.set(upload.id, upload);
+    }
+    const orphans = names.filter((name) => !name.endsWith('.json') && !records.includes(`${name}.json`));
+    await Promise.all(orphans.map((name) => rm(join(dir, name), { force: true })));
+  }
+  return found;
+}
+
+/** Token bucket of one player socket or one link's uploads: true while the player stays within its rate. */
 function playerRateLimit(): () => boolean {
   let tokens = PLAYER_BURST;
   let at = Date.now();

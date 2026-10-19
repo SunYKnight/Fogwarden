@@ -170,15 +170,10 @@ describe('RelayUploader against the relay', () => {
   it('uploads the player bundle with the page last and only changed files later', async () => {
     const bundle: Record<string, Uint8Array<ArrayBuffer>> = {
       'assets/player-1.js': encode('chunk'),
-      'player.html': encode('<script src="/assets/player-1.js"></script>'),
+      // As the desktop app serves it: rewritten after the build (CSP).
+      'player.html': encode('<meta http-equiv="Content-Security-Policy"><script src="/assets/player-1.js"></script>'),
     };
-    const sha = async (bytes: Uint8Array<ArrayBuffer>) =>
-      Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
-    const manifest: PlayerBundle = {
-      files: await Promise.all(
-        Object.entries(bundle).map(async ([path, bytes]) => ({ path, sha256: await sha(bytes) })),
-      ),
-    };
+    const manifest: PlayerBundle = { files: Object.keys(bundle).map((path) => ({ path })) };
     const readFile = (path: string) =>
       Promise.resolve(path === 'player-bundle.json' ? encode(JSON.stringify(manifest)) : (bundle[path] ?? encode('')));
 

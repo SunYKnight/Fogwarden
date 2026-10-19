@@ -7,6 +7,7 @@ import {
   createEncounter,
   createMap,
   defaultSettings,
+  emptyPlayerSheet,
   type BattleMap,
   type Encounter,
 } from '@/core/model';
@@ -238,6 +239,47 @@ describe('Repository campaigns and encounters', () => {
     expect(text(storage, `campaigns/${campaign.id}/campaign.json`)).not.toContain('notes');
     storage.files.data.set(campaignNotesPath(campaign.id), 'Edited by hand');
     expect((await repository.listCampaigns()).campaigns[0]!.notes).toBe('Edited by hand');
+  });
+
+  it("keeps a player's notes and sheet changes in the campaign's players folder", async () => {
+    const { storage, repository } = setup();
+    expect(await repository.loadPlayerNotes('saga', 'thorin')).toBe('');
+    expect(await repository.loadPlayerSheet('saga', 'thorin')).toEqual(emptyPlayerSheet());
+    await repository.storePlayerNotes('saga', 'thorin', '# Clues\n\nThe mayor lies.');
+    expect(text(storage, 'campaigns/saga/players/thorin/notes.md')).toBe('# Clues\n\nThe mayor lies.');
+    expect(await repository.loadPlayerNotes('saga', 'thorin')).toBe('# Clues\n\nThe mayor lies.');
+    const overlay = {
+      ...emptyPlayerSheet(),
+      hitDiceUsed: 2,
+      inventory: { '0': { name: 'Rope', quantity: 1, equipped: false } },
+      currency: { gp: 12 },
+      session: { hp: 7, tempHp: 3, slotsUsed: { '1': 2 }, deathSaves: { successes: 0, failures: 0 } },
+    };
+    await repository.storePlayerSheet('saga', 'thorin', overlay);
+    expect(await repository.loadPlayerSheet('saga', 'thorin')).toEqual(overlay);
+    expect(await repository.loadPlayerNotes('saga', 'anna')).toBe('');
+  });
+
+  it("keeps a player's sheet edits waiting for the DM in pending.json", async () => {
+    const { storage, repository } = setup();
+    expect(await repository.loadPlayerPending('saga', 'thorin')).toEqual([]);
+    const edits = [
+      { id: 'e1', edit: { field: 'hp', value: 7 }, text: 'Thorin: HP 12 → 7', before: '12' },
+      { id: 'e2', edit: { field: 'currency', coin: 'gp', value: 9 }, text: 'Thorin: gp 12 → 9', before: '12' },
+    ] as const;
+    await repository.storePlayerPending('saga', 'thorin', edits);
+    expect(JSON.parse(text(storage, 'campaigns/saga/players/thorin/pending.json'))).toMatchObject({
+      schema: 'player-pending',
+      version: 1,
+    });
+    expect(await repository.loadPlayerPending('saga', 'thorin')).toEqual(edits);
+  });
+
+  it('reads a sheet.json written before session state existed as rested', async () => {
+    const { storage, repository } = setup();
+    const { session: _session, ...older } = emptyPlayerSheet();
+    storage.files.data.set('campaigns/saga/players/thorin/sheet.json', JSON.stringify({ ...older, hitDiceUsed: 1 }));
+    expect(await repository.loadPlayerSheet('saga', 'thorin')).toEqual({ ...emptyPlayerSheet(), hitDiceUsed: 1 });
   });
 
   it('stores fog as black-and-white masks in the encounter folder and drops stale ones', async () => {

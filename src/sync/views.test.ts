@@ -4,6 +4,7 @@ import {
   createCreature,
   createEncounter,
   defaultSettings,
+  noPlayerFeatures,
   PARTY_VIEW,
   type Encounter,
 } from '@/core/model';
@@ -12,8 +13,17 @@ import { Repository } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { addParty, createPc } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
+import { resetPlayerData, usePlayerDataStore } from './playerData';
 import { RELAY_TOKEN_PATTERN } from './relayApi';
-import { linkTable, linkToken, playerViews, startViewLinks, useViewLinksStore } from './views';
+import {
+  campaignSaved,
+  linkTable,
+  linkToken,
+  playerViews,
+  startViewLinks,
+  uploadViews,
+  useViewLinksStore,
+} from './views';
 
 const SECRET = 'f'.repeat(64);
 
@@ -83,10 +93,13 @@ describe('startViewLinks', () => {
       repository: new Repository(new MemoryStorage()),
       settings: { ...settings, playerLinks: { secret: SECRET, rotations: {} } },
     });
-    useViewLinksStore.setState({ views: [], linked: [], tokens: {} });
+    useViewLinksStore.setState({ views: [], linked: [], tokens: {}, campaignId: null });
   });
 
-  afterEach(() => useEncounterStore.getState().close());
+  afterEach(() => {
+    useEncounterStore.getState().close();
+    resetPlayerData();
+  });
 
   it("keeps a character's link while the character sits out an encounter of the campaign", async () => {
     const thorin = createPc({ name: 'Thorin', armorClass: 18, maxHp: 28, senses: {}, visionSource: true });
@@ -125,6 +138,47 @@ describe('startViewLinks', () => {
       useAppStore.setState({ route: { page: 'maps' } });
       const ben = await linkToken(SECRET, 'ben', 0);
       await vi.waitFor(() => expect(linkTable(useViewLinksStore.getState())[ben]).toBe('ben'));
+    } finally {
+      stop();
+    }
+  });
+
+  it("loads the waiting sheet edits of the open campaign's party before its players are back", async () => {
+    const { repository } = useAppStore.getState();
+    const member = { id: 'anna', creature: { area: 'data', id: 'c-anna' }, player: 'Anna' } as const;
+    const campaign = { ...createCampaign('Red Hand'), party: [member] };
+    await repository.storeCampaign(campaign);
+    const edit = { id: 'e1', edit: { field: 'hp', value: 3 }, text: 'Anna: HP 9 → 3', before: '9' } as const;
+    await repository.storePlayerPending(campaign.id, 'anna', [edit]);
+    useEncounterStore.getState().open(createEncounter('Ambush', campaign.id, null), null);
+    const stop = startViewLinks();
+    try {
+      await vi.waitFor(() => expect(usePlayerDataStore.getState().pending).toEqual([{ ...edit, view: 'anna' }]));
+    } finally {
+      stop();
+    }
+  });
+
+  it("follows the campaign's player features and lets only its characters upload while they are on", async () => {
+    const { repository } = useAppStore.getState();
+    const member = { id: 'anna', creature: { area: 'data', id: 'c-anna' }, player: 'Anna' } as const;
+    const features = { ...noPlayerFeatures(), uploads: true };
+    const campaign = { ...createCampaign('Red Hand'), party: [member], playerFeatures: features };
+    await repository.storeCampaign(campaign);
+    useEncounterStore.getState().open(createEncounter('Ambush', campaign.id, null), null);
+    const stop = startViewLinks();
+    try {
+      await vi.waitFor(() => expect(useViewLinksStore.getState().features).toEqual(features));
+      await vi.waitFor(() => expect(uploadViews(useViewLinksStore.getState())).toEqual(['anna']));
+
+      campaignSaved({ ...campaign, playerFeatures: noPlayerFeatures() });
+      expect(uploadViews(useViewLinksStore.getState())).toEqual([]);
+      // Another campaign's switches never apply to the linked one.
+      campaignSaved({ ...campaign, id: 'other', playerFeatures: features });
+      expect(useViewLinksStore.getState().features.uploads).toBe(false);
+
+      useEncounterStore.getState().open(createEncounter('Elsewhere', 'c2', null), null);
+      expect(useViewLinksStore.getState()).toMatchObject({ campaignId: 'c2', features: { uploads: false } });
     } finally {
       stop();
     }

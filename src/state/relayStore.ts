@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { errorMessage } from '@/core/errors';
 import type { AssetRef } from '@/core/model';
 import { fetchRelaySession, pushRelayLinks, relayBaseUrl, RelayTransport, RelayUploader } from '@/sync/relayClient';
-import { linkTable, useViewLinksStore } from '@/sync/views';
+import { linkTable, uploadViews, useViewLinksStore } from '@/sync/views';
 import { useAppStore } from './appStore';
 
 /** `connecting`: checking the key and uploading the player page; `reconnecting`: the socket dropped. */
@@ -64,13 +64,15 @@ export const useRelayStore = create<RelayState>((set, get) => {
         const session = await fetchRelaySession(baseUrl, dmKey);
         const uploader = new RelayUploader(baseUrl, dmKey, readAsset);
         await uploader.uploadBundle(readFrontendFile);
-        await pushRelayLinks(baseUrl, dmKey, linkTable(useViewLinksStore.getState()));
+        const push = () => {
+          const links = useViewLinksStore.getState();
+          return pushRelayLinks(baseUrl, dmKey, linkTable(links), uploadViews(links));
+        };
+        await push();
         if (mine === attempt) {
           const transport = new RelayTransport(baseUrl, dmKey, uploader, reportError);
           const pushLinks = () => {
-            pushes = pushes
-              .then(() => pushRelayLinks(baseUrl, dmKey, linkTable(useViewLinksStore.getState())))
-              .catch(reportError);
+            pushes = pushes.then(push).catch(reportError);
           };
           unsubscribers = [
             transport.watchConnection((open) => {
@@ -80,7 +82,8 @@ export const useRelayStore = create<RelayState>((set, get) => {
             }),
             transport.watchStatus(({ players }) => set({ players })),
             useViewLinksStore.subscribe((state, previous) => {
-              if (state.tokens !== previous.tokens || state.linked !== previous.linked) pushLinks();
+              const changed = state.tokens !== previous.tokens || state.linked !== previous.linked;
+              if (changed || state.features !== previous.features) pushLinks();
             }),
           ];
           set({ transport, players: session.players, baseUrl });

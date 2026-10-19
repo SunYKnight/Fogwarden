@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { slug } from '@/core/import/ids';
-import { resolveTokenAsset, type AssetRef, type Combatant, type LibraryKind } from '@/core/model';
+import { resolveTokenAsset, type AssetRef, type CharacterSheet, type Combatant, type LibraryKind } from '@/core/model';
 import {
   LIBRARY_KINDS,
   type LibraryDocs,
@@ -30,6 +30,11 @@ interface LibraryState {
   /** Installed packs in precedence order (My content first) and problems reading them. */
   packs: PackInfo[];
   packProblems: LoadProblem[];
+  /**
+   * Player characters' sheet files by creature id, loaded with the creature listing; characters without one
+   * get a sheet derived from their stat block (`sheetFromCreature`).
+   */
+  characterSheets: Record<string, CharacterSheet>;
   refresh(kind: LibraryKind): Promise<void>;
   refreshPacks(): Promise<void>;
   /** Every listing and the packs; after pack changes, which touch every kind. */
@@ -104,17 +109,27 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   loading: { creature: false, marker: false, map: false, table: false, item: false, spell: false },
   packs: [],
   packProblems: [],
+  characterSheets: {},
 
   refresh: async (kind) => {
     const mine = ++latestRefresh[kind];
     set((s) => ({ loading: { ...s.loading, [kind]: true } }));
     try {
       const { repository } = useAppStore.getState();
-      const [listing, sources] = await Promise.all([repository.list(kind), repository.librarySources()]);
+      const [listing, sources, sheets] = await Promise.all([
+        repository.list(kind),
+        repository.librarySources(),
+        kind === 'creature' ? repository.characterSheets() : null,
+      ]);
       const order = sources.map((s) => s.pack);
-      const shown = withDuplicates(kind, listing, order, repository.packSettings.hideDuplicates);
+      // Unreadable sheets show among the creatures' load problems.
+      const full = sheets ? { ...listing, problems: [...listing.problems, ...sheets.problems] } : listing;
+      const shown = withDuplicates(kind, full, order, repository.packSettings.hideDuplicates);
       if (mine === latestRefresh[kind]) {
-        set((s) => ({ listings: { ...s.listings, [kind]: shown } }));
+        set((s) => ({
+          listings: { ...s.listings, [kind]: shown },
+          ...(sheets && { characterSheets: sheets.sheets }),
+        }));
       }
     } finally {
       if (mine === latestRefresh[kind]) {

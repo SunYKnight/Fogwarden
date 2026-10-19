@@ -3,6 +3,7 @@ import { getCurrentWindow, type CloseRequestedEvent } from '@tauri-apps/api/wind
 import { useEffect, useState, type ReactNode } from 'react';
 import { PARTY_VIEW } from '@/core/model';
 import { startDmSound } from '@/sound/dmSound';
+import { reloadSounds } from '@/sound/soundStore';
 import { useAppStore, type Route } from '@/state/appStore';
 import { flushEncounter, flushMap, startAutosave } from '@/state/autosave';
 import { useEditorStore } from '@/state/editorStore';
@@ -11,16 +12,20 @@ import { startCalendarSync } from '@/state/calendarStore';
 import { startJournalRecorder } from '@/state/journalRecorder';
 import { useLanStore } from '@/state/lanStore';
 import { useLibraryStore } from '@/state/libraryStore';
+import { startPlayerUploads } from '@/state/playerUploadStore';
 import { useRelayStore } from '@/state/relayStore';
 import { startAutoUpdateCheck } from '@/state/updateStore';
 import { startAtmospherePublisher } from '@/sync/atmospherePublisher';
+import { startDmMirrorPublisher, startRemoteDm, useRemoteDmStore } from '@/sync/dmMirror';
 import { startDmPublisher } from '@/sync/dmPublisher';
 import { startFogTracker } from '@/sync/fogTracker';
+import { flushPartySessions, startPartySessions } from '@/sync/partySession';
 import { createLocalTransport, LocalViewTransport } from '@/sync/transports';
 import { startViewLinks, useViewLinksStore } from '@/sync/views';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CreatureEditorPage } from './creature/CreatureEditorPage';
 import { MapEditorPage } from './editor/MapEditorPage';
+import { changeMap } from './encounter/ChangeMapDialog';
 import { useActiveEncounter } from './encounter/useActiveEncounter';
 import { HomePage } from './home/HomePage';
 import { ConfirmHost, ContextMenuHost, ShortcutHost, ToastHost } from './kit';
@@ -34,6 +39,7 @@ import { refreshPlayerWindowState, usePlayerWindowStore } from './playerWindow';
 import { SettingsPage } from './settings/SettingsPage';
 import { CommandPalette } from './shell/CommandPalette';
 import { NavRail } from './shell/NavRail';
+import { RemoteDmBanner } from './shell/RemoteDmBanner';
 
 function Page({ route }: { route: Route }) {
   let page: ReactNode;
@@ -79,7 +85,7 @@ async function confirmClose(event: CloseRequestedEvent): Promise<void> {
   try {
     const leave = leaveGuard ? await leaveGuard() : true;
     if (leave) {
-      await Promise.all([flushMap(), flushEncounter()]);
+      await Promise.all([flushMap(), flushEncounter(), flushPartySessions()]);
     } else {
       event.preventDefault();
     }
@@ -96,14 +102,16 @@ function warnUnsaved(event: BeforeUnloadEvent): void {
   const encounter = useEncounterStore.getState();
   if (editor.revision !== editor.savedRevision || encounter.revision !== encounter.savedRevision) {
     event.preventDefault();
-    Promise.all([flushMap(), flushEncounter()]).catch(useAppStore.getState().reportError);
+    Promise.all([flushMap(), flushEncounter(), flushPartySessions()]).catch(useAppStore.getState().reportError);
   }
 }
 
-export function DmApp() {
-  const route = useAppStore((s) => s.route);
+/**
+ * What the desktop app runs as the authority: it loads and saves the encounter, computes fog, records the
+ * journal, plays the sound and publishes to the player views and the remote DMs.
+ */
+function DesktopServices() {
   const reportError = useAppStore((s) => s.reportError);
-  const [ready, setReady] = useState(false);
   const [local] = useState(() => new LocalViewTransport(createLocalTransport('dm')));
   const lan = useLanStore((s) => s.transport);
   const relay = useRelayStore((s) => s.transport);
@@ -115,8 +123,10 @@ export function DmApp() {
   useActiveEncounter();
   useEffect(() => startFogTracker(), []);
   useEffect(() => startViewLinks(), []);
+  useEffect(() => startPlayerUploads(), []);
   useEffect(() => startCalendarSync(), []);
   useEffect(() => startJournalRecorder(), []);
+  useEffect(() => startPartySessions(), []);
   useEffect(() => startDmSound(), []);
   // Browser builds have no updater; they are served, not installed.
   useEffect(() => (isTauri() ? startAutoUpdateCheck() : undefined), []);
@@ -127,16 +137,38 @@ export function DmApp() {
     () => startAtmospherePublisher([local, ...(lan ? [lan] : []), ...(relay ? [relay] : [])]),
     [local, lan, relay],
   );
+  useEffect(() => (lan ? startDmMirrorPublisher(lan.remoteDms, { changeMap }) : undefined), [lan]);
   useEffect(() => {
     useLanStore.getState().refresh().catch(reportError);
     refreshPlayerWindowState().catch(reportError);
   }, [reportError]);
+  return null;
+}
+
+/**
+ * What a remote DM runs: the mirror of the desktop app it controls. The desktop does everything else, so
+ * nothing here writes the encounter, computes fog or reaches players.
+ */
+function RemoteDmServices() {
+  const generation = useRemoteDmStore((s) => s.generation);
+  // A new generation is a new connection: the banner's Reconnect.
+  useEffect(() => startRemoteDm(), [generation]);
+  return null;
+}
+
+export function DmApp() {
+  const route = useAppStore((s) => s.route);
+  const reportError = useAppStore((s) => s.reportError);
+  const [ready, setReady] = useState(false);
+  const remoteHost = useRemoteDmStore((s) => s.host);
 
   useEffect(() => {
+    // The desktop's sound runs in its dmSound; a remote DM lists the library.
+    const sounds = () => (useRemoteDmStore.getState().host === null ? undefined : reloadSounds());
     useAppStore
       .getState()
       .init()
-      .then(() => useLibraryStore.getState().refreshAll())
+      .then(() => Promise.all([useLibraryStore.getState().refreshAll(), sounds()]))
       .then(() => setReady(true), reportError);
     const stop = startAutosave();
     return () => {
@@ -160,8 +192,10 @@ export function DmApp() {
 
   return (
     <div className="shell">
+      {remoteHost === null ? <DesktopServices /> : <RemoteDmServices />}
       <NavRail />
       <main className="shell-main">
+        {remoteHost !== null && <RemoteDmBanner host={remoteHost} />}
         {ready ? (
           <ErrorBoundary resetKey={JSON.stringify(route)}>
             <Page route={route} />

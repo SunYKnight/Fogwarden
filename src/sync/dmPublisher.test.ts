@@ -1,13 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BitSet } from '@/core/binary';
-import { createEncounter, createMap, PARTY_VIEW, type Combatant } from '@/core/model';
+import { createCreature, createEncounter, createMap, noPlayerFeatures, PARTY_VIEW, type Combatant } from '@/core/model';
+import { sheetFromCreature } from '@/core/rules/characterSheet';
 import { FOG_VISIBLE, fogSize, viewFog, type FogSources } from '@/core/vision/fog';
+import { MemoryStorage } from '@/data/memoryStorage';
+import { Repository } from '@/data/repository';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
 import { useAppStore } from '@/state/appStore';
 import { createPc } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
+import { useLibraryStore } from '@/state/libraryStore';
 import { usePingStore } from '@/state/pingStore';
+import { appendChat, chatLine, DM_NAME } from './chat';
 import { startDmPublisher } from './dmPublisher';
+import { resetPlayerData } from './playerData';
 import type { DmTransport, PlayerRequest, SyncPayload } from './protocol';
 import { useViewLinksStore } from './views';
 
@@ -103,6 +109,71 @@ beforeEach(() => {
 afterEach(() => {
   stop();
   useEncounterStore.getState().close();
+  useViewLinksStore.setState({ campaignId: null, features: noPlayerFeatures() });
+  resetPlayerData();
+});
+
+/** Every chat line text a view got, in order. */
+function chatOf(transport: FakeTransport, view: string): string[] {
+  return transport.sent
+    .filter((s) => s.views.includes(view))
+    .flatMap((s) => (s.payload.type === 'chatLines' ? s.payload.lines.map((l) => l.text) : []));
+}
+
+describe('player chat and notes', () => {
+  const views = () => [PARTY_VIEW, thorin.id, elara.id];
+
+  it('keeps whispers between their view and the DM and gives the party view no chat', () => {
+    useViewLinksStore.setState({ features: { ...noPlayerFeatures(), chat: true, sharedRolls: true } });
+    const transport = new FakeTransport(views());
+    stop = startDmPublisher([transport]);
+    transport.request(thorin.id, { type: 'chat', text: 'I pocket the gem', to: 'dm' });
+    transport.request(elara.id, { type: 'chat', text: ' Hello all ', to: 'all' });
+    useEncounterStore.getState().update((d) => appendChat(d, chatLine(null, DM_NAME, elara.id, 'say', 'Psst')));
+    transport.request(thorin.id, { type: 'roll', dice: '1d1', mode: 'normal', label: '', share: true });
+    const roll = 'Thorin rolls 1d1: 1 (1d1 [1] = 1)';
+    expect(chatOf(transport, thorin.id)).toEqual(['I pocket the gem', 'Hello all', roll]);
+    expect(chatOf(transport, elara.id)).toEqual(['Hello all', 'Psst', roll]);
+    expect(chatOf(transport, PARTY_VIEW)).toEqual([]);
+    expect(transport.lastOf(elara.id, 'chatLines')?.lines[0]).toMatchObject({ by: 'Thorin', kind: 'roll' });
+
+    transport.request(PARTY_VIEW, { type: 'chat', text: 'Party here', to: 'all' });
+    transport.hello(PARTY_VIEW);
+    transport.hello(elara.id);
+    expect(chatOf(transport, PARTY_VIEW)).toEqual([]);
+    expect(transport.lastOf(elara.id, 'chatLines')).toMatchObject({ reset: true });
+    expect(useEncounterStore.getState().encounter?.chat).toHaveLength(4);
+  });
+
+  it('refuses chat and shares no rolls while the campaign has them off', () => {
+    const notify = vi.spyOn(useAppStore.getState(), 'notify').mockImplementation(() => undefined);
+    const transport = new FakeTransport(views());
+    stop = startDmPublisher([transport]);
+    transport.request(thorin.id, { type: 'chat', text: 'Hi', to: 'all' });
+    transport.request(thorin.id, { type: 'roll', dice: '1d1', mode: 'normal', label: '', share: true });
+    expect(useEncounterStore.getState().encounter?.chat).toEqual([]);
+    expect(transport.lastOf(thorin.id, 'notice')?.text).toBe('Not done: the campaign has no chat');
+    expect(chatOf(transport, elara.id)).toEqual([]);
+    notify.mockRestore();
+  });
+
+  it("keeps a player's notes for that view alone and none for the party view", async () => {
+    useAppStore.setState({ repository: new Repository(new MemoryStorage()) });
+    const notify = vi.spyOn(useAppStore.getState(), 'notify').mockImplementation(() => undefined);
+    useViewLinksStore.setState({ campaignId: 'c1', features: { ...noPlayerFeatures(), playerNotes: true } });
+    const transport = new FakeTransport(views());
+    stop = startDmPublisher([transport]);
+    transport.request(thorin.id, { type: 'note', text: 'The mayor lies.' });
+    transport.request(PARTY_VIEW, { type: 'note', text: 'Party notes' });
+    expect(transport.lastOf(thorin.id, 'notes')?.text).toBe('The mayor lies.');
+    expect(transport.lastOf(elara.id, 'notes')?.text).not.toBe('The mayor lies.');
+    expect(transport.lastOf(PARTY_VIEW, 'notes')).toBeUndefined();
+    expect(transport.lastOf(PARTY_VIEW, 'notice')?.text).toBe('Not done: the view keeps no notes');
+    const { repository } = useAppStore.getState();
+    await vi.waitFor(async () => expect(await repository.loadPlayerNotes('c1', thorin.id)).toBe('The mayor lies.'));
+    expect(await repository.loadPlayerNotes('c1', PARTY_VIEW)).toBe('');
+    notify.mockRestore();
+  });
 });
 
 describe('startDmPublisher', () => {
@@ -166,6 +237,66 @@ describe('startDmPublisher', () => {
     expect(transport.lastOf(PARTY_VIEW, 'encounter')?.encounter?.sheet).toBeUndefined();
   });
 
+  describe('full sheets', () => {
+    const library = useLibraryStore.getState();
+    const creature = { ...createCreature('Thorin'), id: 'thorin', kind: 'player' as const };
+    const sheet = { ...sheetFromCreature(creature), backstory: 'Swore an oath only Thorin knows.' };
+    const sentTo = (transport: FakeTransport, view: string) =>
+      JSON.stringify(transport.sent.filter((s) => s.views.includes(view)));
+
+    beforeEach(() => {
+      useEncounterStore.getState().update((d) => void (d.combatants[0]!.creature = { area: 'data', id: 'thorin' }));
+      const entry = { ref: { area: 'data' as const, id: 'thorin' }, doc: creature, pack: 'library', overrides: [] };
+      useLibraryStore.setState({
+        listings: { ...library.listings, creature: { ...library.listings.creature, entries: [entry] } },
+        characterSheets: { thorin: sheet },
+      });
+      useViewLinksStore.setState({ features: { ...useViewLinksStore.getState().features, sheets: true } });
+    });
+
+    afterEach(() => {
+      useLibraryStore.setState({ listings: library.listings, characterSheets: library.characterSheets });
+      useViewLinksStore.setState({ features: { ...useViewLinksStore.getState().features, sheets: false } });
+    });
+
+    it("go to that character's view only, never to another view or the party", () => {
+      const transport = new FakeTransport([PARTY_VIEW, thorin.id, elara.id]);
+      stop = startDmPublisher([transport]);
+      const details = transport.lastOf(thorin.id, 'encounter')?.encounter?.sheet?.details;
+      expect(details?.content?.sheet.backstory).toBe('Swore an oath only Thorin knows.');
+      transport.hello(elara.id);
+      transport.hello(PARTY_VIEW);
+      expect(sentTo(transport, elara.id)).not.toContain('oath');
+      expect(sentTo(transport, PARTY_VIEW)).not.toContain('oath');
+      expect(transport.lastOf(elara.id, 'encounter')?.encounter?.sheet?.details).toBeUndefined();
+      expect(transport.lastOf(PARTY_VIEW, 'encounter')?.encounter?.sheet).toBeUndefined();
+    });
+
+    it('send the sheet text once per change and again to a device that says hello', () => {
+      const transport = new FakeTransport([thorin.id]);
+      stop = startDmPublisher([transport]);
+      const first = transport.lastOf(thorin.id, 'encounter')!.encounter!.sheet!.details!;
+      useEncounterStore.getState().update((d) => void (d.combatants[0]!.hp.current = 4), 'Hurt Thorin');
+      const light = transport.lastOf(thorin.id, 'encounter')!.encounter!.sheet!;
+      expect(light.hp.current).toBe(4);
+      expect(light.details).toEqual({ revision: first.revision });
+      transport.hello(thorin.id);
+      expect(transport.lastOf(thorin.id, 'encounter')!.encounter!.sheet!.details).toEqual(first);
+      useLibraryStore.setState({ characterSheets: { thorin: { ...sheet, backstory: 'Broke the oath.' } } });
+      const changed = transport.lastOf(thorin.id, 'encounter')!.encounter!.sheet!.details!;
+      expect(changed.revision).not.toBe(first.revision);
+      expect(changed.content?.sheet.backstory).toBe('Broke the oath.');
+    });
+
+    it('stay off while the campaign does not share them', () => {
+      useViewLinksStore.setState({ features: { ...useViewLinksStore.getState().features, sheets: false } });
+      const transport = new FakeTransport([thorin.id]);
+      stop = startDmPublisher([transport]);
+      expect(transport.lastOf(thorin.id, 'encounter')?.encounter?.sheet).toMatchObject({ name: 'Thorin' });
+      expect(transport.lastOf(thorin.id, 'encounter')?.encounter?.sheet?.details).toBeUndefined();
+    });
+  });
+
   it('shows a ping to the view that pointed and to the views that see the spot', () => {
     const transport = new FakeTransport([PARTY_VIEW, thorin.id, elara.id]);
     stop = startDmPublisher([transport]);
@@ -190,6 +321,18 @@ describe('startDmPublisher', () => {
     expect(useEncounterStore.getState().encounter?.log.at(-1)?.text).toBe('Thorin moved 10 ft (player)');
     expect(useEncounterStore.getState().undo()).toBe('Move Thorin');
     expect(positionOf()).toEqual(at(2.5));
+  });
+
+  it("offers picture uploads only on characters' own views while the campaign allows them", () => {
+    useViewLinksStore.setState({ features: noPlayerFeatures() });
+    const transport = new FakeTransport([PARTY_VIEW, thorin.id]);
+    stop = startDmPublisher([transport]);
+    const uploads = (view: string) => transport.lastOf(view, 'encounter')?.encounter?.uploads;
+    expect([uploads(thorin.id), uploads(PARTY_VIEW)]).toEqual([undefined, undefined]);
+    useViewLinksStore.setState({ features: { ...noPlayerFeatures(), uploads: true } });
+    expect([uploads(thorin.id), uploads(PARTY_VIEW)]).toEqual([true, undefined]);
+    useViewLinksStore.setState({ features: noPlayerFeatures() });
+    expect(uploads(thorin.id)).toBeUndefined();
   });
 
   it("logs a player's roll and answers that view alone", () => {

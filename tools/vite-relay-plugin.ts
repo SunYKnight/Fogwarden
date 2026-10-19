@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Plugin } from 'vite';
@@ -21,7 +20,7 @@ export function relayBundle(relayScript: string): Plugin {
       }
       this.emitFile({ type: 'asset', fileName: RELAY_SCRIPT, source: readFileSync(relayScript) });
     },
-    // After writing: hashes cover the files exactly as they land in dist/.
+    // After writing: the manifest lists the files exactly as they land in dist/.
     writeBundle(options, bundle) {
       const dir = options.dir ?? 'dist';
       const names = Object.keys(bundle).filter(
@@ -29,14 +28,7 @@ export function relayBundle(relayScript: string): Plugin {
       );
       // The page goes last, so the relay never serves it before its chunks.
       const ordered = [...names.filter((n) => n !== RELAY_PLAYER_PAGE), RELAY_PLAYER_PAGE];
-      const manifest: PlayerBundle = {
-        files: ordered.map((path) => ({
-          path,
-          sha256: createHash('sha256')
-            .update(readFileSync(join(dir, path)))
-            .digest('hex'),
-        })),
-      };
+      const manifest: PlayerBundle = { files: ordered.map((path) => ({ path })) };
       writeFileSync(join(dir, PLAYER_BUNDLE_MANIFEST), JSON.stringify(manifest, null, 2));
     },
   };

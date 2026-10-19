@@ -21,6 +21,7 @@ import { newId } from '@/core/model';
 import { CampaignFiles } from '@/data/campaignFiles';
 import { useAppStore } from '@/state/appStore';
 import { saveCampaignCalendar } from '@/state/calendarStore';
+import { longRestParty } from '@/sync/partySession';
 import { Field, NumberField, SelectField, TextField } from '../components/fields';
 import { Button, Dialog, EmptyState, Section } from '../kit';
 import type { CampaignTabProps } from './campaignUi';
@@ -221,7 +222,10 @@ export function CalendarTab({ campaignId }: CampaignTabProps) {
     const next = advanceCalendar(calendar!, ADVANCE_STEPS[step].minutes);
     await save(next);
     setPrevious((p) => [...p, calendar!.now]);
-    useAppStore.getState().notify(`${ADVANCE_STEPS[step].label}: now ${formatCalendarDate(next, next.now)}`, 'success');
+    const rested = step === 'longRest' ? await longRestParty(campaignId) : 0;
+    const party = rested > 0 ? '; the party is rested' : '';
+    const text = `${ADVANCE_STEPS[step].label}: now ${formatCalendarDate(next, next.now)}${party}`;
+    useAppStore.getState().notify(text, 'success');
   };
 
   const undo = async () => {

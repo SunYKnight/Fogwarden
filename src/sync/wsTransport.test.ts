@@ -243,4 +243,19 @@ describe('ViewSocketTransport', () => {
     sockets[0]!.receive(status({ party: 2, thorin: 1 }));
     expect(counts).toEqual([0, 3]);
   });
+
+  it('reports waiting uploads without a resend, and none once the socket drops', () => {
+    const { transport, sockets, resends } = dm();
+    const seen: string[][] = [];
+    transport.watchUploads((uploads) => seen.push(uploads.map((u) => u.id)));
+    sockets[0]!.open();
+    sockets[0]!.receive(status({}));
+    const upload = { id: 'a'.repeat(32), view: 'thorin', name: 'me.png', type: 'png', size: 10, at: 1 };
+    sockets[0]!.receive(JSON.stringify({ uploads: [upload] }));
+    expect(seen).toEqual([[], [upload.id]]);
+    expect(resends).toEqual([null]);
+    expect(() => sockets[0]!.receive(JSON.stringify({ uploads: [{ ...upload, name: '../x' }] }))).toThrow();
+    sockets[0]!.close();
+    expect(seen.at(-1)).toEqual([]);
+  });
 });

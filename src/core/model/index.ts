@@ -1,5 +1,6 @@
 export * from './common';
 export * from './creature';
+export * from './character';
 export * from './map';
 export * from './marker';
 export * from './encounter';

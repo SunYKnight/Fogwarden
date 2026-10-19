@@ -15,6 +15,7 @@ import {
   previousTurn,
   removeCombatant,
   rollAttack,
+  sessionOf,
   sortByInitiative,
   spawnCombatant,
   uniqueName,
@@ -143,6 +144,20 @@ describe('spawning', () => {
       { id: 'm1', partyMemberId: 'm1', creature: brom.member.creature, side: 'player', visionSource: true, level: 3 },
       { id: 'm2', partyMemberId: 'm2', creature: ivy.member.creature, hp: { current: 24, max: 24, temp: 0 } },
     ]);
+  });
+
+  it('starts a party member as its session state left it, capped by a lower maximum', () => {
+    const creature = { ...createCreature('Brom'), kind: 'player' as const, hitPoints: { average: 24, formula: '' } };
+    const member = { id: 'm1', creature: { area: 'data', id: 'brom' }, player: '' } as const;
+    const session = { hp: 30, tempHp: 5, slotsUsed: { '2': 1 }, deathSaves: { successes: 1, failures: 0 } };
+    const encounter = encounterWith([]);
+    addParty(encounter, [{ member, creature, session }]);
+    expect(encounter.combatants[0]).toMatchObject({
+      hp: { current: 24, max: 24, temp: 5 },
+      resources: { slotsUsed: { '2': 1 } },
+      deathSaves: { successes: 1, failures: 0 },
+    });
+    expect(sessionOf(encounter.combatants[0]!)).toEqual({ ...session, hp: 24 });
   });
 });
 

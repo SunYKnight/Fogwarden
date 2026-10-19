@@ -1,11 +1,12 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { useEffect, useState } from 'react';
-import { sideSchema, type AssetRef, type PartyMember, type Side } from '@/core/model';
+import { sideSchema, type AssetRef, type CharacterSession, type PartyMember, type Side } from '@/core/model';
 import { formatCr } from '@/core/rules/abilities';
 import { useAppStore } from '@/state/appStore';
 import { addParty, createPc, spawnCombatant, type HpMode } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLibraryStore } from '@/state/libraryStore';
+import { partySessions } from '@/sync/partySession';
 import { AssetImage } from '../components/AssetImage';
 import { CheckboxField, Field, NumberField, SelectField, TextField } from '../components/fields';
 import { CreatureThumb } from '../creatureTypes/CreatureThumb';
@@ -276,8 +277,22 @@ function AddParty() {
           ? 'The whole party is in this encounter.'
           : `Party: ${names}`;
 
-  const add = () => {
-    update((d) => void addParty(d, members), 'Add the party');
+  // Each member joins as the last encounter of the campaign left them.
+  const add = async () => {
+    const sessions: Record<string, CharacterSession | null> = campaignId
+      ? await partySessions(
+          campaignId,
+          joining.map((m) => m.member.id),
+        )
+      : {};
+    update(
+      (d) =>
+        void addParty(
+          d,
+          members.map((m) => ({ ...m, session: sessions[m.member.id] })),
+        ),
+      'Add the party',
+    );
     notify(`Added ${names}`);
     close();
   };
@@ -288,7 +303,7 @@ function AddParty() {
         {status}
         {missing > 0 && ` (${missing} no longer in the compendium)`}
       </span>
-      <Button icon="users" label="Add party" disabled={joining.length === 0} onClick={add} />
+      <Button icon="users" label="Add party" disabled={joining.length === 0} onClick={() => add().catch(reportError)} />
     </div>
   );
 }

@@ -155,8 +155,9 @@ async function removeStale(repository: Repository, dir: string, keep: (name: str
 
 /**
  * Writes the ticked parts of the plan into the pack "Aurora Builder": portraits, items, spells, then characters
- * (their portrait from the folder by file name, else the picture embedded in the character file); then removes
- * what an earlier import left in the imported parts that this one did not write. Skipped parts stay untouched.
+ * with their sheets (their portrait from the folder by file name, else the picture embedded in the character
+ * file); then removes what an earlier import left in the imported parts that this one did not write. Skipped
+ * parts stay untouched.
  */
 export async function runAuroraImport(
   plan: AuroraPlan,
@@ -195,7 +196,7 @@ export async function runAuroraImport(
     step();
   }
   const kept = new Set([...portraits.values()].map((r) => r.path.slice(portraitDir.length + 1)));
-  for (const { creature, portraitFile, portraitPng } of characters) {
+  for (const { creature, sheet, portraitFile, portraitPng } of characters) {
     let image = portraitFile ? (portraits.get(portraitFile.toLowerCase()) ?? null) : null;
     if (!image && portraitPng) {
       image = { area: 'data', path: `${portraitDir}/${creature.id}.png` };
@@ -203,6 +204,7 @@ export async function runAuroraImport(
       kept.add(`${creature.id}.png`);
     }
     await repository.save('creature', { ...creature, image }, AURORA_PACK.id);
+    await repository.storeCharacterSheet(creature.id, sheet, AURORA_PACK.id);
     step();
   }
   const ids = (docs: { id: string }[]) => new Set(docs.map((d) => d.id));
@@ -215,7 +217,7 @@ export async function runAuroraImport(
     [parts.portraits, portraitDir, (name) => kept.has(name)],
     [parts.items, `${root}/${KIND_LAYOUTS.item.dir}`, (name) => itemIds.has(idOf(name, '.md'))],
     [parts.spells, `${root}/${KIND_LAYOUTS.spell.dir}`, (name) => spellIds.has(idOf(name, '.md'))],
-    // Character pictures are `<id>.<ext>` beside `<id>.txt`.
+    // Character pictures (`<id>.<ext>`) and sheets (`<id>.sheet.json`) are beside `<id>.txt`.
     [parts.characters, `${root}/${KIND_LAYOUTS.creature.dir}`, (name) => characterIds.has(name.split('.')[0]!)],
   ];
   const removed = await Promise.all(

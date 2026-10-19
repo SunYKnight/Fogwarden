@@ -11,7 +11,9 @@ import type { WebSocketTransport } from '@/sync/wsTransport';
 import { InterludeVideo } from './InterludeVideo';
 import { PlayerDragOverlay } from './PlayerDragOverlay';
 import { HandoutOverlay, TurnBanner } from './PlayerOverlays';
+import { PictureUpload, type UploadTarget } from './PictureUpload';
 import { cancelHold, playerPointer, pointerMoved } from './playerPointer';
+import { PlayerChat, PlayerNotice } from './PlayerChat';
 import { PlayerSheetPanel } from './PlayerSheet';
 import { PlayerSound } from './PlayerSound';
 import { usePlayerStore } from './playerStore';
@@ -39,9 +41,15 @@ function InitiativeRibbon({ encounter }: { encounter: PlayerEncounter }) {
 
 /**
  * Player view: renders only what the DM sends over `transport`. `lan` is the same transport when players
- * connect over the LAN, so the view can tell a lost connection from a DM who shows nothing.
+ * connect over the LAN or the relay, so the view can tell a lost connection from a DM who shows nothing;
+ * `uploadTo` is that server, where a character's link may send pictures while the DM allows it.
  */
-export function PlayerApp({ transport, lan }: { transport: SyncTransport; lan: WebSocketTransport | null }) {
+export function PlayerApp(props: {
+  transport: SyncTransport;
+  lan: WebSocketTransport | null;
+  uploadTo: UploadTarget | null;
+}) {
+  const { transport, lan, uploadTo } = props;
   const map = usePlayerStore((s) => s.map);
   const terrain = usePlayerStore((s) => s.terrain);
   const mapRevision = usePlayerStore((s) => s.mapRevision);
@@ -131,15 +139,24 @@ export function PlayerApp({ transport, lan }: { transport: SyncTransport; lan: W
       )}
       {ribbon && <InitiativeRibbon encounter={encounter} />}
       {encounter && <TurnBanner encounter={encounter} />}
-      {encounter?.sheet && <PlayerSheetPanel sheet={encounter.sheet} send={send} />}
-      {corner && (
-        <div className="player-status" role="status">
-          {corner}
+      {encounter?.sheet && <PlayerSheetPanel sheet={encounter.sheet} flags={encounter} send={send} />}
+      <div className="player-bottom">
+        <div className="player-tools">
+          {encounter && (encounter.chat || encounter.sharedRolls) && (
+            <PlayerChat canWrite={encounter.chat === true} send={send} />
+          )}
+          {encounter?.uploads && uploadTo && <PictureUpload target={uploadTo} />}
+          <PlayerSound />
         </div>
-      )}
+        {corner && (
+          <div className={link === 'open' ? 'player-status' : 'player-status problem'} role="status">
+            {corner}
+          </div>
+        )}
+      </div>
+      <PlayerNotice />
       <HandoutOverlay />
       <InterludeVideo />
-      <PlayerSound />
     </div>
   );
 }

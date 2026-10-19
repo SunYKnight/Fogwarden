@@ -9,7 +9,14 @@ import {
   type SyncTransport,
 } from './protocol';
 
-const REQUESTS: Record<PlayerRequest['type'], true> = { roll: true, point: true, move: true };
+const REQUESTS: Record<PlayerRequest['type'], true> = {
+  roll: true,
+  point: true,
+  move: true,
+  chat: true,
+  note: true,
+  sheetEdit: true,
+};
 
 /** True for the payloads players send besides `hello`. */
 export function isPlayerRequest(payload: SyncPayload): payload is PlayerRequest {
