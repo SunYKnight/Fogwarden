@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-lan-delete-player-upload"
+description = "Enables the lan_delete_player_upload command without any pre-configured scope."
+commands.allow = ["lan_delete_player_upload"]
+
+[[permission]]
+identifier = "deny-lan-delete-player-upload"
+description = "Denies the lan_delete_player_upload command without any pre-configured scope."
+commands.deny = ["lan_delete_player_upload"]

@@ -4,6 +4,7 @@ import {
   nowIso,
   type AssetRef,
   type AttackRoll,
+  type CharacterSession,
   type Combatant,
   type Creature,
   type DamageType,
@@ -142,20 +143,59 @@ export function createPc(options: PcOptions): Combatant {
   };
 }
 
+/** Where a party member's combatant stands, kept between encounters. */
+export function sessionOf(c: Combatant): CharacterSession {
+  return {
+    hp: c.hp.current,
+    tempHp: c.hp.temp,
+    slotsUsed: { ...c.resources.slotsUsed },
+    deathSaves: { ...c.deathSaves },
+  };
+}
+
+/** A fresh combatant as `session` left it; a maximum lowered since caps the hit points. */
+export function withSession(c: Combatant, session: CharacterSession): Combatant {
+  return {
+    ...c,
+    hp: { ...c.hp, current: Math.min(session.hp, c.hp.max), temp: session.tempHp },
+    deathSaves: { ...session.deathSaves },
+    resources: { ...c.resources, slotsUsed: { ...session.slotsUsed } },
+  };
+}
+
+export interface JoiningMember {
+  member: PartyMember;
+  creature: Creature;
+  /** Where the last encounter left the character; null or absent: rested, full hit points. */
+  session?: CharacterSession | null;
+}
+
+/** 5e long rest: full hit points, no temporary ones, every spell slot back, death saves cleared. */
+export function longRest(c: Combatant): void {
+  c.hp.current = c.hp.max;
+  c.hp.temp = 0;
+  c.resources.slotsUsed = {};
+  c.deathSaves = { successes: 0, failures: 0 };
+}
+
+/** Hit dice still spent after a long rest: 5e gives back half the level, at least one; all without a level. */
+export function hitDiceAfterLongRest(used: number, level: number | null): number {
+  return level === null ? 0 : Math.max(0, used - Math.max(1, Math.floor(level / 2)));
+}
+
 /**
- * Adds the party members that are not in the encounter yet as player characters and vision sources; returns
- * the names they got. Each takes its member's id (see `combatantSchema.partyMemberId`).
+ * Adds the party members that are not in the encounter yet as player characters and vision sources, each as
+ * its session state left it; returns the names they got. Each takes its member's id (see
+ * `combatantSchema.partyMemberId`).
  */
-export function addParty(
-  encounter: Encounter,
-  members: readonly { member: PartyMember; creature: Creature }[],
-): string[] {
+export function addParty(encounter: Encounter, members: readonly JoiningMember[]): string[] {
   const present = new Set(encounter.combatants.map((c) => c.id));
   const names: string[] = [];
-  for (const { member, creature } of members.filter((m) => !present.has(m.member.id))) {
+  for (const { member, creature, session } of members.filter((m) => !present.has(m.member.id))) {
     const takenNames = encounter.combatants.map((c) => c.name);
     const spawned = spawnCombatant(creature, member.creature, { hpMode: 'average', side: 'player', takenNames });
-    encounter.combatants.push({ ...spawned, id: member.id, partyMemberId: member.id, visionSource: true });
+    const joined: Combatant = { ...spawned, id: member.id, partyMemberId: member.id, visionSource: true };
+    encounter.combatants.push(session ? withSession(joined, session) : joined);
     names.push(spawned.name);
   }
   return names;

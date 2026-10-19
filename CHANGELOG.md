@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.0
+
+### Added
+
+- Online play is no longer hidden: the relay was set up and tested on a real server.
+- Optional per-campaign player features (Party tab, all off by default): full character sheets, chat with whispers,
+  shared rolls, player notes, players editing their sheet (at once or after the DM's OK) and picture uploads the DM
+  accepts as portrait or token.
+- Second DM screen: a laptop on the LAN opens the full DM app from the desktop with a DM link and controls it; the
+  desktop keeps the data and computes vision and fog.
+- Home shows the player window, LAN and online state in a Players card.
+- Party members keep their hit points, temporary HP, used spell slots, death saves and hit dice from one encounter
+  to the next (**+ Add > Add party**); the Calendar's long rest restores them. This also applies to your own changes.
+
+### Changed
+
+- The relay needs a redeploy (API version 5, for picture uploads); the app refuses the older relay.
+- The relay install script works on servers whose nginx is run by nginx-manager: it registers an HTTPS-only site
+  spec and gets the certificate through the existing ACME webroot instead of adding its own nginx site. It also
+  refuses a relay port another service already listens on.
+
 ## 0.1.3
 
 ### Added

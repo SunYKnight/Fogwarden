@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const SETTINGS_SCHEMA_VERSION = 13;
+export const SETTINGS_SCHEMA_VERSION = 14;
 
 /** View of all player characters together; any other view is one player character's combatant id. */
 export const PARTY_VIEW = 'party';
@@ -73,6 +73,18 @@ export type PlayerLinks = z.infer<typeof playerLinksSchema>;
 
 export function defaultPlayerLinks(): PlayerLinks {
   return { secret: '', rotations: {} };
+}
+
+export const dmRemoteSchema = z.object({
+  /** The LAN server lets the DM link in: a second device of the DM controls this app. */
+  enabled: z.boolean(),
+  /** How often the DM link was replaced; its token derives from `playerLinks.secret` like player links. */
+  rotation: z.number().int().nonnegative(),
+});
+export type DmRemote = z.infer<typeof dmRemoteSchema>;
+
+export function defaultDmRemote(): DmRemote {
+  return { enabled: false, rotation: 0 };
 }
 
 /** Kinds of library documents; My content and every pack keep each kind in its own folder. */
@@ -179,6 +191,8 @@ export const settingsSchema = z.object({
   remote: remoteSettingsSchema,
   /** Player links per view for the LAN server and the relay. */
   playerLinks: playerLinksSchema,
+  /** The DM's second device on the LAN (Players menu > LAN). */
+  dmRemote: dmRemoteSchema,
   /** Order and enabled state of the content packs (Settings > Content). */
   packs: packSettingsSchema,
   /** Sound volumes (Settings > Audio, Play > Sound). */
@@ -202,6 +216,7 @@ export function defaultSettings(): Settings {
     tokenStandees: true,
     remote: defaultRemoteSettings(),
     playerLinks: defaultPlayerLinks(),
+    dmRemote: defaultDmRemote(),
     packs: defaultPackSettings(),
     audio: defaultAudioSettings(),
     updates: defaultUpdateSettings(),

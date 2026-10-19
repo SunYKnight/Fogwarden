@@ -14,8 +14,9 @@ A desktop app for a Dungeon Master running 5e encounters at the table:
 - Clean separation of **source**, **build output** and **data** (shipped content vs. user data).
 
 ### Non-goals (for now)
-- Character sheet management / level-up for player characters (players are lightweight creature entries).
-- Online multiplayer over the internet, accounts, cloud sync.
+- Character creation / level-up for player characters (sheets come from the Aurora import; players only edit
+  session values such as HP, slots, items and coins).
+- Accounts, cloud sync, and player access while the DM app is closed (`docs/ONLINE_PLAN.md` phase 5).
 - Rules automation beyond rolls, ranges, areas and vision (no automatic spell resolution).
 
 ## 2. Stack
@@ -217,10 +218,10 @@ Order: M0 → M1 (only what M2 needs first: map schema, storage) → **M2** → 
 - SRD creature source: the D&D 5e API (dnd5eapi.co, SRD 5.1, CC-BY-4.0), imported at run time into the data folder.
 - Phase 2 LAN server exposes a port: bind to LAN only, random session token in URL.
 - Testing the LAN view on a phone touches the local network → ask before M6 tests.
-- **To do: online play.** The relay (Settings > Players > Online, Players popover "Online", server deploy) is hidden
-  by `ONLINE_PLAY_AVAILABLE = false` in `src/ui/server/OnlineSection.tsx` because it was never tried against a real
-  server. Before switching it on: deploy the relay to a server with a domain, connect from the app, join from a
-  phone on mobile data, check map, fog, token moves, handouts and reconnects; then add the search keywords back.
+- **To do: online play on phones and the laptop DM screen.** The relay runs on a real server (nginx-manager VPS,
+  `fogwarden.homejj.ch`) and passed a scripted check; player features (`docs/ONLINE_PLAN.md` phases 1–4) and the
+  laptop DM screen pass their automated tests. Still to try by hand: join from a phone on mobile data (map, fog,
+  moves, handouts, chat, sheet edits, uploads, reconnects) and drive a session from the laptop.
 - **To do: roofs in player fog.** Roofs do not block sight or light from above in the players' fog yet.
 
 ## 11. Conventions

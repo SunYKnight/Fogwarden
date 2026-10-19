@@ -4,6 +4,7 @@ import {
   CAMPAIGN_SCHEMA_VERSION,
   defaultAtmosphere,
   ENCOUNTER_SCHEMA_VERSION,
+  noPlayerFeatures,
   type Campaign,
   type Encounter,
 } from './encounter';
@@ -115,7 +116,12 @@ export function createMarkerTemplate(name: string): MarkerTemplate {
 }
 
 export function createCampaign(name: string): Campaign {
-  return { ...header('campaign', CAMPAIGN_SCHEMA_VERSION, name), notes: '', party: [] };
+  return {
+    ...header('campaign', CAMPAIGN_SCHEMA_VERSION, name),
+    notes: '',
+    party: [],
+    playerFeatures: noPlayerFeatures(),
+  };
 }
 
 export function createEncounter(name: string, campaignId: string, map: DocRef | null): Encounter {
@@ -131,6 +137,7 @@ export function createEncounter(name: string, campaignId: string, map: DocRef | 
     openingStates: {},
     fog: { cellsPerSquare: 2, exploredBy: {}, revealedByDm: '', hiddenByDm: '' },
     log: [],
+    chat: [],
     notes: '',
     atmosphere: defaultAtmosphere(),
     playersMoveTokens: false,

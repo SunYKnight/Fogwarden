@@ -15,6 +15,7 @@ import { openCreatureImport, openNewEncounter } from '../library/compendiumUi';
 import { encounterStatus, statusLabel } from '../library/encounterStatus';
 import { isDamFile, isMapSourceFile, useFileDrop } from '../library/fileDrop';
 import { openNewMapWizard } from '../library/NewMapWizard';
+import { LanLine, OnlineLine, WindowLine } from '../shell/PlayerLines';
 import { FirstSteps } from './FirstSteps';
 import { homeCampaignId, recentMaps, type MapEntry } from './recent';
 
@@ -228,6 +229,30 @@ function RecentMapCard({ entry }: { entry: MapEntry }) {
   );
 }
 
+/** How players reach the game right now; setup lives in Settings > Players. */
+function PlayerServers() {
+  const navigate = useAppStore((s) => s.navigate);
+  return (
+    <section className="home-card" aria-label="Players">
+      <div className="home-card-head">
+        <h2>Players</h2>
+        <div className="spacer" />
+        <Button
+          icon="settings"
+          label="Player settings"
+          variant="ghost"
+          onClick={() => navigate({ page: 'settings', section: 'players' })}
+        />
+      </div>
+      <div className="col">
+        <WindowLine />
+        <LanLine linksOpen={false} />
+        <OnlineLine />
+      </div>
+    </section>
+  );
+}
+
 /** Routes dropped files: images and map exports become maps, stat blocks and campaigns are imported. */
 async function handleDrop(files: File[]): Promise<void> {
   const { notify } = useAppStore.getState();
@@ -327,6 +352,7 @@ export function HomePage() {
             </EmptyState>
           )
         )}
+        <PlayerServers />
         <section aria-label="Recent maps">
           <div className="home-card-head">
             <h2>Recent maps</h2>

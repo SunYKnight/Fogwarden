@@ -51,6 +51,7 @@ const ICON_PATHS = {
   area: [circle(12, 12, 8), circle(12, 12, 3), 'M12 2v2M12 20v2M2 12h2M20 12h2'],
   dice: ['M4 4h16v16H4z', 'M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01'],
   list: ['M8 6h13M8 12h13M8 18h13', 'M3 6h.01M3 12h.01M3 18h.01'],
+  chat: ['M4 5h16v11H9l-5 4z', 'M8 9h8M8 12h5'],
   close: ['M6 6l12 12', 'M18 6L6 18'],
   chevronRight: ['M9 6l6 6-6 6'],
   chevronDown: ['M6 9l6 6 6-6'],

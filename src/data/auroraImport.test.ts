@@ -45,6 +45,12 @@ function characterFile(level: number, portrait: string): string {
           <element type="Class" registered="ID_T_CLASS_FIGHTER" />
         </element>
       </elements>
+      <equipment><item name="Rope" id="ID_T_ITEM_ROPE"><quantity>2</quantity></item></equipment>
+      <magic>
+        <spellcasting name="Wizard" ability="Intelligence" attack="2" dc="10">
+          <cantrips><spell name="Zap" id="ID_T_SPELL_ZAP" /></cantrips>
+        </spellcasting>
+      </magic>
     </build>
   </character>`;
 }
@@ -198,6 +204,37 @@ describe('Aurora Builder import', () => {
     expect(report.removed).toBe(1);
     expect(storage.files.data.has(`${PACK}/items/t-item-lantern.md`)).toBe(false);
     expect(storage.files.data.has(`${PACK}/portraits/elf _druid_.jpg`)).toBe(true);
+  });
+
+  it("writes each character's sheet beside it and removes it with the character", async () => {
+    const storage = new MemoryStorage();
+    const repository = new Repository(storage);
+    const source = auroraFolder(firstImport());
+    await runAuroraImport(await planAuroraImport(source, FOLDER), ALL, source, repository, () => undefined);
+    const text = storage.files.data.get(`${PACK}/creatures/selana.sheet.json`) as string;
+    const { sheets, problems } = await repository.characterSheets();
+    expect(problems).toEqual([]);
+    // Pretty JSON for text editors, read back unchanged.
+    expect(text).toBe(`${JSON.stringify(sheets.selana, null, 2)}\n`);
+    expect(sheets.selana).toMatchObject({
+      schema: 'character-sheet',
+      version: 1,
+      classes: 'Fighter',
+      proficiencyBonus: 2,
+      abilities: { str: 16, dex: 10, con: 14, int: 10, wis: 10, cha: 10 },
+      savingThrows: { str: { proficient: false, bonus: 3 }, con: { proficient: false, bonus: 2 } },
+      skills: { athletics: { proficiency: 'none', bonus: 3 }, stealth: { proficiency: 'none', bonus: 0 } },
+      spellcasting: [{ source: 'Wizard', ability: 'Intelligence', saveDc: 10, attackBonus: 2 }],
+      spells: [{ name: 'Zap', level: 0, status: 'known', source: 'Wizard', spell: 't-spell-zap' }],
+      inventory: [{ name: 'Rope', item: 't-item-rope', quantity: 2, equipped: false, attuned: false }],
+    });
+
+    const files = firstImport();
+    files.delete(`${FOLDER}/Selana.dnd5e`);
+    const without = auroraFolder(files);
+    await runAuroraImport(await planAuroraImport(without, FOLDER), CHARACTERS_ONLY, without, repository, () => {});
+    expect(storage.files.data.has(`${PACK}/creatures/selana.sheet.json`)).toBe(false);
+    expect((await repository.characterSheets()).sheets).toEqual({});
   });
 
   it('refuses folders without Aurora Builder data', async () => {

@@ -8,12 +8,15 @@ import { isDeepStrictEqual } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import {
+  PLAYER_UPLOAD_MAX_BYTES,
+  PLAYER_UPLOAD_MAX_PENDING,
   RELAY_API_VERSION,
   RELAY_DM_PROTOCOL,
   RELAY_HASH_HEADER,
   RELAY_LINK_REVOKED,
   RELAY_MAX_UPLOAD_BYTES,
   relaySessionSchema,
+  relayUploadsSchema,
   type RelaySession,
   type RelayStatus,
 } from '@/sync/relayApi';
@@ -23,6 +26,7 @@ const DM_KEY = 'a'.repeat(64);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 const TOKEN_A = 'linkA_0123456789abcdef';
 const TOKEN_B = 'linkB_0123456789abcdef';
+const TOKEN_C = 'linkC_0123456789abcdef';
 const HELLO = '{"protocol":2,"from":"player","payload":{"type":"hello"}}';
 
 let dataDir: string;
@@ -57,11 +61,11 @@ function put(target: string, body: Buffer, key = DM_KEY, hash = sha256(body)): P
   });
 }
 
-function putLinks(links: Record<string, string>, key = DM_KEY): Promise<Response> {
+function putLinks(links: Record<string, string>, key = DM_KEY, uploads: string[] = []): Promise<Response> {
   return fetch(`${base}/api/links`, {
     method: 'PUT',
     headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ links }),
+    body: JSON.stringify({ links, uploads }),
   });
 }
 
@@ -186,6 +190,26 @@ describe('relay sockets', () => {
     expect(await dm.message((m) => m.includes('"move"'))).toBe(`A\n${move}`);
   });
 
+  it("forwards players' chat, notes, shared rolls and own sheet edits rebuilt and tagged with the view", async () => {
+    await putLinks({ [TOKEN_A]: 'A' });
+    const dm = connect(`${base}/ws`, [RELAY_DM_PROTOCOL, DM_KEY]);
+    await dm.opened;
+    const a = player(TOKEN_A);
+    await a.opened;
+    const message = (payload: string) => `{"protocol":3,"from":"player","payload":${payload}}`;
+    const chat = message('{"type":"chat","text":"Hello","to":"dm"}');
+    const note = message('{"type":"note","text":"# Clues"}');
+    const roll = message('{"type":"roll","dice":"1d20","mode":"normal","label":"","share":true}');
+    const edit = message('{"type":"sheetEdit","combatantId":"A","edit":{"field":"slotsUsed","level":1,"value":2}}');
+    for (const each of [chat, note, roll, edit]) {
+      a.socket.send(each);
+    }
+    expect(await dm.message((m) => m.includes('"chat"'))).toBe(`A\n${chat}`);
+    expect(await dm.message((m) => m.includes('"note"'))).toBe(`A\n${note}`);
+    expect(await dm.message((m) => m.includes('"share"'))).toBe(`A\n${roll}`);
+    expect(await dm.message((m) => m.includes('"sheetEdit"'))).toBe(`A\n${edit}`);
+  });
+
   it("closes a player socket whose request is malformed or for another view's token", async () => {
     await putLinks({ [TOKEN_A]: 'A', [TOKEN_B]: 'party' });
     const sends = async (token: string, payload: string) => {
@@ -202,6 +226,14 @@ describe('relay sockets', () => {
     expect(await sends(TOKEN_A, '{"type":"point","at":{"x":"1","y":2,"elevationFt":0}}')).toBe(1008);
     expect(await sends(TOKEN_A, '{"type":"point","at":{"x":1,"y":2,"elevationFt":0},"by":"DM"}')).toBe(1008);
     expect(await sends(TOKEN_A, '{"type":"point","at":{"x":1e9,"y":2,"elevationFt":0}}')).toBe(1008);
+    // Party screens have no chat, notes or sheet; nobody edits another character's sheet.
+    expect(await sends(TOKEN_B, '{"type":"chat","text":"Hi","to":"all"}')).toBe(1008);
+    expect(await sends(TOKEN_B, '{"type":"note","text":"x"}')).toBe(1008);
+    const hp = '"edit":{"field":"hp","value":3}';
+    expect(await sends(TOKEN_A, `{"type":"sheetEdit","combatantId":"B",${hp}}`)).toBe(1008);
+    expect(await sends(TOKEN_A, '{"type":"sheetEdit","combatantId":"A","edit":{"field":"name","value":3}}')).toBe(1008);
+    expect(await sends(TOKEN_A, '{"type":"chat","text":"","to":"all"}')).toBe(1008);
+    expect(await sends(TOKEN_A, '{"type":"chat","text":"Hi","to":"B"}')).toBe(1008);
   });
 
   it('drops player messages beyond the rate limit', async () => {
@@ -431,5 +463,138 @@ describe('relay player access', () => {
     const response = await fetch(`${base}/health`);
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
     expect(await response.json()).toMatchObject({ ok: true });
+  });
+});
+
+describe('relay player uploads', () => {
+  const PICTURE = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40, 7)]);
+  const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(40, 7)]);
+  const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), Buffer.alloc(40, 7)]);
+  const NO_UPLOADS = '{"uploads":[]}';
+
+  const url = (token: string, name: string) => `${base}/api/player-upload/${name}?token=${token}`;
+  // Spaced past the rate limit's refill unless a test is about the limit.
+  const upload = (token: string, name: string, body: Buffer) => {
+    vi.setSystemTime(Date.now() + 600);
+    return fetch(url(token, name), { method: 'PUT', body: new Uint8Array(body) });
+  };
+  const dmRequest = (id: string, method = 'GET', key = DM_KEY) =>
+    fetch(`${base}/api/player-upload/${id}`, { method, headers: { authorization: `Bearer ${key}` } });
+  /** The uploads frame a freshly connected DM gets. */
+  const pending = async () => {
+    const dm = connect(`${base}/ws`, [RELAY_DM_PROTOCOL, DM_KEY]);
+    const frame = await dm.message((m) => m.startsWith('{"uploads"'));
+    dm.socket.close();
+    return relayUploadsSchema.parse(JSON.parse(frame)).uploads;
+  };
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    await putLinks({ [TOKEN_A]: 'A', [TOKEN_B]: 'party', [TOKEN_C]: 'C' }, DM_KEY, ['A', 'party']);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('announces a valid upload to the DM, who alone may fetch and delete it', async () => {
+    const dm = connect(`${base}/ws`, [RELAY_DM_PROTOCOL, DM_KEY]);
+    await dm.message((m) => m === NO_UPLOADS);
+    const response = await upload(TOKEN_A, 'Thorin%20portrait.png', PICTURE);
+    expect(response.status).toBe(201);
+    const { id } = (await response.json()) as { id: string };
+    const frame = relayUploadsSchema.parse(JSON.parse(await dm.message((m) => m.includes(id))));
+    expect(frame.uploads).toEqual([
+      { id, view: 'A', name: 'Thorin portrait.png', type: 'png', size: PICTURE.length, at: expect.any(Number) },
+    ]);
+
+    expect((await dmRequest(id, 'GET', 'b'.repeat(64))).status).toBe(401);
+    expect((await fetch(`${base}/api/player-upload/${id}?token=${TOKEN_A}`)).status).toBe(401);
+    expect((await fetch(`${base}/asset/data/player-uploads/A/${id}?token=${TOKEN_A}`)).status).toBe(403);
+    const fetched = await dmRequest(id);
+    expect(fetched.status).toBe(200);
+    expect(fetched.headers.get('content-type')).toBe('image/png');
+    expect(Buffer.from(await fetched.arrayBuffer())).toEqual(PICTURE);
+
+    expect((await fetch(`${base}/api/player-upload/${id}?token=${TOKEN_A}`, { method: 'DELETE' })).status).toBe(401);
+    expect((await dmRequest(id, 'DELETE')).status).toBe(204);
+    expect((await dmRequest(id)).status).toBe(404);
+    expect((await dmRequest(id, 'DELETE')).status).toBe(204);
+    expect(await pending()).toEqual([]);
+  });
+
+  it('takes PNG, JPEG and WebP by their first bytes, whatever the name says', async () => {
+    expect((await upload(TOKEN_A, 'photo.png', JPEG)).status).toBe(201);
+    expect((await upload(TOKEN_A, 'noextension', WEBP)).status).toBe(201);
+    expect((await pending()).map((u) => [u.name, u.type])).toEqual([
+      ['photo.png', 'jpg'],
+      ['noextension', 'webp'],
+    ]);
+  });
+
+  it('refuses unknown links, the party view, views without permission, other types and path tricks', async () => {
+    expect((await upload('wrong_0123456789abcdef', 'me.png', PICTURE)).status).toBe(401);
+    expect((await upload(TOKEN_B, 'me.png', PICTURE)).status).toBe(403);
+    expect((await upload(TOKEN_C, 'me.png', PICTURE)).status).toBe(403);
+    expect((await upload(TOKEN_A, 'me.png', Buffer.from('GIF89a and more bytes'))).status).toBe(415);
+    expect((await upload(TOKEN_A, 'me.png', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))).status).toBe(
+      415,
+    );
+    expect((await upload(TOKEN_A, 'me.png', PICTURE.subarray(0, 4))).status).toBe(415);
+    for (const name of ['..%2F..%2Flinks.json', 'a%5C..%5Cx.png', '.hidden.png', 'a%00.png', 'C%3A.png', 'x%0A.png']) {
+      expect((await upload(TOKEN_A, name, PICTURE)).status, name).toBe(400);
+    }
+    expect((await upload(TOKEN_A, 'dir/me.png', PICTURE)).status).toBe(400);
+    expect((await upload(TOKEN_A, 'x'.repeat(101), PICTURE)).status).toBe(400);
+    expect(await pending()).toEqual([]);
+    // Withdrawn permission and withdrawn links are refused at once.
+    await putLinks({ [TOKEN_A]: 'A' });
+    expect((await upload(TOKEN_A, 'me.png', PICTURE)).status).toBe(403);
+    await putLinks({});
+    expect((await upload(TOKEN_A, 'me.png', PICTURE)).status).toBe(401);
+  });
+
+  it('refuses pictures over the size limit, declared or streamed', async () => {
+    const send = (headers: Record<string, string | number>, body: Buffer[]) => {
+      const { promise, resolve, reject } = Promise.withResolvers<number>();
+      const request = httpRequest(`${base}/api/player-upload/big.png?token=${TOKEN_A}`, { method: 'PUT', headers });
+      request.on('response', (response) => resolve(response.statusCode ?? 0));
+      request.on('error', reject);
+      for (const chunk of body) {
+        request.write(chunk);
+      }
+      return promise.finally(() => request.destroy());
+    };
+    expect(await send({ 'content-length': PLAYER_UPLOAD_MAX_BYTES + 1 }, [PICTURE])).toBe(413);
+    const streamed = [PICTURE, Buffer.alloc(PLAYER_UPLOAD_MAX_BYTES)];
+    expect(await send({ 'transfer-encoding': 'chunked' }, streamed)).toBe(413);
+    expect(await pending()).toEqual([]);
+  });
+
+  it(`keeps at most ${PLAYER_UPLOAD_MAX_PENDING} pictures per view waiting, across a restart`, async () => {
+    const results: number[] = [];
+    for (let i = 0; i <= PLAYER_UPLOAD_MAX_PENDING; i++) {
+      results.push((await upload(TOKEN_A, `p${i}.png`, PICTURE)).status);
+    }
+    expect(results).toEqual([...Array<number>(PLAYER_UPLOAD_MAX_PENDING).fill(201), 429]);
+    const waiting = await pending();
+    expect(waiting).toHaveLength(PLAYER_UPLOAD_MAX_PENDING);
+
+    await relay.close();
+    await start();
+    expect(await pending()).toEqual(waiting);
+    expect((await upload(TOKEN_A, 'more.png', PICTURE)).status).toBe(429);
+    expect((await dmRequest(waiting[0]!.id, 'DELETE')).status).toBe(204);
+    expect((await upload(TOKEN_A, 'more.png', PICTURE)).status).toBe(201);
+  });
+
+  it('drops uploads beyond the rate limit', async () => {
+    const results: number[] = [];
+    for (let i = 0; i < 11; i++) {
+      // The frozen clock keeps the bucket from refilling.
+      const response = await fetch(url(TOKEN_A, `p${i}.png`), { method: 'PUT', body: new Uint8Array(PICTURE) });
+      results.push(response.status);
+    }
+    expect(results).toEqual([...Array<number>(10).fill(201), 429]);
   });
 });

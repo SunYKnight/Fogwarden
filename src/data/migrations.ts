@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import {
   CAMPAIGN_SCHEMA_VERSION,
+  CHARACTER_SHEET_SCHEMA_VERSION,
   CREATURE_SCHEMA_VERSION,
   defaultAtmosphere,
   defaultAudioSettings,
+  defaultDmRemote,
   defaultGraphicsSettings,
   defaultOnboarding,
   defaultPackSettings,
@@ -14,11 +16,23 @@ import {
   freshCombatState,
   MAP_SCHEMA_VERSION,
   MARKER_SCHEMA_VERSION,
+  noPlayerFeatures,
   PARTY_VIEW,
+  PLAYER_PENDING_SCHEMA_VERSION,
+  PLAYER_SHEET_SCHEMA_VERSION,
   SETTINGS_SCHEMA_VERSION,
 } from '@/core/model';
 
-export type SchemaName = 'creature' | 'map' | 'marker' | 'campaign' | 'encounter' | 'settings';
+export type SchemaName =
+  | 'creature'
+  | 'character-sheet'
+  | 'player-sheet'
+  | 'player-pending'
+  | 'map'
+  | 'marker'
+  | 'campaign'
+  | 'encounter'
+  | 'settings';
 
 type Migration = (doc: Record<string, unknown>) => Record<string, unknown>;
 
@@ -32,6 +46,9 @@ const fieldList = z.array(fields);
 
 const CURRENT_VERSION: Record<SchemaName, number> = {
   creature: CREATURE_SCHEMA_VERSION,
+  'character-sheet': CHARACTER_SHEET_SCHEMA_VERSION,
+  'player-sheet': PLAYER_SHEET_SCHEMA_VERSION,
+  'player-pending': PLAYER_PENDING_SCHEMA_VERSION,
   map: MAP_SCHEMA_VERSION,
   marker: MARKER_SCHEMA_VERSION,
   campaign: CAMPAIGN_SCHEMA_VERSION,
@@ -48,6 +65,9 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     // v2: creatures are text files (stat block plus header).
     LAYOUT,
   ],
+  'character-sheet': [],
+  'player-sheet': [],
+  'player-pending': [],
   map: [
     // v2: terrain heights moved from base64 into terrain.png.
     LAYOUT,
@@ -66,6 +86,8 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     LAYOUT,
     // v3: the group's player characters; nobody had named them before.
     (doc) => ({ ...doc, party: [] }),
+    // v4: player features; off, so a table group sees no change.
+    (doc) => ({ ...doc, playerFeatures: noPlayerFeatures() }),
   ],
   encounter: [
     // v2: explored fog per character; nobody knows who saw what before, so
@@ -88,6 +110,8 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
     (doc) => ({ ...doc, playersMoveTokens: false }),
     // v7: distance moved this turn; turns already running count from now.
     (doc) => ({ ...doc, turnStart: null }),
+    // v8: chat with the players' own links.
+    (doc) => ({ ...doc, chat: [] }),
   ],
   settings: [
     // v2: the never-used lastCampaignId became lastEncounter.
@@ -129,6 +153,8 @@ const MIGRATIONS: Record<SchemaName, (Migration | typeof LAYOUT)[]> = {
       ...doc,
       graphics: { ...defaultGraphicsSettings(), ...z.looseObject({ graphics: fields }).parse(doc).graphics },
     }),
+    // v14: the DM's second device on the LAN; off until the DM turns it on.
+    (doc) => ({ ...doc, dmRemote: defaultDmRemote() }),
   ],
 };
 

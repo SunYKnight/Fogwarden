@@ -21,6 +21,7 @@ const ELEMENTS = `<elements>
     <setters><set name="hd">d10</set></setters>
   </element>
   <element name="Defense" type="Class Feature" source="Test" id="ID_TEST_DEFENSE">
+    <description><p>While you are wearing armor, you gain a <b>+1 bonus</b> to AC.</p></description>
     <rules><stat name="ac:misc" value="1" bonus="fighting style" equipped="[armor:any]" /></rules>
   </element>
   <element name="Tough Feet" type="Feat" source="Test" id="ID_TEST_TOUGH">
@@ -34,6 +35,12 @@ const ELEMENTS = `<elements>
     <rules><stat name="ac:shield" value="2" bonus="shield" /></rules>
   </element>
   <element name="Common" type="Language" source="Test" id="ID_TEST_LANGUAGE_COMMON" />
+  <element name="Trance" type="Racial Trait" source="Test" id="ID_TEST_TRANCE">
+    <description><p>Elves don't sleep.</p></description><sheet display="false" />
+  </element>
+  <element name="Hunter's Mark" type="Spell" source="Test" id="ID_TEST_SPELL_HUNTERS_MARK">
+    <setters><set name="level">1</set></setters>
+  </element>
 </elements>`;
 
 function character(level: number, average = true): string {
@@ -57,7 +64,11 @@ function character(level: number, average = true): string {
         <attack name="Longbow" range="150/600" attack="+7 vs AC" damage="1d8+4 piercing"><description><![CDATA[Ammunition]]></description></attack>
         <attack name="Dagger" range="20/60" attack="+7 vs AC" damage="1d4+4 piercing"><description><![CDATA[Finesse, Light, Thrown]]></description></attack>
       </attacks>
+      <background-traits>I watch the treeline.</background-traits>
+      <background-ideals>Freedom.</background-ideals>
+      <backstory>Raised by wolves.</backstory>
     </input>
+    <appearance><age>120</age><eyes>Green</eyes></appearance>
     <abilities><strength>10</strength><dexterity>15</dexterity><constitution>14</constitution>
       <intelligence>10</intelligence><wisdom>13</wisdom><charisma>8</charisma></abilities>
     <elements>
@@ -67,6 +78,7 @@ function character(level: number, average = true): string {
           <element type="Size" name="Medium" id="ID_SIZE_MEDIUM" />
           <element type="Vision" name="Darkvision" id="ID_VISION_DARKVISION" />
           <element type="Racial Trait" name="Fleet of Foot" id="ID_TEST_FLEET" />
+          <element type="Racial Trait" name="Trance" id="ID_TEST_TRANCE" />
           <element type="Sub Race" name="Elven Subrace" registered="ID_TEST_SUB_RACE_WOOD_ELF" />
           <element type="Language" name="Common" id="ID_TEST_LANGUAGE_COMMON" />
         </element>
@@ -86,12 +98,15 @@ function character(level: number, average = true): string {
     <equipment>
       <item name="Leather" id="ID_TEST_ARMOR_LEATHER"><equipped location="Armor">true</equipped></item>
       <item name="Shield" id="ID_TEST_SHIELD"><details /></item>
+      <item name="Arrows" id="ID_TEST_ARROWS"><quantity>20</quantity></item>
+      <coins><gold>15</gold><silver>3</silver></coins>
     </equipment>
     <magic>
       <spellcasting name="Ranger" ability="Wisdom" attack="5" dc="13">
         <slots s1="3" s2="0" />
         <spells>
-          <spell name="Hunter's Mark" level="1" id="ID_X" known="true" />
+          <spell name="Hunter's Mark" level="1" id="ID_TEST_SPELL_HUNTERS_MARK" known="true" />
+          <spell name="Cure Wounds" level="1" id="ID_Z" prepared="true" />
           <spell name="Alarm" level="1" id="ID_Y" />
         </spells>
       </spellcasting>
@@ -168,6 +183,44 @@ describe('Aurora characters', () => {
     const levelFive = auroraCharacter(character(5), 'Awen.dnd5e', elements()).creature;
     expect(levelFive.level).toBe(5);
     expect(levelFive.hitPoints.average).toBe(10 + 4 * 6 + 10 + 5 + 5);
+  });
+
+  it('fills the full sheet: saves, skills, features, spells, equipment and the player texts', () => {
+    const { sheet } = auroraCharacter(character(3), 'Awen_3.dnd5e', elements());
+    expect(sheet).toMatchObject({
+      race: 'Wood Elf',
+      classes: 'Ranger (Hunter)',
+      background: 'Outlander',
+      proficiencyBonus: 2,
+      abilities: { dex: 19, wis: 14 },
+      savingThrows: { dex: { proficient: true, bonus: 6 }, wis: { proficient: false, bonus: 2 } },
+      skills: {
+        stealth: { proficiency: 'proficient', bonus: 6 },
+        perception: { proficiency: 'proficient', bonus: 4 },
+        acrobatics: { proficiency: 'none', bonus: 4 },
+      },
+      spellcasting: [{ source: 'Ranger', ability: 'Wisdom', saveDc: 13, attackBonus: 5 }],
+      currency: { cp: 0, sp: 3, ep: 0, gp: 15, pp: 0 },
+      personality: { traits: 'I watch the treeline.', ideals: 'Freedom.', bonds: '', flaws: '' },
+      appearance: { age: '120', height: '', eyes: 'Green' },
+      backstory: 'Raised by wolves.',
+    });
+    // Trance stays off the sheet like in Aurora; features name what they came with.
+    expect(sheet.features).toEqual([
+      { name: 'Fleet of Foot', source: 'Elf', text: '' },
+      { name: 'Defense', source: 'Ranger', text: 'While you are wearing armor, you gain a **+1 bonus** to AC.' },
+      { name: 'Tough Feet', source: 'Feat', text: '' },
+    ]);
+    // Only the marked spells; a spell the element files hold gets its library id.
+    expect(sheet.spells).toEqual([
+      { name: "Hunter's Mark", level: 1, status: 'known', source: 'Ranger', spell: 'test-spell-hunters-mark' },
+      { name: 'Cure Wounds', level: 1, status: 'prepared', source: 'Ranger', spell: null },
+    ]);
+    expect(sheet.inventory).toEqual([
+      { name: 'Leather', item: 'test-armor-leather', quantity: 1, equipped: true, attuned: false },
+      { name: 'Shield', item: 'test-shield', quantity: 1, equipped: false, attuned: false },
+      { name: 'Arrows', item: null, quantity: 20, equipped: false, attuned: false },
+    ]);
   });
 
   it('refuses files that are no characters', () => {

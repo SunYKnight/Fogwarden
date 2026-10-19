@@ -21,6 +21,7 @@ import {
   campaignNotesPath,
   campaignPath,
   encounterDir,
+  SHEET_FILE,
   storableFog,
   type LoadProblem,
   type PictureKind,
@@ -244,8 +245,9 @@ export async function migrateDataRoot(repository: Repository): Promise<LoadProbl
   const index = (await storage.exists('data', PORTRAITS_PATH))
     ? portraitIndexSchema.parse(JSON.parse(await storage.readText('data', PORTRAITS_PATH))).portraits
     : {};
+  // Character sheets are JSON beside today's stat block text, never old creatures.
   const creatureIds = (await storage.list('data', CREATURES))
-    .filter((e) => !e.isDir && e.name.endsWith('.json'))
+    .filter((e) => !e.isDir && e.name.endsWith('.json') && !e.name.endsWith(SHEET_FILE))
     .map((e) => e.name.slice(0, -'.json'.length));
   for (const id of creatureIds) {
     await run.convert(`${CREATURES}/${id}.json`, () => run.creature(id, index[id]));

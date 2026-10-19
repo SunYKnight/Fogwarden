@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-lan-player-upload"
+description = "Enables the lan_player_upload command without any pre-configured scope."
+commands.allow = ["lan_player_upload"]
+
+[[permission]]
+identifier = "deny-lan-player-upload"
+description = "Denies the lan_player_upload command without any pre-configured scope."
+commands.deny = ["lan_player_upload"]

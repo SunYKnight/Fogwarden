@@ -29,6 +29,8 @@ const COMMANDS: &[&str] = &[
     "lan_set_links",
     "lan_stop",
     "lan_status",
+    "lan_player_upload",
+    "lan_delete_player_upload",
     "frontend_file",
     "deploy_write_files",
     "deploy_host_key",

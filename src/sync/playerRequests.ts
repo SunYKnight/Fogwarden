@@ -1,4 +1,14 @@
-import type { BattleMap, Combatant, Encounter, MapPoint, Settings, Vec2 } from '@/core/model';
+import {
+  CHAT_EVERYONE,
+  CHAT_TO_DM,
+  PARTY_VIEW,
+  type BattleMap,
+  type Combatant,
+  type Encounter,
+  type MapPoint,
+  type Settings,
+  type Vec2,
+} from '@/core/model';
 import { rollDice } from '@/core/rules/dice';
 import { gridDistanceFt } from '@/core/rules/distance';
 import type { HeightField } from '@/core/terrain/heightfield';
@@ -8,7 +18,10 @@ import { useAppStore } from '@/state/appStore';
 import { addLog, describeRoll } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
 import { usePingStore } from '@/state/pingStore';
+import { appendChat, chatLine } from './chat';
+import { storePlayerNotes } from './playerData';
 import type { PlayerRequest, SyncPayload } from './protocol';
+import { handleSheetEdit } from './sheetEdits';
 import { useViewLinksStore } from './views';
 
 /**
@@ -94,11 +107,50 @@ function applyMove(view: string, request: Extract<PlayerRequest, { type: 'move' 
   }
 }
 
+type Reply = (payload: SyncPayload) => void;
+
+/** Tells the DM and the player why a request was not carried out. */
+function refuse(what: string, why: string, reply: Reply): void {
+  useAppStore.getState().notify(`A player's ${what} was refused: ${why}`, 'info');
+  reply({ type: 'notice', text: `Not done: ${why}` });
+}
+
+function applyChat(view: string, name: string, request: Extract<PlayerRequest, { type: 'chat' }>, reply: Reply) {
+  const { encounter, update } = useEncounterStore.getState();
+  const text = request.text.trim();
+  const refused = !useViewLinksStore.getState().features.chat
+    ? 'the campaign has no chat'
+    : view === PARTY_VIEW
+      ? 'the party view cannot chat'
+      : !encounter
+        ? 'no encounter is open'
+        : null;
+  if (refused !== null) {
+    refuse('chat line', refused, reply);
+  } else if (text !== '') {
+    const to = request.to === 'dm' ? CHAT_TO_DM : CHAT_EVERYONE;
+    update((d) => appendChat(d, chatLine(view, name, to, 'say', text)));
+  }
+}
+
+function applyNote(view: string, request: Extract<PlayerRequest, { type: 'note' }>, reply: Reply) {
+  const { features, campaignId, linked } = useViewLinksStore.getState();
+  const linkedCharacter = view !== PARTY_VIEW && linked.some((v) => v.id === view);
+  if (!features.playerNotes || campaignId === null || !linkedCharacter) {
+    const why = !features.playerNotes ? 'the campaign keeps no player notes' : 'the view keeps no notes';
+    refuse('note', why, reply);
+  } else {
+    storePlayerNotes(campaignId, view, request.text).catch(useAppStore.getState().reportError);
+  }
+}
+
 /**
  * Carries out what a player asked for over the link of `view`: a roll goes into the log and back to that view
- * as `rolled`, a point becomes a ping, a move is applied as one undo step. Throws when a roll cannot be made.
+ * as `rolled` (and, shared while the campaign allows it, into the chat for every character view), a point
+ * becomes a ping, a move is applied as one undo step, chat lines and notes are kept, sheet edits go to
+ * `handleSheetEdit`. Refusals reach the DM and the view as a notice. Throws when a roll cannot be made.
  */
-export function handlePlayerRequest(view: string, request: PlayerRequest, reply: (payload: SyncPayload) => void): void {
+export function handlePlayerRequest(view: string, request: PlayerRequest, reply: Reply): void {
   const name = useViewLinksStore.getState().linked.find((v) => v.id === view)?.name ?? view;
   switch (request.type) {
     case 'point':
@@ -106,12 +158,25 @@ export function handlePlayerRequest(view: string, request: PlayerRequest, reply:
       break;
     case 'roll': {
       const text = rollText(name, request);
-      useEncounterStore.getState().update((d) => addLog(d, 'roll', text));
+      const shared = request.share === true && useViewLinksStore.getState().features.sharedRolls;
+      useEncounterStore.getState().update((d) => {
+        addLog(d, 'roll', text);
+        if (shared) appendChat(d, chatLine(view, name, CHAT_EVERYONE, 'roll', text));
+      });
       reply({ type: 'rolled', text });
       break;
     }
     case 'move':
       applyMove(view, request);
+      break;
+    case 'chat':
+      applyChat(view, name, request, reply);
+      break;
+    case 'note':
+      applyNote(view, request, reply);
+      break;
+    case 'sheetEdit':
+      handleSheetEdit(view, request, reply);
       break;
   }
 }

@@ -10,6 +10,7 @@ import { Button, Dialog, EmptyState, Section } from '../kit';
 import { openAuroraImport } from '../library/compendiumUi';
 import { activateOnKey } from '../library/listRow';
 import { characterSummary } from '../library/PlayerLibrary';
+import { DmCharacterSheet } from '../sheet/DmCharacterSheet';
 
 interface PartyTabProps {
   campaign: Campaign;
@@ -31,16 +32,18 @@ function AuroraButton() {
 }
 
 interface MemberRowProps {
+  campaignId: string;
   member: PartyMember;
   busy: boolean;
   onChange: (member: PartyMember) => void;
   onRemove: () => void;
 }
 
-function MemberRow({ member, busy, onChange, onRemove }: MemberRowProps) {
+function MemberRow({ campaignId, member, busy, onChange, onRemove }: MemberRowProps) {
   const creature = useCreature(member.creature);
   const heldPack = useHeldPackOf(member.creature);
   const [player, setPlayer] = useDraft(member.player);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const name = creature?.name ?? member.creature.id;
   const missing = heldPack
     ? `Its pack "${heldPack.name}" ${heldPack.hidden ? 'hides its creatures' : 'is disabled'}.`
@@ -49,26 +52,44 @@ function MemberRow({ member, busy, onChange, onRemove }: MemberRowProps) {
     if (player !== member.player) onChange({ ...member, player });
   };
   return (
-    <div className="encounter-row">
-      {creature && <CreatureThumb creature={creature} alt="" className="creature-thumb" />}
-      <div className="encounter-info">
-        <strong>{name}</strong>
-        <span className="muted">{creature ? characterSummary(creature) : missing}</span>
+    <div className="col">
+      <div className="encounter-row">
+        {creature && <CreatureThumb creature={creature} alt="" className="creature-thumb" />}
+        <div className="encounter-info">
+          <strong>{name}</strong>
+          <span className="muted">{creature ? characterSummary(creature) : missing}</span>
+        </div>
+        {/* A field label column would sit far from the box; the placeholder names it. */}
+        <input
+          type="text"
+          aria-label={`Player of ${name}`}
+          placeholder="Player name"
+          title="Who plays this character"
+          value={player}
+          onChange={(e) => setPlayer(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+          }}
+        />
+        <Button
+          icon="book"
+          label={sheetOpen ? `Hide ${name}'s sheet` : `Show ${name}'s sheet`}
+          iconOnly
+          active={sheetOpen}
+          disabled={!creature}
+          onClick={() => setSheetOpen(!sheetOpen)}
+        />
+        <Button
+          icon="trash"
+          label="Remove from the party"
+          iconOnly
+          variant="danger"
+          disabled={busy}
+          onClick={onRemove}
+        />
       </div>
-      {/* A field label column would sit far from the box; the placeholder names it. */}
-      <input
-        type="text"
-        aria-label={`Player of ${name}`}
-        placeholder="Player name"
-        title="Who plays this character"
-        value={player}
-        onChange={(e) => setPlayer(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') commit();
-        }}
-      />
-      <Button icon="trash" label="Remove from the party" iconOnly variant="danger" disabled={busy} onClick={onRemove} />
+      {sheetOpen && creature && <DmCharacterSheet creature={creature} campaignId={campaignId} view={member.id} />}
     </div>
   );
 }
@@ -159,6 +180,7 @@ export function PartyTab({ campaign, onChange }: PartyTabProps) {
         {party.map((member) => (
           <MemberRow
             key={member.id}
+            campaignId={campaign.id}
             member={member}
             busy={saving}
             onChange={(changed) => save((p) => p.map((m) => (m.id === changed.id ? changed : m)))}

@@ -8,6 +8,7 @@ import {
   bundleTarget,
   fileExtension,
   PLAYER_BUNDLE_MANIFEST,
+  playerUploadTarget,
   playerBundleSchema,
   RELAY_API_VERSION,
   RELAY_DM_PROTOCOL,
@@ -18,6 +19,7 @@ import {
   type RelayMissingRequest,
   type RelaySession,
 } from './relayApi';
+import type { PlayerUploadSource } from './playerUploads';
 import { ViewSocketTransport } from './wsTransport';
 
 /** Reads a stored asset or a built frontend file as bytes. */
@@ -67,9 +69,14 @@ export async function fetchRelaySession(baseUrl: string, dmKey: string): Promise
   return session;
 }
 
-/** Replaces the relay's player links: token → view. */
-export async function pushRelayLinks(baseUrl: string, dmKey: string, links: Record<string, string>): Promise<void> {
-  const body: RelayLinks = { links };
+/** Replaces the relay's player links (token → view) and the views whose players may upload pictures. */
+export async function pushRelayLinks(
+  baseUrl: string,
+  dmKey: string,
+  links: Record<string, string>,
+  uploads: string[],
+): Promise<void> {
+  const body: RelayLinks = { links, uploads };
   await relayFetch(baseUrl, dmKey, '/api/links', {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
@@ -220,16 +227,18 @@ export class RelayUploader {
     }
   }
 
-  /** Uploads the player page and its chunks listed in the build's bundle manifest. */
+  /**
+   * Uploads the player page and its chunks listed in the build's bundle manifest. Hashes come from the bytes read
+   * here: the app's asset resolver rewrites HTML (CSP), so the page differs from the file in dist/.
+   */
   async uploadBundle(readFile: ReadBytes<string>): Promise<void> {
     const manifestBytes = await readFile(PLAYER_BUNDLE_MANIFEST);
     const manifest = playerBundleSchema.parse(JSON.parse(new TextDecoder().decode(manifestBytes)));
     const files = await Promise.all(
-      manifest.files.map(async ({ path, sha256 }) => ({
-        target: bundleTarget(path),
-        sha256,
-        bytes: await readFile(path),
-      })),
+      manifest.files.map(async ({ path }) => {
+        const bytes = await readFile(path);
+        return { target: bundleTarget(path), sha256: await sha256Hex(bytes), bytes };
+      }),
     );
     await this.upload(files);
   }
@@ -238,14 +247,15 @@ export class RelayUploader {
 /**
  * DM side of the internet relay: a `ViewSocketTransport` (reconnects, resend on reconnect) whose messages
  * wait until the assets they reference are uploaded. An upload failure is reported and the message still
- * goes out, so players keep getting updates while one asset is broken.
+ * goes out, so players keep getting updates while one asset is broken. Player uploads waiting on the relay
+ * are read and deleted with the DM key.
  */
-export class RelayTransport extends ViewSocketTransport {
+export class RelayTransport extends ViewSocketTransport implements PlayerUploadSource {
   private queue: Promise<void> = Promise.resolve();
 
   constructor(
-    baseUrl: string,
-    dmKey: string,
+    private readonly baseUrl: string,
+    private readonly dmKey: string,
     private readonly uploader: RelayUploader,
     private readonly uploadFailed: (error: unknown) => void,
   ) {
@@ -258,5 +268,14 @@ export class RelayTransport extends ViewSocketTransport {
       .then(() => this.uploader.ensure(refs))
       .catch((error: unknown) => this.uploadFailed(error))
       .then(() => super.send(views, payload));
+  }
+
+  async fetchUpload(id: string): Promise<Uint8Array<ArrayBuffer>> {
+    const response = await relayFetch(this.baseUrl, this.dmKey, playerUploadTarget(id));
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  async deleteUpload(id: string): Promise<void> {
+    await relayFetch(this.baseUrl, this.dmKey, playerUploadTarget(id), { method: 'DELETE' });
   }
 }

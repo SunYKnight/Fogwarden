@@ -150,9 +150,6 @@ repository secrets of the same names (_Settings > Secrets and variables > Action
 
 ## Play over the internet
 
-> Hidden in the app for now: online play has not been tested against a real server yet (see `PLAN.md`), so the
-> Online settings and the Players popover's Online line are switched off. The steps below describe it once enabled.
-
 Players outside your network connect through a relay on a server you control; the app connects out to it, so
 nothing at home needs to be reachable. You need an Ubuntu 22.04/24.04 server with root or sudo SSH access and a DNS
 name pointing to it (ports 80 and 443 open).
@@ -162,7 +159,13 @@ name pointing to it (ports 80 and 443 open).
 2. Either **Deploy via SSH** (host, user, key file or password; the password is never stored, the host key is shown
    for confirmation on first connect) or **Download install script** and run `sudo bash install.sh` in the copied
    folder on the server. The script installs Node.js 22, nginx, the `fogwarden-relay` systemd service and the
-   certificate; it is safe to run again and keeps the DM key. It prints the DM key as `FOGWARDEN_DM_KEY=…`.
+   certificate; it is safe to run again and keeps the DM key. It prints the DM key as `FOGWARDEN_DM_KEY=…`. It
+   refuses a relay port another service listens on. On a server whose nginx is run by nginx-manager
+   (`nginx-manager` on the path) it leaves nginx alone: it gets the
+   certificate with `certbot certonly --webroot` through the existing `/.well-known/acme-challenge/` location (so an
+   email is required), then registers `/etc/fogwarden-relay/fogwarden-relay.site.env` (HTTPS only, WebSockets,
+   1 GiB uploads, 1 h read timeout) with `nginx-manager register` and `apply`. The domain must lie inside the
+   manager's `BASE_DOMAIN`.
 3. _Online_: the URL (`https://<domain>`) and DM key are filled in after an SSH deploy; otherwise paste the key.
    **Connect** (also in the rail's Players popover) uploads the player page and shows the player links with a QR
    code.
@@ -187,6 +190,33 @@ with Alt+click on the Play canvas. In Play's **Table** tab, **Players move their
 own token (undo with Ctrl+Z), and **Show to players** shows a picture, video or text from the campaign's
 `handouts/` folder to everyone or one view; the tab also holds Sound, Scene (time of day, weather) and whether your
 camera and the turn order go to the players.
+
+The campaign's **Party** tab switches on more for character links (all off by default, so a table group sees no
+change; the Party link and the player window never show any of it):
+
+- **Full character sheets**: Skills, Spells, Inventory and Features tabs (from the Aurora import, else from the
+  stat block) with roll buttons on saves and skills.
+- **Chat**: to everyone or a whisper to you; you answer in Play's Chat tab, to everyone or one character.
+- **Shared rolls**: "Show everyone" puts a player's roll in every character's chat.
+- **Player notes**: a Notes tab saved to `campaigns/<id>/players/<character>/notes.md`; you can read them.
+- **Sheet edits**: off, applied at once, or waiting for your OK in the Players popover (waiting edits are kept in
+  `campaigns/<id>/players/<character>/pending.json`, so they survive a restart). Hit points, temp HP, death saves and
+  spell slots change the encounter (undo with Ctrl+Z); hit dice, items and coins go to
+  `campaigns/<id>/players/<character>/sheet.json`, never into a pack. Your Party tab shows the sheet with the
+  player's changes.
+- **Picture uploads**: PNG, JPEG or WebP up to 10 MB; they wait in the Players popover until you accept one as the
+  character's portrait or token, and nobody else sees them before.
+
+Home's **Players** card shows the player window, LAN and online state at a glance.
+
+## Second DM screen (laptop)
+
+A laptop in your home network can run the full DM app against your desktop: the desktop keeps the data, computes
+vision and fog, and drives the player window, LAN and online players; the laptop shows and changes the same
+encounter. Start LAN on the desktop, tick **DM link for my laptop** under the player links and open the link (or QR
+code) in a browser on the laptop. Both can be used at once; undo stays one history on the desktop. **New link** or
+unticking the box disconnects the laptop. Settings changed on the laptop are not saved, and player links and
+uploads stay on the desktop.
 
 ## Where things live
 

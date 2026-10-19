@@ -1,5 +1,6 @@
 import type { Encounter } from '@/core/model';
 import { Tabs, type TabSpec } from '../kit';
+import { ChatPanel } from './ChatPanel';
 import { DiceRoller } from './DiceRoller';
 import { EncounterOverview } from './EncounterOverview';
 import { useEncounterUi, type InspectorTab } from './encounterUiStore';
@@ -18,6 +19,7 @@ export function Inspector({ encounter, hasMap }: { encounter: Encounter; hasMap:
     { id: 'table', label: 'Table', icon: 'users' },
     { id: 'dice', label: 'Dice', icon: 'dice' },
     { id: 'log', label: 'Log', icon: 'list' },
+    { id: 'chat', label: 'Chat', icon: 'chat' },
     { id: 'areas', label: 'Areas', icon: 'area', badge: String(encounter.markers.length) },
   ];
 
@@ -34,6 +36,7 @@ export function Inspector({ encounter, hasMap }: { encounter: Encounter; hasMap:
         {tab === 'table' && <TableTab encounter={encounter} />}
         {tab === 'dice' && <DiceRoller />}
         {tab === 'log' && <LogPanel encounter={encounter} />}
+        {tab === 'chat' && <ChatPanel encounter={encounter} />}
         {tab === 'areas' && <MarkerPanel encounter={encounter} />}
       </div>
     </aside>

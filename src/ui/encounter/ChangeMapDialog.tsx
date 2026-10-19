@@ -5,17 +5,14 @@ import { useAppStore } from '@/state/appStore';
 import { flushEncounter } from '@/state/autosave';
 import { addLog } from '@/state/encounterActions';
 import { useEncounterStore } from '@/state/encounterStore';
+import { remoteChangeMap, useRemoteDmStore } from '@/sync/dmMirror';
 import { MapPicker } from '../components/MapPicker';
 import { Button, Dialog } from '../kit';
 import { cancelInteraction, useEncounterUi } from './encounterUiStore';
 
 const close = () => useEncounterUi.setState({ mapDialogOpen: false });
 
-/**
- * Moves the running encounter to another map. Positions, doors, fog and area templates belong to the old
- * map's ground, so they go; combatants, initiative, HP and the log stay.
- */
-async function changeMap(ref: DocRef | null): Promise<void> {
+async function moveEncounter(ref: DocRef | null): Promise<void> {
   const { repository } = useAppStore.getState();
   const map = ref ? await repository.load('map', ref) : null;
   // The pending autosave of the old state must not land after the new one.
@@ -37,6 +34,21 @@ async function changeMap(ref: DocRef | null): Promise<void> {
   cancelInteraction();
   useEncounterUi.setState({ areaTargetsId: null });
   useEncounterStore.getState().open(saved, map);
+}
+
+/**
+ * Moves the running encounter to another map. Positions, doors, fog and area templates belong to the old
+ * map's ground, so they go; combatants, initiative, HP and the log stay. A remote DM asks the desktop app,
+ * which owns the encounter's files, to do it.
+ */
+export async function changeMap(ref: DocRef | null): Promise<void> {
+  if (useRemoteDmStore.getState().host === null) {
+    await moveEncounter(ref);
+  } else {
+    remoteChangeMap(ref);
+    cancelInteraction();
+    useEncounterUi.setState({ areaTargetsId: null });
+  }
 }
 
 /** "Choose map…" / "Change map…" of Play: picks the map and says what is cleared. */

@@ -1788,16 +1788,30 @@ kbd {
   background: #000;
 }
 
-.player-status {
+/*
+ * Bottom of the player view: the tools stack bottom left, the status bottom right. Where both do not fit side by
+ * side the status wraps below the tools, so neither covers the other.
+ */
+.player-bottom {
   position: absolute;
+  left: 12px;
   right: 12px;
   bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.player-status {
+  margin-left: auto;
   padding: 4px 10px;
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.6);
   color: var(--fg-muted);
   font-size: 13px;
-  pointer-events: none;
 }
 
 .initiative-ribbon {
@@ -2835,6 +2849,96 @@ kbd {
   gap: 4px;
 }
 
+/* Five tabs must fit a phone: they scroll sideways instead of wrapping. */
+.player-sheet .kit-tabs {
+  flex-shrink: 0;
+  overflow-x: auto;
+  padding: 0 8px;
+}
+
+.player-sheet .kit-tab {
+  min-height: 40px;
+}
+
+.sheet-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-section h4 {
+  margin: 4px 0 0;
+}
+
+.sheet-abilities {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.sheet-ability {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.sheet-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sheet-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.sheet-check button {
+  min-height: 32px;
+  min-width: 40px;
+}
+
+.sheet-mark {
+  width: 24px;
+  color: var(--accent);
+  text-align: center;
+}
+
+.sheet-entry summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.sheet-about {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.sheet-about dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* The DM's read-only sheet in the Party tab and Compendium > Players. */
+.character-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* Phones: a bottom sheet the thumb reaches; collapsed it is one line. */
 @media (max-width: 700px) {
   .player-sheet {
@@ -2847,9 +2951,36 @@ kbd {
     border-radius: 12px 12px 0 0;
   }
 
-  .player-app .player-status {
+  .player-app .player-bottom {
     bottom: 56px;
   }
+
+  /* An open sheet or chat takes the bottom; only a broken link still shows, on top. */
+  .player-app:has(:is(.player-sheet, .player-chat).open) .player-bottom {
+    top: 12px;
+    bottom: auto;
+  }
+
+  .player-app:has(.player-sheet.open) .player-tools,
+  .player-app:has(.player-chat.open) .player-tools > :not(.player-chat),
+  .player-app:has(:is(.player-sheet, .player-chat).open) .player-status:not(.problem) {
+    display: none;
+  }
+}
+
+/* A character's own link only, in the bottom left stack. */
+.picture-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(21, 23, 28, 0.92);
+  border: 1px solid var(--border);
+}
+
+.picture-upload progress {
+  width: 100%;
 }
 
 .turn-banner {
@@ -3147,9 +3278,6 @@ kbd {
 }
 
 .player-sound {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3600,4 +3728,156 @@ video.encounter-thumb,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Chat between the DM and the players' own links (Play inspector and player link) */
+
+.chat-panel {
+  min-height: 0;
+}
+
+.chat-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.chat-panel .chat-lines {
+  max-height: 50vh;
+}
+
+.chat-line {
+  border-left: 3px solid var(--border);
+  padding-left: 6px;
+  overflow-wrap: anywhere;
+}
+
+.chat-line.roll {
+  border-color: #3d8bfd;
+}
+
+.chat-line.whisper {
+  border-color: var(--accent);
+  font-style: italic;
+}
+
+/* Bottom left: chat, picture upload, then the volume. */
+.player-tools {
+  max-width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.player-tools > * {
+  pointer-events: auto;
+}
+
+.player-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(21, 23, 28, 0.92);
+  border: 1px solid var(--border);
+  touch-action: auto;
+  user-select: text;
+}
+
+.player-chat.open {
+  width: min(360px, calc(100vw - 24px));
+}
+
+.player-chat .chat-lines {
+  max-height: 40vh;
+}
+
+.player-chat-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.player-notice {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 6px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+}
+
+.sheet-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sheet-number input {
+  width: 4.5em;
+  text-align: center;
+}
+
+.sheet-number button {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+/* Asked for, not yet accepted by the DM. */
+.sheet-number.waiting input {
+  border-color: var(--accent);
+  font-style: italic;
+}
+
+.sheet-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (max-width: 700px) {
+  /* The open chat is a bottom sheet over the map, like the character sheet. */
+  .player-app .player-chat.open {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 70%;
+    border-radius: 12px 12px 0 0;
+    z-index: 5;
+  }
+
+  .player-chat.open .chat-lines {
+    max-height: none;
+    flex: 1;
+  }
+}
+
+/* Remote DM: which desktop app this window controls. */
+.shell-main > .remote-dm-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+  border-left: 3px solid var(--ok);
+}
+
+.shell-main > .remote-dm-banner-off {
+  border-left-color: var(--danger);
+}
+
+.dm-link {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
 }

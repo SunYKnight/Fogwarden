@@ -214,7 +214,7 @@ fn resolve_writable(root: &Path, relative: &str) -> Result<PathBuf, StorageError
 }
 
 /// Every write into the data area: keeps the replaced version in the history, then writes atomically.
-fn write_data(root: &Path, relative: &str, bytes: &[u8]) -> Result<(), StorageError> {
+pub(crate) fn write_data(root: &Path, relative: &str, bytes: &[u8]) -> Result<(), StorageError> {
     let target = resolve_writable(root, relative)?;
     history::keep(root, Path::new(relative), Some(bytes), &history::today())?;
     write_atomic(&target, bytes)
@@ -286,15 +286,23 @@ pub fn storage_open_data_root(state: State<'_, StorageState>) -> Result<(), Stor
     open_in_file_manager(&state.root(Area::Data)?)
 }
 
+pub(crate) fn read_text(root: &Path, relative: &str) -> Result<String, StorageError> {
+    Ok(fs::read_to_string(resolve(root, relative)?)?)
+}
+
+pub(crate) fn read_bytes(root: &Path, relative: &str) -> Result<Vec<u8>, StorageError> {
+    Ok(fs::read(resolve(root, relative)?)?)
+}
+
 #[tauri::command(async)]
 pub fn storage_read_text(state: State<'_, StorageState>, area: Area, path: String) -> Result<String, StorageError> {
-    Ok(fs::read_to_string(resolve(&state.root(area)?, &path)?)?)
+    read_text(&state.root(area)?, &path)
 }
 
 // A raw response keeps PNG bytes out of JSON number arrays.
 #[tauri::command(async)]
 pub fn storage_read_bytes(state: State<'_, StorageState>, area: Area, path: String) -> Result<Response, StorageError> {
-    Ok(Response::new(fs::read(resolve(&state.root(area)?, &path)?)?))
+    Ok(Response::new(read_bytes(&state.root(area)?, &path)?))
 }
 
 #[tauri::command(async)]
@@ -411,7 +419,7 @@ fn list_dir(dir: &Path) -> Result<Vec<Entry>, StorageError> {
 }
 
 // The version history is no document folder; only its own commands list it.
-fn list_area(root: &Path, path: &str) -> Result<Vec<Entry>, StorageError> {
+pub(crate) fn list_area(root: &Path, path: &str) -> Result<Vec<Entry>, StorageError> {
     let dir = resolve(root, path)?;
     let entries = list_dir(&dir)?;
     Ok(entries
@@ -480,19 +488,22 @@ pub fn storage_read_file_bytes(path: String) -> Result<Response, StorageError> {
     Ok(Response::new(fs::read(picked_file(&path)?)?))
 }
 
-#[tauri::command(async)]
-pub fn storage_exists(state: State<'_, StorageState>, area: Area, path: String) -> Result<bool, StorageError> {
-    Ok(resolve(&state.root(area)?, &path)?.exists())
+pub(crate) fn exists(root: &Path, relative: &str) -> Result<bool, StorageError> {
+    Ok(resolve(root, relative)?.exists())
 }
 
 #[tauri::command(async)]
-pub fn storage_remove(state: State<'_, StorageState>, path: String) -> Result<(), StorageError> {
-    let root = state.root(Area::Data)?;
-    let target = resolve_writable(&root, &path)?;
+pub fn storage_exists(state: State<'_, StorageState>, area: Area, path: String) -> Result<bool, StorageError> {
+    exists(&state.root(area)?, &path)
+}
+
+/// Removes a file or folder of the data area; the history keeps what it held.
+pub(crate) fn remove_data(root: &Path, relative: &str) -> Result<(), StorageError> {
+    let target = resolve_writable(root, relative)?;
     if target == root {
         Err(StorageError("refusing to remove the data root".into()))
     } else if target.exists() {
-        history::keep_removed(&root, Path::new(&path), &history::today())?;
+        history::keep_removed(root, Path::new(relative), &history::today())?;
         if target.is_dir() {
             fs::remove_dir_all(&target)?;
         } else {
@@ -502,6 +513,11 @@ pub fn storage_remove(state: State<'_, StorageState>, path: String) -> Result<()
     } else {
         Ok(())
     }
+}
+
+#[tauri::command(async)]
+pub fn storage_remove(state: State<'_, StorageState>, path: String) -> Result<(), StorageError> {
+    remove_data(&state.root(Area::Data)?, &path)
 }
 
 #[tauri::command(async)]
@@ -525,22 +541,26 @@ fn copy_recursive(from: &Path, to: &Path) -> Result<(), StorageError> {
     Ok(())
 }
 
-/// Copies a file or folder from either area into the data area, file by file like any write.
-#[tauri::command(async)]
-pub fn storage_copy(state: State<'_, StorageState>, area: Area, from: String, to: String) -> Result<(), StorageError> {
-    let source = resolve(&state.root(area)?, &from)?;
-    let root = state.root(Area::Data)?;
+/// Copies a file or folder below `source_root` into the data area, file by file like any write.
+pub(crate) fn copy_into_data(source_root: &Path, data_root: &Path, from: &str, to: &str) -> Result<(), StorageError> {
+    let source = resolve(source_root, from)?;
     if source.is_dir() {
         for file in history::files_under(&source)? {
-            let target = Path::new(&to).join(&file);
-            write_data(&root, &target.to_string_lossy(), &fs::read(source.join(&file))?)?;
+            let target = Path::new(to).join(&file);
+            write_data(data_root, &target.to_string_lossy(), &fs::read(source.join(&file))?)?;
         }
         Ok(())
     } else if source.is_file() {
-        write_data(&root, &to, &fs::read(&source)?)
+        write_data(data_root, to, &fs::read(&source)?)
     } else {
         Err(StorageError(format!("nothing to copy at {from}")))
     }
+}
+
+/// Copies a file or folder from either area into the data area.
+#[tauri::command(async)]
+pub fn storage_copy(state: State<'_, StorageState>, area: Area, from: String, to: String) -> Result<(), StorageError> {
+    copy_into_data(&state.root(area)?, &state.root(Area::Data)?, &from, &to)
 }
 
 /// Copies the whole data root `from` into `to`, an existing empty folder that neither contains nor lies inside it.

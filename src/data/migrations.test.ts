@@ -9,6 +9,7 @@ import {
   defaultRemoteSettings,
   defaultSettings,
   encounterSchema,
+  noPlayerFeatures,
   PARTY_VIEW,
   settingsSchema,
   SETTINGS_SCHEMA_VERSION,
@@ -130,6 +131,13 @@ describe('settings migration', () => {
       maxFps: null,
     });
   });
+
+  it('adds the DM link, turned off, to v13 settings and keeps the rest', () => {
+    const { dmRemote: _unused, ...v13 } = { ...defaultSettings(), tokenStandees: false };
+    const migrated = settingsSchema.parse(migrate('settings', { ...v13, version: 13 }));
+    expect(migrated.dmRemote).toEqual({ enabled: false, rotation: 0 });
+    expect(migrated.tokenStandees).toBe(false);
+  });
 });
 
 describe('encounter migration', () => {
@@ -165,11 +173,24 @@ describe('encounter migration', () => {
   });
 
   it('keeps players from moving their own tokens in a v5 encounter', () => {
-    const { playersMoveTokens: _moves, turnStart: _start, ...v5 } = { ...createEncounter('e', 'c1', null), version: 5 };
+    const {
+      playersMoveTokens: _moves,
+      turnStart: _start,
+      chat: _chat,
+      ...v5
+    } = {
+      ...createEncounter('e', 'c1', null),
+      version: 5,
+    };
     const migrated = encounterSchema.parse(migrate('encounter', v5));
-    expect(migrated.version).toBe(7);
+    expect(migrated.version).toBe(8);
     expect(migrated.playersMoveTokens).toBe(false);
     expect(migrated.turnStart).toBeNull();
+  });
+
+  it('starts a v7 encounter without chat lines', () => {
+    const { chat: _chat, ...v7 } = { ...createEncounter('e', 'c1', null), version: 7 };
+    expect(encounterSchema.parse(migrate('encounter', v7)).chat).toEqual([]);
   });
 
   it('gives combatants of a v4 encounter no level, effects, death saves, spent resources or light', () => {
@@ -234,10 +255,32 @@ describe('update settings migration', () => {
 });
 
 describe('campaign migration', () => {
-  it('gives v2 campaigns an empty party and keeps the rest', () => {
-    const { notes: _notes, party: _party, ...v2 } = { ...createCampaign('Saga'), id: 'saga', version: 2 };
+  it('gives v2 campaigns an empty party and no player features and keeps the rest', () => {
+    const {
+      notes: _notes,
+      party: _party,
+      playerFeatures: _features,
+      ...v2
+    } = {
+      ...createCampaign('Saga'),
+      id: 'saga',
+      version: 2,
+    };
     const migrated = campaignFileSchema.parse(migrate('campaign', v2));
-    expect(migrated).toEqual({ ...v2, version: 3, party: [] });
+    expect(migrated).toEqual({ ...v2, version: 4, party: [], playerFeatures: noPlayerFeatures() });
+  });
+
+  it('turns player features off for v3 campaigns', () => {
+    const { notes: _notes, playerFeatures: _features, ...v3 } = { ...createCampaign('Saga'), version: 3 };
+    const migrated = campaignFileSchema.parse(migrate('campaign', v3));
+    expect(migrated.playerFeatures).toEqual({
+      uploads: false,
+      sheets: false,
+      chat: false,
+      sharedRolls: false,
+      playerNotes: false,
+      sheetEdits: 'off',
+    });
   });
 
   it('refuses to read a campaign of the old file layout as a current one', () => {

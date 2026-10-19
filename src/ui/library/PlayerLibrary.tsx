@@ -4,8 +4,10 @@ import type { Campaign, Creature } from '@/core/model';
 import type { LibraryEntry } from '@/data/repository';
 import { useAppStore } from '@/state/appStore';
 import { useLibraryStore } from '@/state/libraryStore';
+import { useViewLinksStore } from '@/sync/views';
 import { CreatureThumb } from '../creatureTypes/CreatureThumb';
-import { Button, EmptyState, openContextMenu } from '../kit';
+import { Button, EmptyState, openContextMenu, Section } from '../kit';
+import { DmCharacterSheet } from '../sheet/DmCharacterSheet';
 import { openAuroraImport } from './compendiumUi';
 import { CreaturePreview, useCreatureActions } from './CreatureLibrary';
 import { OriginBadge } from './OriginBadge';
@@ -59,6 +61,7 @@ export function PlayerLibrary() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const actions = useCreatureActions(setSelectedId);
+  const linkedCampaign = useViewLinksStore((s) => s.campaignId);
 
   useEffect(() => {
     let ignore = false;
@@ -86,6 +89,9 @@ export function PlayerLibrary() {
     return byCreature;
   }, [campaigns]);
   const selectedParties = (selected && partiesByCreature.get(selected.ref.id)) ?? [];
+  // In the party of the campaign at the table, the sheet shows its player's changes.
+  const linked = campaigns.find((c) => c.id === linkedCampaign);
+  const member = linked?.party.find((m) => m.creature.id === selected?.ref.id);
 
   const showMenu = (e: MouseEvent, entry: Entry) => {
     e.preventDefault();
@@ -145,6 +151,9 @@ export function PlayerLibrary() {
                 ? `In the party of ${selectedParties.join(', ')}.`
                 : 'In no campaign party yet.'}
             </p>
+            <Section title="Character sheet" collapsible defaultOpen={false}>
+              <DmCharacterSheet creature={selected.doc} campaignId={member && linked?.id} view={member?.id} />
+            </Section>
           </CreaturePreview>
         ) : (
           <EmptyState icon="user" title="Select a player character to see its stat block." />

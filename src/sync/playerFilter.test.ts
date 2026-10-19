@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { BitSet } from '@/core/binary';
 import {
+  createCreature,
   createEncounter,
   createMap,
   freshCombatState,
+  PARTY_VIEW,
   type BattleMap,
   type Combatant,
   type Encounter,
 } from '@/core/model';
+import type { Spell } from '@/core/spells';
 import { HeightField } from '@/core/terrain/heightfield';
 import {
   exploreBySource,
@@ -19,7 +22,14 @@ import {
   type FogSources,
 } from '@/core/vision/fog';
 import { computeVisibility } from '@/core/vision/visibility';
-import { filterEncounterForPlayers, filterMapForPlayers, healthBand, playerMapInputs } from './playerFilter';
+import {
+  characterDetails,
+  filterEncounterForPlayers,
+  filterMapForPlayers,
+  healthBand,
+  ownCharacter,
+  playerMapInputs,
+} from './playerFilter';
 
 function combatant(id: string, extra: Partial<Combatant> = {}): Combatant {
   return {
@@ -220,6 +230,75 @@ describe('healthBand', () => {
     expect(healthBand({ current: 2, max: 9, temp: 0 })).toBe('critical');
     expect(healthBand({ current: 0, max: 9, temp: 0 })).toBe('down');
     expect(healthBand({ current: -3, max: 9, temp: 0 })).toBe('down');
+  });
+});
+
+describe('character sheets', () => {
+  it('belong to the view of their own shown player character only, never to another view or the party', () => {
+    const encounter = encounterWith([
+      combatant('thorin', { side: 'player' }),
+      combatant('elara', { side: 'player' }),
+      combatant('hidden-pc', { side: 'player', hiddenFromPlayers: true }),
+      combatant('goblin'),
+    ]);
+    expect(ownCharacter(encounter, 'thorin')?.id).toBe('thorin');
+    expect(ownCharacter(encounter, 'elara')?.id).toBe('elara');
+    expect(ownCharacter(encounter, PARTY_VIEW)).toBeUndefined();
+    expect(ownCharacter(encounter, 'goblin')).toBeUndefined();
+    expect(ownCharacter(encounter, 'hidden-pc')).toBeUndefined();
+    expect(ownCharacter(encounterWith([combatant(PARTY_VIEW, { side: 'player' })]), PARTY_VIEW)).toBeUndefined();
+  });
+
+  it('come from the stat block without a sheet file, expertise where the bonus holds proficiency twice', () => {
+    const creature = {
+      ...createCreature('Awen'),
+      kind: 'player' as const,
+      level: 1,
+      abilities: { str: 10, dex: 14, con: 10, int: 10, wis: 12, cha: 10 },
+      savingThrows: { dex: 4 },
+      skills: { stealth: 6, perception: 3 },
+      traits: [{ name: 'Keen Senses', description: 'Sees far.' }],
+    };
+    const { sheet, spells } = characterDetails(creature, undefined, new Map());
+    expect(sheet.savingThrows.dex).toEqual({ proficient: true, bonus: 4 });
+    expect(sheet.savingThrows.wis).toEqual({ proficient: false, bonus: 1 });
+    expect(sheet.skills.stealth).toEqual({ proficiency: 'expertise', bonus: 6 });
+    expect(sheet.skills.perception).toEqual({ proficiency: 'proficient', bonus: 3 });
+    expect(sheet.skills.acrobatics).toEqual({ proficiency: 'none', bonus: 2 });
+    expect(sheet.features).toEqual([{ name: 'Keen Senses', source: '', text: 'Sees far.' }]);
+    expect(spells).toEqual({});
+  });
+
+  it('carry the library texts of the spells they name', () => {
+    const creature = { ...createCreature('Awen'), kind: 'player' as const };
+    const base = characterDetails(creature, undefined, new Map()).sheet;
+    const stored = {
+      ...base,
+      spells: [
+        { name: 'Aid', level: 2, status: 'prepared' as const, source: 'Cleric', spell: 'aid' },
+        { name: 'Lost', level: 1, status: 'known' as const, source: 'Cleric', spell: 'gone' },
+      ],
+    };
+    const aid: Spell = {
+      id: 'aid',
+      name: 'Aid',
+      level: 2,
+      school: 'Abjuration',
+      castingTime: '1 action',
+      range: '30 feet',
+      components: 'V, S, M',
+      duration: '8 hours',
+      ritual: false,
+      classes: ['Cleric'],
+      source: 'SRD',
+      createdAt: null,
+      updatedAt: null,
+      description: 'Bolsters allies.',
+    };
+    const { sheet, spells } = characterDetails(creature, stored, new Map([['aid', aid]]));
+    expect(sheet).toBe(stored);
+    expect(Object.keys(spells)).toEqual(['aid']);
+    expect(spells.aid).toMatchObject({ school: 'Abjuration', description: 'Bolsters allies.' });
   });
 });
 

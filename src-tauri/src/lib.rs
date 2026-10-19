@@ -52,6 +52,8 @@ pub fn run() {
             lan::lan_set_links,
             lan::lan_stop,
             lan::lan_status,
+            lan::lan_player_upload,
+            lan::lan_delete_player_upload,
             frontend::frontend_file,
             deploy::deploy_write_files,
             deploy::deploy_host_key,

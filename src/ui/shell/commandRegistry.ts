@@ -49,7 +49,7 @@ export function openCommandPalette(): void {
 
 const SETTINGS_KEYWORDS: Record<SettingsSection, string[]> = {
   data: ['folder', 'backup', 'history', 'version', 'restore', 'storage'],
-  players: ['player view', 'monitor', 'window', 'lan', 'port', 'qr code'],
+  players: ['player view', 'monitor', 'window', 'lan', 'port', 'relay', 'online', 'server', 'qr code'],
   graphics: ['quality', 'shadows', 'performance'],
   audio: ['sound', 'music', 'volume'],
   rules: ['diagonals', 'standees'],

@@ -115,7 +115,8 @@ const DOCUMENT_RULES: DocumentRule[] = [
   { kind: 'settings', pattern: /^settings\.json$/, id: () => 'settings', main: (m) => m[0]! },
   {
     kind: 'creature',
-    pattern: new RegExp(`^${SOURCE}/creatures/([^/.]+)(?:\\.token)?\\.[a-z]+$`, 'i'),
+    // Pictures (`<id>.token.png`) and the sheet (`<id>.sheet.json`) belong to the creature.
+    pattern: new RegExp(`^${SOURCE}/creatures/([^/.]+)(?:\\.token|\\.sheet)?\\.[a-z]+$`, 'i'),
     id: (m) => m[2]!,
     main: (m) => `${m[1]}/creatures/${m[2]}.txt`,
   },

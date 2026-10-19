@@ -6,7 +6,7 @@ import type { HitTag } from '@/render/mapRenderContext';
 import { useFogViewStore } from '@/render/fog/fogViewStore';
 
 export type EncounterTool = 'select' | 'measure';
-export type InspectorTab = 'encounter' | 'table' | 'dice' | 'log' | 'areas';
+export type InspectorTab = 'encounter' | 'table' | 'dice' | 'log' | 'chat' | 'areas';
 export type DockTab = 'actions' | 'effects' | 'token' | 'stats' | 'notes';
 export type HpChange = 'damage' | 'heal' | 'temp';
 

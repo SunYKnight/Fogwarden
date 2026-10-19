@@ -1,10 +1,20 @@
 import type { CreatureIconKey } from '@/core/creatureTypeIcon';
-import type { AssetRef, BattleMap, Combatant, Creature, Encounter } from '@/core/model';
+import {
+  PARTY_VIEW,
+  type AssetRef,
+  type BattleMap,
+  type CharacterSheet,
+  type Combatant,
+  type Creature,
+  type Encounter,
+} from '@/core/model';
+import { sheetFromCreature, sheetSpellInfo } from '@/core/rules/characterSheet';
 import { CREATURE_SPACE_FT } from '@/core/rules/space';
 import { creatureResources } from '@/core/rules/resources';
+import type { Spell } from '@/core/spells';
 import { cellRange, FOG_VISIBLE, type FogCells } from '@/core/vision/fog';
 import { currentCombatant } from '@/state/encounterActions';
-import type { PlayerCombatant, PlayerEncounter, PlayerSheet } from './protocol';
+import type { CharacterDetails, PlayerCombatant, PlayerEncounter, PlayerSheet } from './protocol';
 
 /** Secret openings players know about: only those standing open right now. */
 function openSecretIds(map: BattleMap, encounter: Encounter): Set<string> {
@@ -130,8 +140,11 @@ export function filterEncounterForPlayers(
   };
 }
 
-/** A player character's own sheet for its view; speeds and spell slots come from its library creature. */
-export function playerSheet(combatant: Combatant, creature: Creature | null): PlayerSheet {
+/**
+ * A player character's own sheet for its view; speeds and spell slots come from its library creature, spent
+ * hit dice from the player's stored changes with the level as their number.
+ */
+export function playerSheet(combatant: Combatant, creature: Creature | null, hitDiceUsed = 0): PlayerSheet {
   const slots = creature ? creatureResources(creature).slots : {};
   return {
     id: combatant.id,
@@ -145,5 +158,26 @@ export function playerSheet(combatant: Combatant, creature: Creature | null): Pl
     slots: Object.entries(slots)
       .map(([level, max]) => ({ level: Number(level), max, used: combatant.resources.slotsUsed[level] ?? 0 }))
       .sort((a, b) => a.level - b.level),
+    ...(combatant.level !== null && { hitDice: { used: hitDiceUsed, max: combatant.level } }),
   };
+}
+
+/**
+ * The player character whose eyes `view` is: shown to players, on their side, with the view's id. Sheets go
+ * only to this character's view, so no other view and never the party view gets one.
+ */
+export function ownCharacter(encounter: Encounter, view: string): Combatant | undefined {
+  return view === PARTY_VIEW
+    ? undefined
+    : encounter.combatants.find((c) => c.id === view && c.side === 'player' && !c.hiddenFromPlayers);
+}
+
+/** The full sheet of a library character: its sheet file, else one from its stat block; spells from the library. */
+export function characterDetails(
+  creature: Creature,
+  stored: CharacterSheet | undefined,
+  spells: ReadonlyMap<string, Spell>,
+): CharacterDetails {
+  const sheet = stored ?? sheetFromCreature(creature);
+  return { sheet, spells: sheetSpellInfo(sheet, spells) };
 }

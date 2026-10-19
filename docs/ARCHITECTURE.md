@@ -104,6 +104,7 @@ Packs (`content/packs/<id>/`, `<data root>/packs/<id>/`) use the same folders as
     creatures/<id>.txt                 stat block text with a header
     creatures/<id>.png|jpg|jpeg|webp   picture (also for pack creatures)
     creatures/<id>.token.<ext>         token picture
+    creatures/<id>.sheet.json          full sheet of a player character
     markers/<id>.json                  area template
     maps/<id>/map.json                 map without heights
     maps/<id>/terrain.png              16-bit grayscale heightmap
@@ -132,6 +133,11 @@ Packs (`content/packs/<id>/`, `<data root>/packs/<id>/`) use the same folders as
     people-and-places/<id>.<ext>       its picture (named in the header)
     quests/<id>.md                     quest (header + Markdown)
     calendar.json                      in-game calendar
+    players/<view>/uploads/<id>.<png|jpg|webp>   pictures the DM accepted from that player view
+    players/<view>/notes.md            that player's own notes (Markdown; the DM reads them)
+    players/<view>/sheet.json          what that player changed on their sheet (hit dice, items, coins) and
+                                       where the character stands between encounters (HP, slots, death saves)
+    players/<view>/pending.json        that player's sheet edits waiting for the DM ('approve' mode)
   history/<YYYY-MM-DD>/<path>          earlier version of <path> (version history, see Documents and storage)
   history/.objects/<sha256>            its content, stored once
 ```
@@ -170,6 +176,20 @@ Packs (`content/packs/<id>/`, `<data root>/packs/<id>/`) use the same folders as
   ...
   ```
 
+- **Character sheet** (`creatures/<id>.sheet.json` beside a player character's stat block, `characterSheetSchema`
+  in `src/core/model/character.ts`, schema `character-sheet` v1): `{schema, version, race, classes, background,
+proficiencyBonus, abilities, savingThrows: {<ability>: {proficient, bonus}}, skills: {<skill>: {proficiency,
+bonus}}, features: [{name, source, text}], spellcasting: [{source, ability, saveDc, attackBonus}], spells: [{name,
+level, status, source, spell}], inventory: [{name, item, quantity, equipped, attuned}], currency: {cp, sp, ep, gp,
+pp}, personality: {traits, ideals, bonds, flaws}, appearance: {age, height, weight, eyes, skin, hair}, backstory}`.
+  `proficiency` is `none`, `proficient` or `expertise`, `status` `known`, `prepared` or `always-prepared`; bonuses
+  are totals as rolled; `spell` and `item` are library ids or null; feature texts and the backstory are Markdown.
+  The file name is the creature id, so the file holds no id, name or time stamps. Sheets resolve by pack
+  precedence like pictures (`repository.characterSheets()`, loaded with the creature listing into
+  `useLibraryStore.characterSheets`), belong to the creature in version history, campaign archives and deletes,
+  and the layout migration skips them. A character without one gets `sheetFromCreature`
+  (`src/core/rules/characterSheet.ts`: scores, saves and skills from the stat block, expertise where a skill bonus
+  holds the proficiency bonus twice, traits as features).
 - **Area template** (`library/markers/<id>.json`): `{schema: "marker", version, id, name, createdAt, updatedAt,
 shape, sizeFt, widthFt, heightFt, color, opacity, notes, save?}`; the optional `save` is `{ability, dc, damage,
 damageType, halfOnSuccess}` (`damage` a dice formula rolled once for all targets) and is copied into placed markers.
@@ -180,9 +200,23 @@ damageType, halfOnSuccess}` (`damage` a dice formula rolled once for all targets
   coarsest power of two the heights lie on, at most 2^-16 ft for small ranges, so saving moves a height by at most
   half a step (whole and half feet stay exact) and a reloaded map saves the same image again. 8-bit and RGB edits load
   too (8-bit value × 257, first channel).
-- **Campaign** (`campaign.json`, schema `campaign` v3): `{schema, version, id, name, createdAt, updatedAt,
-party: [{id, creature: DocRef, player}]}`; notes in `notes.md` (missing file = no notes). Party members are
-  library creatures (kind player) referenced by `DocRef` plus the player's name; v2 → v3 adds `party: []`.
+- **Campaign** (`campaign.json`, schema `campaign` v4): `{schema, version, id, name, createdAt, updatedAt,
+party: [{id, creature: DocRef, player}], playerFeatures: {uploads, sheets, chat, sharedRolls, playerNotes,
+sheetEdits}}`; notes in `notes.md` (missing file = no notes). `sheetEdits` is `off`, `auto` or `approve`, the others
+  are booleans. Party members are library creatures (kind player) referenced by `DocRef` plus the player's name;
+  v2 → v3 adds `party: []`, v3 → v4 `playerFeatures` with everything off.
+- **Player files** (`campaigns/<id>/players/<view>/`, `<view>` the party member id): `notes.md` (the player's
+  notes, missing file = none), `sheet.json` (schema `player-sheet` v1, `playerSheetSchema`: `{schema, version,
+hitDiceUsed, inventory: {<index>: {name, quantity, equipped}}, currency: {cp?, …}, session: {hp, tempHp,
+slotsUsed: {<level>: n}, deathSaves: {successes, failures}} | null}`; missing file = `emptyPlayerSheet()`, missing
+  `session` = null) and `pending.json` (schema `player-pending` v1, `playerPendingSchema`: `{schema, version,
+edits: [{id, edit, text, before}]}`, the edits waiting for the DM, oldest first, `edit` a `sheetEditSchema` value;
+  missing file = none). Inventory keys are indexes into the character sheet's `inventory`; an entry applies only
+  while that item still has the stored name (`applySheetOverlay`), so a re-imported sheet never gets a wrong count.
+  `session` is where the character stands between encounters (`characterSessionSchema`; null = rested, full hit
+  points). The queue has its own file: it holds requests, not accepted values, and `sheet.json` is laid over the
+  published sheet, which must never show them. `Repository.loadPlayerNotes`/`storePlayerNotes`/
+  `loadPlayerSheet`/`storePlayerSheet`/`loadPlayerPending`/`storePlayerPending`.
 - **Journal, people and places, quests** (`src/core/campaign/journal.ts`, `people.ts`, `quests.ts`): Markdown with
   an optional header between `---` lines (`src/core/frontMatter.ts`: one `key: value` per line, lists comma
   separated, unknown or duplicate keys are errors naming the line). Journal keys `title`, `session`, `date`
@@ -205,8 +239,8 @@ title, notes}]}`; months and days count from 1, days have 24 hours, years are th
   the campaign files.
 - **Portraits** (`portraits/` in My content or a pack): PNG, JPEG or WebP files offered by the picture library
   (`repository.listPortraits()`); picking one for a creature copies it to the creature's picture name on save.
-- **Encounter** (`encounter.json`, schema `encounter` v7): combatants, markers, door states, log, notes,
-  `turnStart` (where the current combatant began its turn; v7),
+- **Encounter** (`encounter.json`, schema `encounter` v8): combatants, markers, door states, log, `chat` (v8, see
+  Player devices), notes, `turnStart` (where the current combatant began its turn; v7),
   `playersMoveTokens` (players may drag their own token) and `fog.cellsPerSquare`. Since v5 every combatant has
   `level` (player characters, else null), `effects` (`{id, name, condition, expires: {round, turnOf, at:
 "start"|"end"} | null}`), `concentrating`, `deathSaves` (`{successes, failures}`), `resources` (spent ones:
@@ -219,9 +253,9 @@ cellsPerSquare` × `squaresY * cellsPerSquare`), white = set. Paint white into `
   `encounterActions.ts`, Add combatants > Add party), so its player view, link token, `settings.playerWindow.view`
   and fog key (`fog.exploredBy`, `fog/explored/<id>.png`) are the same in every encounter of the campaign. Absent
   for everyone else; no encounter schema bump (optional field).
-- **Settings** (`settings.json`, schema `settings` v12): UI and server preferences. Secrets, keep the file private:
-  `remote.dmKey` (authenticates the app at the internet relay as DM) and `playerLinks.secret` (all player links are
-  derived from it; changing it invalidates every link).
+- **Settings** (`settings.json`, schema `settings` v14): UI and server preferences. Secrets, keep the file private:
+  `remote.dmKey` (authenticates the app at the internet relay as DM) and `playerLinks.secret` (all player links and
+  the DM link are derived from it; changing it invalidates every link).
 - **Dungeon Alchemist object choices** (`library/dungeon-alchemist-objects.json`, `damObjectChoicesSchema`):
   `{schema: "dungeon-alchemist-objects", version: 1, modelFolder, gameFolder, objects: {<block id>: {name, model,
 unitFt, rotationDeg}}}`; `gameFolder` is the Dungeon Alchemist install the DM located (null finds Steam installs),
@@ -350,13 +384,18 @@ area, root}`, `MY_CONTENT_SOURCE`, `packSource`, `writableSource`, `orderPacks`,
   heavy none, `ac:calculation` alternatives, shield, `ac:misc`). Hit points: first level die in full, then the
   average (Aurora option) or Aurora's stored rolls (`rndhp`), plus Con and `hp` stats. The result is a creature of
   kind `player` with `level`, attacks as actions, spellcasting as a trait with slots, the portrait file name and
-  the embedded portrait. Checked against Aurora's own sheets of four characters (AC, HP, speed, scores, saves,
-  skills, passive Perception equal). `planAuroraImport(source, folder)` reads everything without writing
-  (problems per unreadable file); `runAuroraImport(plan, parts, source, repository, onProgress)` writes the ticked
-  `AuroraParts` {characters, items, spells, portraits} into the pack `aurora-builder` (`AURORA_PACK`, license "see
-  source books"): portraits (all with `portraits`, else only those the imported characters reference), items,
-  spells, characters (portrait from the folder by file name, else the embedded one), then deletes the files of the
-  ticked parts the import did not write; unticked parts keep their files. `auroraBooks(docs)` lists source books.
+  the embedded portrait, plus its sheet (`auroraSheet`, `src/core/import/auroraSheet.ts`: every save and skill with
+  its proficiency, features, racial traits and feats in build order with the race, class or background they were
+  chosen under as source and without those Aurora keeps off its sheet (`<sheet display="false">`), spellcasting
+  per class with the cantrips and the marked spells, equipment with quantity, equipped and attuned, coins, and the
+  player's texts from the build's `input` and `appearance`). Checked against Aurora's own sheets of four characters
+  (AC, HP, speed, scores, saves, skills, passive Perception equal). `planAuroraImport(source, folder)` reads
+  everything without writing (problems per unreadable file); `runAuroraImport(plan, parts, source, repository,
+onProgress)` writes the ticked `AuroraParts` {characters, items, spells, portraits} into the pack `aurora-builder`
+  (`AURORA_PACK`, license "see source books"): portraits (all with `portraits`, else only those the imported
+  characters reference), items, spells, characters with their sheets (portrait from the folder by file name, else
+  the embedded one), then deletes the files of the ticked parts the import did not write; unticked parts keep
+  their files. `auroraBooks(docs)` lists source books.
   UI: `AuroraImportDialog` (Settings > Content, Compendium > Players, campaign Party tab, Add combatants > Player
   character > From Aurora…; folder dialog starting in `Documents/5e Character Builder`, counts preview, progress,
   report).
@@ -608,7 +647,7 @@ rows, count`, then `count` float32 heights in tiles, rows from the south edge, 8
   combatants) and `typeIconTexture` (token without picture: icon in the side color plus the combatant's number).
   Ad-hoc combatants without a library creature keep initials. Players get the icon key as `PlayerCombatant.typeIcon`
   (`typeIconOf` beside `tokenOf`).
-- Sync (`src/sync/protocol.ts`, protocol 2): the DM sends `map` (filtered for players, with a `revision`),
+- Sync (`src/sync/protocol.ts`, protocol 3): the DM sends `map` (filtered for players, with a `revision`),
   `encounter` (`PlayerEncounter`), `fog` (`PlayerFog`), `camera` and `view` (the view's name, shown in the player
   page's status corner); the player sends `hello` to request a resend and the requests of "Player devices" below.
   `hello` may carry `mapRevision`, the map the page already has; `onResend(view, mapRevision)` and
@@ -684,7 +723,22 @@ typeIconOf })`).
 - Calendar: `useCalendarStore` (`src/state/calendarStore.ts`, `startCalendarSync` in `DmApp`) holds the running
   encounter's campaign calendar (null without one); the Scene's time of day reads `minuteOfDay(calendar)` and writes
   `setCalendarTimeOfDay(minute)`. `saveCampaignCalendar` keeps the store in step with the Calendar tab.
-  Arithmetic: `toMinutes`/`fromMinutes`, `advanceCalendar`, `ADVANCE_STEPS` (short rest 1 h, long rest 8 h).
+  Arithmetic: `toMinutes`/`fromMinutes`, `advanceCalendar`, `ADVANCE_STEPS` (short rest 1 h, long rest 8 h). The
+  Calendar tab's Long rest also rests the party (`longRestParty`, below); a short rest changes no values.
+- Party session state (`src/sync/partySession.ts`): what a party member's last encounter left (HP, temporary HP,
+  spell slots used, death saves; hit dice already in `hitDiceUsed`) lives in its `sheet.json` as `session`.
+  `startPartySessions` (`DmApp`, desktop only) diffs consecutive states of the open encounter like the journal
+  recorder (`changedSessions`: combatants with `partyMemberId` whose values changed, whoever changed them: DM,
+  player, undo) and writes them `SESSION_WRITE_DELAY_MS` (1 s) after the last change, at once when the encounter
+  closes or another opens, and on window close (`flushPartySessions`), through `updatePlayerSheet`. "Add party"
+  (`AddParty` in `AddCombatants.tsx`) reads them with `partySessions(campaignId, views)` (after due writes) and
+  `addParty` starts each member with `withSession` (hit points capped by the current maximum); a member without
+  one (null: rested) starts at full hit points. `sessionOf(combatant)` is the inverse. Combatants without a party
+  member (hand-entered, library characters added one by one) keep no state. `longRestParty(campaignId)`: the open
+  encounter of that campaign rests its party as one undo step "Long rest" (`longRest`: full HP, no temporary HP,
+  slots and death saves cleared), then every member's file gets `session: null` and `hitDiceUsed` lowered by half
+  the creature's level, at least 1 (`hitDiceAfterLongRest`; all of them without a level). Moving the calendar
+  back does not undo it.
 - Random tables: library kind `table`, Compendium tab Tables (`TableLibrary`/`TableActions`,
   `src/ui/library/TableLibrary.tsx`). `rollTable(tableRef)` (`src/state/randomTables.ts`, by id or name) rolls on
   the library listing, `[name]` references resolve there (8 levels at most, so loops end in an error);
@@ -692,19 +746,24 @@ typeIconOf })`).
 
 ## LAN player view
 
-- `src-tauri/src/lan.rs`: axum server on `0.0.0.0:<settings.lan.port>`, commands `lan_start(port, links)`,
-  `lan_set_links(links)` (token → view, checked like the relay's patterns), `lan_stop()`, `lan_status()` →
-  `LanInfo {port, hosts, dmUrl, players}` (`hosts`: base URLs, LAN addresses first, localhost last). Each start
-  generates a DM token (in `dmUrl`, accepted from loopback only); player tokens are the links' keys.
+- `src-tauri/src/lan.rs`: axum server on `0.0.0.0:<settings.lan.port>`, commands
+  `lan_start(port, links, uploads, remoteDm)`, `lan_set_links(links, uploads, remoteDm)` (token → view, the views
+  that may upload and the remote DM token or null, checked like the relay's patterns), `lan_stop()`, `lan_status()`
+  → `LanInfo {port, hosts, dmUrl, players}` (`hosts`: base URLs, LAN addresses first, localhost last),
+  `lan_player_upload(id)` (bytes) and `lan_delete_player_upload(id)`. Each start generates a DM token (in `dmUrl`,
+  accepted from loopback only); player tokens are the links' keys, the remote DM token sits among them under the
+  reserved view `@dm` (see "Remote DM").
 - Routes: `/player.html?token=` (sets an `/asset`-scoped cookie with that token so relative `.gltf` resources load),
   `/assets/*` (Vite bundle, public), `/asset/{area}/{path}?token=` (images and models only, path stays inside the
   storage root via `storage::resolve`; the canonical path below the canonical root decides, so case, `./`, trailing
   dots, 8.3 short names and links cannot reach a DM-only file; documents are never served, nor the PNGs inside
   campaign folders (fog masks) except a campaign's `handouts/` and `imported-assets/`, or `terrain.png`, nor anything
   in `history/`; a single `Range: bytes=` request gets 206 or 416 with `Accept-Ranges: bytes` via `byte_range`,
-  mirroring the relay's `byteRange`), `/ws?token=` (relay). `lan_stop` waits at most 2 s for open responses, then
-  aborts the server task. The DM socket speaks the internet relay's view frames and status frames (see below); a
-  player gets only frames of its
+  mirroring the relay's `byteRange`), `/ws?token=` (relay), `PUT /api/player-upload/{name}?token=` (player
+  pictures, see "Player devices"; streamed into a temporary folder removed with the server, read by the DM only
+  through the commands, so no HTTP route gives them out). `lan_stop` waits at most 2 s for open responses, then
+  aborts the server task. The DM socket speaks the internet relay's view frames, status frames and uploads frames
+  (see below); a player gets only frames of its
   link's view, and only the player messages `rebuild_player_message` accepts pass, rebuilt and at most 10 at once
   then one per 500 ms (more are dropped); any other player message closes its socket. Changed links close the
   sockets of withdrawn tokens with `RELAY_LINK_REVOKED` and of reassigned ones with 1013.
@@ -712,55 +771,121 @@ typeIconOf })`).
   builds (devUrl set) read `dist/` from disk, so run `pnpm build` before testing the LAN view under `pnpm app:dev`.
   For player-code work, open `http://localhost:1420/player.html?token=<t>&ws=ws://127.0.0.1:<port>/ws` on the Vite
   dev server instead.
-- DM side: `useLanStore` (`src/state/lanStore.ts`) holds the DM's `ViewSocketTransport`, takes the player count
-  from its status frames and pushes `linkTable` whenever the links change; `DmApp` adds the transport to
+- DM side: `useLanStore` (`src/state/lanStore.ts`) holds the DM's `LanTransport` (a `ViewSocketTransport` that is a
+  `PlayerUploadSource` through the commands), takes the player count from its status frames and pushes `linkTable`
+  and `uploadViews` whenever the links or the campaign's player features change; `DmApp` adds the transport to
   `startDmPublisher`. UI: `LanControls` (`src/ui/shell/LanControls.tsx`) in Settings > Players > LAN and in the
   rail's Players popover (start/stop, address, `PlayerLinks`: view select, link, copy, QR code via `uqr`, New link);
   the port is under Settings > Players > LAN > Advanced.
 - Browser client: `player.html?token=` → `src/app/player.tsx` sets `useAppStore`'s repository to a read-only
   `LanStorage` (`src/data/lanStorage.ts`, `assetUrl` → `/asset/...`) before rendering `PlayerApp`.
 
+## Remote DM
+
+A second device of the DM on the LAN (a laptop at the table) runs the full DM UI in a browser and controls the
+desktop app, which stays the authority: files, undo history, fog worker, autosave, journal, sound, player window,
+LAN players and relay all stay on the desktop.
+
+- Link: `settings.dmRemote {enabled, rotation}` (settings v14, off by default). While on, `useLanStore` derives the
+  token `linkToken(playerLinks.secret, '@remote-dm', rotation)` and passes it as `remoteDm` to
+  `lan_start`/`lan_set_links`; New link raises `rotation`, which kicks a connected remote DM with
+  `RELAY_LINK_REVOKED`. UI: DM link (on/off, copy, QR, New link) under the player links in `LanControls` while the
+  server runs; the Players card's LAN line says "Remote DM connected".
+- `lan.rs`: `Role::RemoteDm` is accepted from any peer (the loopback-only DM token is unchanged).
+  `GET /dm.html?token=` serves `index.html` and sets `fogwarden-dm=<token>; Path=/; HttpOnly; SameSite=Strict`;
+  players and the loopback DM get 403, and the DM link gets 403 on `/player.html`. Storage routes, remote DM only,
+  token from `?token=` or that cookie: `GET /dm/storage/roots`, `GET read?area&path` (bytes),
+  `PUT write?path` (512 MiB body limit), `GET list?area&path`, `GET exists?area&path`, `POST remove?path`,
+  `POST copy?area&from&to`, all below `/dm/storage/`, running `storage.rs`'s own functions in `spawn_blocking`
+  (`storage::resolve` refuses paths leaving the root, `write_data`/`remove_data` keep the version history and refuse
+  writes into it; errors are 400). `/asset` serves a remote DM the pictures inside documents too (terrain, fog
+  masks), with the same type check and canonical-path containment.
+- Socket: the remote DM's `/ws` (8 MiB message limit) is a third channel. A DM frame `@dm\n<text>` reaches every
+  remote DM as `<text>`; a remote DM's text reaches the DM as `@dm\n<text>`; every join and leave sends the DM
+  `@dm-count\n<n>`, also in its greeting while n > 0. `LanTransport` takes these frames before the view-frame
+  parser and exposes them as `remoteDms`, a `MirrorChannel` that is open only while a remote DM is connected.
+- Browser side: `src/app/dm.tsx` sees `?token=`, sets the repository to `RemoteDmStorage`
+  (`src/data/remoteDmStorage.ts`, kind `remote-dm`, the routes above, `assetUrl` → `/asset/...?token=`) and
+  `useRemoteDmStore.host`. `DmApp` then renders `RemoteDmServices` instead of `DesktopServices`: no
+  `useActiveEncounter`, fog tracker, view links, player uploads, calendar sync, journal, dmSound (the library is
+  loaded once), updater, publishers, LAN refresh or player window; `RemoteDmBanner` shows "Remote DM — controlled
+  desktop: <host>" with the connection state and Reconnect. Autosave runs for the map editor; `setSettings` writes
+  nothing and `init` runs no data conversions (the desktop owns both).
+- Mirror (`src/sync/dmMirror.ts`): the desktop's `startDmMirrorPublisher(lan.remoteDms, {changeMap})` sends
+  `map{mapKey, map}` once per map object (the remote DM says which it holds in `hello{mapKey}`),
+  `snapshot{encounter, revision, base, canUndo, canRedo, mapKey, rejected}` after a hello, an encounter switch
+  (`onEncounterChange` with null patches from `open`/`close`) or a refused update,
+  `patches{patches, from, to, base, canUndo, canRedo, origin}` after every `update`/`undo`/`redo`,
+  `fog{fog, computeMs}` from the visibility worker,
+  `session` (shown handout, turn order, camera push and pushed camera, music, interlude, campaign calendar,
+  `lastEncounter`), `views{views, linked, campaignId, features}` (the desktop's `useViewLinksStore` without the link
+  tokens, so Show and Chat offer the same audiences; on a hello and whenever it changes) and pings. The remote DM
+  sends `hello`, `update{id, encounterId, base, label, patches}`, `undo`,
+  `redo`, `session`, `ping`, `effect` (sound board), `changeMap` (Play's map dialog) and `refresh` (after its writes;
+  the desktop reloads library and sounds).
+- Conflicts: `base` counts the desktop's tracked changes (patches outside `log`, `fog`, `chat`), undo, redo and
+  encounter switches. The desktop applies an update through its real `update(recipe, label)` (one undo history) only
+  if it is for the open encounter and has no tracked patch or the same base; log and chat lines the remote DM
+  appended go to the end of the desktop's list. Otherwise, or when the patches no longer apply, it sends a snapshot
+  with `rejected` and the remote DM tells the user. The remote DM's store (`setEncounterRemote`) applies its own
+  changes at once and marks them saved; the client keeps the confirmed state plus pending updates, drops one when
+  its patches come back (`origin`), predicts `base` from the tracked updates still on their way and starts over
+  with a hello when a patch frame does not follow the last revision.
+- Clocks: music and interlude positions use each machine's `Date.now()`; LAN machines keep close enough time.
+
 ## Internet relay
 
 - The DM app connects out to a relay on a server the DM controls; the relay only receives what the player filter
-  already produced. Contract shared by both sides: `src/sync/relayApi.ts` (`RELAY_API_VERSION` 4, routes, limits,
+  already produced. Contract shared by both sides: `src/sync/relayApi.ts` (`RELAY_API_VERSION` 5, routes, limits,
   file type allowlists, schemas, view frames); player messages are validated and rebuilt by `rebuildPlayerMessage`
   (`protocol.ts`) and rate-limited like on the LAN server, and DM messages pass unparsed behind their view list, so
   sync protocol bumps need no relay redeploy unless players send something new.
 - View frames on the DM socket: `<view>[,<view>...]\n<message>`; DM → relay goes to the players of those views,
   relay → DM carries a player's rebuilt message under its view. Status frames `{relay: {players, views}}` (players per
-  view) go to the DM on connect and whenever players or links change.
+  view) go to the DM on connect and whenever players or links change; uploads frames `{uploads: [PlayerUpload]}`
+  (every waiting player upload, oldest first) on connect and whenever one arrives or is deleted
+  (`relayNoticeSchema`).
 - Relay (`server/`, Node 20+, `ws`): `createRelay({dmKey, dataDir})` (`relayServer.ts`), entry `relay.ts` (env
   `FOGWARDEN_DM_KEY`, `FOGWARDEN_RELAY_PORT`, `FOGWARDEN_RELAY_HOST`, `FOGWARDEN_RELAY_DATA`), bundled by `pnpm build:server`
   (`tools/build-server.ts`, esbuild) into `dist-server/relay.mjs`. Routes: `/health`; `/?t=<token>` and
   `/player.html` (uploaded player page, sets the `/asset` token cookie); `/assets/*` (uploaded bundle, public);
   `/asset/{area}/{path}?token=` (uploaded assets); `/ws` (players with `?token=`, the DM with the subprotocols
-  `fogwarden-dm` + DM key, never in a logged URL). Player tokens are the keys of the links table. DM API with
+  `fogwarden-dm` + DM key, never in a logged URL); `PUT /api/player-upload/{name}?token=` (player pictures, see
+  "Player devices"). Player tokens are the keys of the links table. DM API with
   `Authorization: Bearer <key>`: `GET /api/session` (`{api, players}`), `PUT /api/links` (replaces the token → view
-  table, kept in `dataDir/links.json` across restarts; withdrawn tokens' sockets close with `RELAY_LINK_REVOKED`,
-  reassigned ones with 1013), `POST /api/missing` (which upload targets differ by SHA-256), `PUT
+  table and the views that may upload, kept in `dataDir/links.json` across restarts; withdrawn tokens' sockets close
+  with `RELAY_LINK_REVOKED`, reassigned ones with 1013), `POST /api/missing` (which upload targets differ by
+  SHA-256), `PUT
 /api/asset/{area}/{path}` and `PUT /api/bundle/{path}` (hash header checked, 1 GiB limit `RELAY_MAX_UPLOAD_BYTES`,
   nginx `client_max_body_size 1024m`, extension allowlist,
-  `containedPath`, atomic rename). The relay pings every 30 s and drops players more than 16 MiB behind.
+  `containedPath`, atomic rename), `GET` and `DELETE /api/player-upload/{id}` (a waiting player upload; deleting a
+  gone one is no error). The relay pings every 30 s and drops players more than 16 MiB behind.
 - Player bundle: `tools/vite-relay-plugin.ts` copies `relay.mjs` into `dist/` (so `pnpm build` fails without
   `build:server`, which `pnpm build` runs first) and writes `dist/player-bundle.json` (every built file except
-  `index.html` and source maps, the player page last, with SHA-256). On connect the app reads them through the
-  `frontend_file` command and uploads what changed, so app updates never need a relay redeploy.
+  `index.html` and source maps, the player page last). On connect the app reads them through the `frontend_file`
+  command, hashes the bytes it read (the asset resolver rewrites HTML for the CSP, so the page differs from `dist/`)
+  and uploads what changed, so app updates never need a relay redeploy.
 - DM side: `useRelayStore` (`src/state/relayStore.ts`: `link`, `players`, `baseUrl`, `lastError`, `transport`)
   and `src/sync/relayClient.ts`: `fetchRelaySession` (refuses a relay of another API version with an "update the
-  server" or "update the app" message), `pushRelayLinks` (on connect and whenever the links change),
+  server" or "update the app" message), `pushRelayLinks` (links and `uploadViews`, on connect and whenever the links
+  or the campaign's player features change),
   `RelayUploader` (`ensure(refs)` uploads assets plus glTF/GLB side files found by `modelSideFiles`, remembered per
   connection, and refuses `history/` paths; `uploadBundle`) and `RelayTransport` (a `ViewSocketTransport` whose
-  sends wait for the assets `collectAssetRefs` finds anywhere in the payload). `DmApp` adds the transport to
+  sends wait for the assets `collectAssetRefs` finds anywhere in the payload, and a `PlayerUploadSource` with the DM
+  key). `DmApp` adds the transport to
   `startDmPublisher`. Plain `http://` URLs are refused except for loopback (the DM key would travel unencrypted).
 - Setup (`src-tauri/src/deploy.rs`, `russh` with `ring`): templates `src-tauri/src/deploy/install.sh` and
   `fogwarden-relay.nginx.conf` filled with the validated domain, email and port; commands `deploy_write_files(folder,
 setup)`, `deploy_host_key(host, port)` (`SHA256:` fingerprint, confirmed and stored in
   `settings.remote.knownHosts` by the UI), `deploy_run(request, events)` (uploads to `~/fogwarden-relay-setup/` with
   `cat` over exec, runs the script as root, directly or via `sudo`, streams lines to a `Channel`, returns the DM key
-  from the `FOGWARDEN_DM_KEY=` line, which never reaches the log). The script installs Node 22 (NodeSource) when
-  needed, user and systemd unit `fogwarden-relay`, `/etc/fogwarden-relay/relay.env` with the DM key (kept on re-runs),
-  the nginx site (WebSocket upgrade on `/ws`) and, given an email, a certbot certificate.
+  from the `FOGWARDEN_DM_KEY=` line, which never reaches the log). The script refuses a relay port another process
+  listens on, installs Node 22 (NodeSource) when needed, user and systemd unit `fogwarden-relay`,
+  `/etc/fogwarden-relay/relay.env` with the DM key (kept on re-runs), the nginx site (WebSocket upgrade on `/ws`) and,
+  given an email, a certbot certificate. With `nginx-manager` on the path (HTTPS-only nginx built from site specs) it
+  writes no nginx site: it validates `/etc/fogwarden-relay/fogwarden-relay.site.env` first, gets the certificate
+  with `certbot certonly --webroot` (webroot read from the `acme-challenge` location in `nginx -T`, deploy hook
+  reloads nginx), then `nginx-manager register` + `apply` and checks `/health` over HTTPS on 127.0.0.1.
 - UI: `src/ui/server/OnlineSection.tsx` in Settings > Players (`src/ui/settings/PlayersSection.tsx`): Online (URL,
   DM key, connect, connection test via `/health` + `/api/session`, link + QR) and _Set up a server…_ (dialog with
   domain, email, relay port and `DeployDialog`). Settings `remote` (schema
@@ -781,13 +906,26 @@ transports' `onPlayerRequest`, tagged with the view of the link it came over.
   `rolled`; a point becomes a ping; a move is checked by `checkPlayerMove` (encounter `playersMoveTokens`, own
   visible placed player character, map present), snapped like a DM drag (`snapTokenPoint`, height above the ground
   kept), measured with the diagonal rule and applied as one undo step "Move <name>" with a log line; a refused move
-  is a notice for the DM. Errors go to `reportError`.
+  is a notice for the DM. Errors go to `reportError`. Chat, notes and sheet edits: see below.
 - Sheet: a character's view gets `PlayerEncounter.sheet` (`playerSheet`: exact hit points, AC, speeds and spell
   slots of the library creature via `creatureResources`, conditions, concentration, death saves at 0 HP) and, while
-  the encounter allows moves, `ownMoves` (the diagonal rule). `PlayerSheetPanel` (`src/ui/player/PlayerSheet.tsx`)
-  shows it as a side panel, on screens below 700 px as a bottom sheet, with a dice roller that checks the text
-  like the DM before sending. `TurnBanner` shows while `activeCombatantId` is the sheet's character and vibrates
-  phones (`navigator.vibrate`) once per turn.
+  the encounter allows moves, `ownMoves` (the diagonal rule). Only the view whose id is a shown player character's
+  gets one (`ownCharacter`; never the party view). While the campaign shares full sheets
+  (`campaign.playerFeatures.sheets`, off by default), `sheet.details` adds the full sheet (`characterDetails`:
+  the sheet file or `sheetFromCreature`, plus the library texts of its spells): its `content` travels only when the
+  view's `revision` changes (sheet file, creature or spell library changed) and in every resend, so encounter
+  updates stay small; `usePlayerStore.details` keeps the content of the current revision. `PlayerSheetPanel`
+  (`src/ui/player/PlayerSheet.tsx`) shows it as a side panel, on screens below 700 px as a bottom sheet: the
+  Combat tab with a dice roller that checks the text like the DM before sending and, with details, the tabs of
+  `SHEET_TABS` (`src/ui/sheet/CharacterSheetTabs.tsx`: Skills · Spells · Inventory · Features · Notes; a new tab
+  adds one entry), whose save and skill rows send `roll` (`1d20±bonus`, the name as label, the chosen roll mode).
+  The DM sees the same tabs read-only (`DmCharacterSheet`) in the campaign Party tab (book button per member) and
+  Compendium > Players. In a campaign (the Party tab; in the Compendium for a member of the linked campaign's
+  party) it shows the player's file: the sheet merged like the publisher's (`dmSheetDetails` →
+  `detailsWithOverlay`), a line where the character stands between encounters (`sessionSummary`: HP, temporary HP,
+  slots used, death saves at 0 HP, hit dice used), live from `usePlayerDataStore` or else from the file.
+  `TurnBanner` shows while `activeCombatantId` is the sheet's character and vibrates phones
+  (`navigator.vibrate`) once per turn.
 - Pings: `usePingStore` (`src/state/pingStore.ts`, 3 s each) on both sides, drawn by `PingLayer`
   (`src/render/pings/`, every mode but the editor). The DM pings with Alt+click on the Play canvas; players hold the
   map 500 ms without moving 8 px (`playerPointer`, `src/ui/player/playerPointer.ts`). The publisher sends every new
@@ -803,6 +941,91 @@ transports' `onPlayerRequest`, tagged with the view of the link it came over.
   interlude. The publisher sends `handout` (text inline, pictures and videos as assets, which the relay transport
   uploads) to the audience and null to the other views; `HandoutOverlay` shows it until the player closes it, and a
   new show (new id) opens it again.
+- Picture uploads: while the campaign allows it (`campaign.playerFeatures.uploads`, off by default; switches in
+  the campaign Party tab, `PlayerFeaturesSection` with its `PLAYER_FEATURES` list in
+  `src/ui/campaign/PlayerFeatures.tsx`), a character's view gets `PlayerEncounter.uploads` and `PictureUpload`
+  (`src/ui/player/PictureUpload.tsx`, in the bottom left stack; only browser players, `uploadTo` from
+  `src/app/player.tsx`) sends a picture with progress as `PUT /api/player-upload/<playerUploadName(file name)>?token=`.
+  The LAN server and the relay take it only from a link whose view is in the pushed `uploadViews` (the linked
+  characters while the switch is on; never the party view), by the first bytes (`sniffPicture`: PNG, JPEG,
+  WebP; `sniff_picture`), at most 10 MB (`PLAYER_UPLOAD_MAX_BYTES`, refused as soon as exceeded), at most 20
+  waiting per view (`PLAYER_UPLOAD_MAX_PENDING`, uploads still streaming count), with the player message rate
+  limit per link, a name `isPlayerUploadName` accepts (shown only; the stored file is named by a random 128-bit
+  id) and streamed to disk (relay: `dataDir/player-uploads/<view>/<id>` plus `<id>.json`, kept across restarts).
+  Nothing reaches another player: only the DM reads or deletes uploads. DM side: `startPlayerUploads()` (`DmApp`,
+  `src/state/playerUploadStore.ts`) merges the LAN server's and the relay's uploads frames into
+  `usePlayerUploadStore.pending` and notifies the DM once per new upload; `PlayerUploadsLine`
+  (`src/ui/shell/PlayerUploads.tsx`, rail Players popover) previews each from the server in the DM app only, Accept
+  (`acceptPlayerUpload`: needs the linked campaign and one of its characters, `checkPlayerUpload` compares bytes,
+  size and type with the announcement, `storePlayerUpload` writes `campaigns/<id>/players/<view>/uploads/<id>.<type>`,
+  then the server copy is deleted) or Reject (deleted). Accepted pictures of the session offer Portrait and Token
+  (`applyPlayerPicture` → `importCreaturePicture` of the view's library character, then the creature listing
+  refreshes); only then do players see it, like any token picture. Aurora `.dnd5e` files are not taken:
+  `planAuroraImport` needs Aurora's element files, which only the DM's machine has.
+- Switches: `PlayerFeaturesSection` (`src/ui/campaign/PlayerFeatures.tsx`) has a checkbox per boolean of
+  `campaign.playerFeatures` (`PLAYER_FEATURES`) and a select for `sheetEdits`. The publisher sends the matching
+  flags (`uploads`, `chat`, `sharedRolls`, `notes`, `sheetEdits`) only in a character's own `PlayerEncounter`
+  (`featureFlags`); the party view gets none of them. Requests for a switched-off feature are refused by the DM
+  with an app notice and a `notice` to that view ("Not done: …").
+- Requests beyond roll, point and move: `chat` (text 1..500, to `all` or `dm`), `note` (whole text ≤ 20,000),
+  `roll.share`, `sheetEdit` (own combatant id, `sheetEditSchema` in `src/core/model/character.ts`, as the queue
+  file stores it: `hp`, `tempHp`, `slotsUsed` {level 1..9},
+  `hitDiceUsed`, `deathSaves` {0..3, 0..3}, `itemQuantity`/`itemEquipped` {index < 1000}, `currency` {coin};
+  numbers 0..1,000,000). `rebuildPlayerMessage` and `rebuild_player_message` refuse chat, notes, rolls and sheet
+  edits from the party view and sheet edits naming another combatant; ranges and ownership are the DM's checks.
+- Chat (`src/sync/chat.ts`): lines live in `encounter.chat` (`chatLineSchema` `{id, at, from: view|null, name, to,
+kind: say|roll, text}`, at most `CHAT_MAX_LINES` 200, `appendChat` drops the oldest with one whole-field
+  replace; untracked by undo like the log). `to` is `all`, `dm` (a player's whisper) or a view id (the DM's
+  whisper). `chatVisibleTo(line, view)`: never the party view; `all` reaches every character view, a player's
+  whisper only its writer, a DM whisper only its view. `playerChatLines` also needs `chat` for said lines and
+  `sharedRolls` for roll lines. The publisher sends `chatLines` per view: the lines after the last one that view
+  got, or all of them with `reset` when that line is gone (other encounter, switch off) and in every resend that
+  has lines. A shared roll (`roll.share` while `sharedRolls`) adds a `roll` line to everyone besides the log.
+  DM: Chat tab next to Log in the Play inspector (`ChatPanel`, `src/ui/encounter/ChatPanel.tsx`: every line with
+  its receivers, "Send to" everyone or one character view via `AudienceField`, shared with `ShowPanel`). Player:
+  `PlayerChat` (`src/ui/player/PlayerChat.tsx`, a bottom sheet below 700 px): unread count, lines, and with `chat`
+  a box with "Only to the DM". Layout: `.player-bottom` holds the `.player-tools` stack bottom left (chat, picture
+  upload, `PlayerSound`'s volume) and the status bottom right, wrapping the status below the stack where both do
+  not fit; below 700 px it sits above the collapsed sheet, and while the sheet or the chat is open it hides
+  everything but a broken-link status, which moves to the top.
+- Player data (`src/sync/playerData.ts`, `usePlayerDataStore {campaignId, notes, overlays, pending}`): the
+  publisher calls `ensurePlayerData(campaignId, view)` for each active character view, and `startViewLinks` for
+  every party member of the open encounter's campaign once its party is read, so edits waiting since the last run
+  show in the Players popover before their players are back. It loads `notes.md`, `sheet.json` and `pending.json`
+  once per campaign and view, sets the store only when read (so it is safe while publishing; text a player sent
+  meanwhile wins, a newer queued edit of the same value replaces the stored one) and resolves then. Each view's
+  file work runs one after the other (the load too, so a write asked for meanwhile keeps what the files held).
+  `storePlayerNotes`/`storePlayerSheet` update the store and write through the repository; `updatePlayerSheet`
+  changes an overlay in the store while it holds that campaign and view, else the file alone;
+  `readPlayerSheet` reads one after earlier writes. `sendPlayerNotice(view, text)` reaches the view through every
+  running publisher (`onPlayerNotice`).
+- Notes: `note` needs `playerNotes` and a linked character view; the publisher sends `notes` to that view alone
+  when they change and in resends. Player: the Notes tab of `SHEET_TABS` (`kind: 'notes'`, shown without the full
+  sheet too; `sheetTabsFor`, `SheetTabBody`) uses `NotesEditor` (saves 800 ms after typing) and says the DM reads
+  them. DM: the campaign Party tab's sheet (`DmCharacterSheet` with `campaignId` and the member id) shows them
+  read-only, live from the store or else from the file.
+- Sheet edits (`src/sync/sheetEdits.ts`): `checkSheetEdit(ctx, view, request)` refuses unless `sheetEdits` is on,
+  the combatant is the view's own shown character (`ownCharacter`) and the value is in range: HP ≤ max, temp HP
+  ≤ 999, a slot level the creature has (`creatureResources`) and used ≤ its slots, hit dice used ≤ `level`, death
+  saves only at 0 HP, items and coins only with full sheets and a loaded overlay, and not unchanged. Its `text`
+  ("Thorin: HP 12 → 7") names the undo step and, with "(player)", the log line; `before` is the current value as
+  JSON. Encounter values (`hp` with `settleHpChange` and `queueConcentrationChecks`, `tempHp`, `slotsUsed`,
+  `deathSaves`) change in one `update`; overlay values (`hitDiceUsed`, items, coins; `overlayAfter`) go to
+  `storePlayerSheet` with a log line. In `approve` mode `handleSheetEdit` queues the edit (`queueSheetEdit`: a
+  newer edit of the same value, `sheetEditTarget`, replaces it; written to `pending.json`) and answers "Waiting for
+  the DM"; asking for the value the character already has takes the queued edit back ("Taken back").
+  `PlayerEditsLine` (`src/ui/shell/PlayerEdits.tsx`, Players popover, counted in its status) offers Accept
+  (`acceptSheetEdit`: checks again and drops the edit with a notice when the value is no longer `before`) and
+  Reject (`rejectSheetEdit`); both take it off the queue and its file (`takeSheetEdit`). Every notice that answers
+  an edit for good (refused, taken back, accepted, dropped, declined) carries it as `settles`. The publisher merges
+  the overlay into the sent sheet (`detailsWithOverlay` → `applySheetOverlay`, memoised per overlay and library
+  sheet) and sends `sheet.hitDice {used, max: level}`. Player: with `encounter.sheetEdits` the Combat tab shows
+  `SheetNumber` steppers (`SheetEditNumber`) for HP, temp HP, death saves, slots used and hit dice spent, the
+  Inventory tab for counts and coins plus an Equipped checkbox; in `approve` mode a hint says the DM accepts each
+  change, and `usePlayerStore.waitingEdits` (`src/ui/player/waitingEdits.ts`) keeps each sent edit until a notice
+  `settles` it or the view's character changes: the field shows it "(waiting for the DM)" and the next step
+  starts from it, while the DM's sheet still shows the value the player saw. Answers arrive as `notice` and show
+  briefly at the top (`PlayerNotice`).
 
 ## UI registries
 
@@ -812,7 +1035,9 @@ transports' `onPlayerRequest`, tagged with the view of the link it came over.
 - Routes: `Route` union in `src/state/appStore.ts` + `Page` switch in `src/ui/DmApp.tsx`.
 - Home (`src/ui/home/HomePage.tsx`, default route): Continue card (`settings.lastEncounter`), recent maps and
   encounters, `FirstSteps` (progress in `settings.onboarding`, `completeOnboardingStep(step)`; step `srdData` opens
-  the D&D 5e API import and is done when an import wrote something), drop zone. `openSampleEncounter()`
+  the D&D 5e API import and is done when an import wrote something), drop zone, a Players card (`WindowLine`,
+  `LanLine`, `OnlineLine` from `src/ui/shell/PlayerLines.tsx`, shared with the rail's `PlayersMenu`; live from
+  `usePlayerWindowStore`, `useLanStore`, `useRelayStore`). `openSampleEncounter()`
   (`onboarding.ts`) calls `ensureSampleCampaign(repository)` (`sampleCampaign.ts`). Before building encounters it
   imports the sample's monsters (`SAMPLE_MONSTER_INDEXES`) with `importApiMonsters`, which skips present ones; a
   failed download becomes an error asking to check the internet connection. While campaign `sample-campaign` does

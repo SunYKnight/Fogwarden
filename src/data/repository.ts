@@ -6,9 +6,11 @@ import { freeDocumentId } from '@/core/import/ids';
 import {
   campaignFileSchema,
   campaignSchema,
+  characterSheetSchema,
   creatureSchema,
   defaultPackSettings,
   defaultSettings,
+  emptyPlayerSheet,
   encounterFileSchema,
   encounterSchema,
   gridSchema,
@@ -17,10 +19,14 @@ import {
   mapSchema,
   markerTemplateSchema,
   nowIso,
+  PLAYER_PENDING_SCHEMA_VERSION,
+  playerPendingSchema,
+  playerSheetSchema,
   settingsSchema,
   type AssetRef,
   type BattleMap,
   type Campaign,
+  type CharacterSheet,
   type Creature,
   type DocRef,
   type Encounter,
@@ -29,6 +35,9 @@ import {
   type LibraryKind,
   type MarkerTemplate,
   type PackSettings,
+  type PendingSheetEdit,
+  type PlayerPending,
+  type PlayerSheetOverlay,
   type Settings,
   type StorageArea,
 } from '@/core/model';
@@ -109,6 +118,8 @@ const CREATURE_FOLDER_FILE = /^(?:library|packs\/[a-z0-9-]+)\/creatures\/[^/]+$/
 const MODEL_FILE = /\.(glb|gltf)$/i;
 /** Picture library folder of a pack root (Aurora Builder portraits and the like). */
 export const PORTRAITS_DIR = 'portraits';
+/** What follows the creature id in the name of a player character's sheet file. */
+export const SHEET_FILE = '.sheet.json';
 
 /** A picture in a `portraits/` folder of My content or a pack. */
 export interface PortraitEntry {
@@ -210,6 +221,11 @@ export function campaignPath(id: string): string {
 
 export function campaignNotesPath(id: string): string {
   return `campaigns/${id}/notes.md`;
+}
+
+/** Folder of what one player's own link keeps in a campaign; `view` is the character's view id. */
+export function playerDir(campaignId: string, view: string): string {
+  return `campaigns/${campaignId}/players/${view}`;
 }
 
 export function encounterDir(campaignId: string, id: string): string {
@@ -546,6 +562,50 @@ export class Repository {
     return { ...parsed, ...(await this.storeCreaturePictures(parsed.id, parsed, pack)) };
   }
 
+  // --- character sheets ---
+
+  /**
+   * Sheets of player characters by creature id (`<id>.sheet.json` beside the stat block). Like pictures they
+   * resolve by pack precedence, so a user copy of a pack character keeps the pack's sheet.
+   */
+  async characterSheets(): Promise<{ sheets: Record<string, CharacterSheet>; problems: LoadProblem[] }> {
+    const sources = (await this.kindSources('creature')).shown;
+    const folders = await this.kindFolders('creature', sources);
+    const winners = new Map<string, { area: StorageArea; path: string }>();
+    sources.forEach((source, i) => {
+      for (const entry of folders[i]!.filter((e) => !e.isDir && e.name.endsWith(SHEET_FILE))) {
+        const id = entry.name.slice(0, -SHEET_FILE.length);
+        if (!winners.has(id)) {
+          winners.set(id, { area: source.area, path: `${libraryDir('creature', source)}/${entry.name}` });
+        }
+      }
+    });
+    const files = [...winners];
+    const results = await Promise.allSettled(
+      files.map(([, { area, path }]) =>
+        this.parseFile(area, path, (text) => characterSheetSchema.parse(migrate('character-sheet', JSON.parse(text)))),
+      ),
+    );
+    const sheets: Record<string, CharacterSheet> = {};
+    const problems: LoadProblem[] = [];
+    results.forEach((result, i) => {
+      const [id, file] = files[i]!;
+      if (result.status === 'fulfilled') {
+        sheets[id] = result.value;
+      } else {
+        problems.push({ ...file, message: errorMessage(result.reason) });
+      }
+    });
+    return { sheets, problems };
+  }
+
+  /** Writes the sheet of creature `id` into `pack` (My content by default). */
+  async storeCharacterSheet(id: string, sheet: CharacterSheet, pack = MY_CONTENT): Promise<CharacterSheet> {
+    const parsed = characterSheetSchema.parse(sheet);
+    await this.writeJson(`${libraryDir('creature', writableSource(pack))}/${id}${SHEET_FILE}`, parsed);
+    return parsed;
+  }
+
   // --- maps ---
 
   private async readMap(source: LibrarySource, id: string): Promise<BattleMap> {
@@ -756,6 +816,10 @@ export class Repository {
       const folders = await this.kindFolders(kind, packs);
       if (!folders.some((entries) => docIds(kind, entries).includes(id))) {
         await this.storeCreaturePictures(id, { image: null, token: null });
+        const sheet = `${libraryDir(kind, MY_CONTENT_SOURCE)}/${id}${SHEET_FILE}`;
+        if (await this.storage.exists('data', sheet)) {
+          await this.storage.remove(sheet);
+        }
       }
     }
   }
@@ -845,6 +909,47 @@ export class Repository {
 
   saveCampaign(campaign: Campaign): Promise<Campaign> {
     return this.storeCampaign({ ...campaign, updatedAt: nowIso() });
+  }
+
+  // --- players' own links ---
+
+  /** The player's notes (Markdown); empty while they wrote none. */
+  async loadPlayerNotes(campaignId: string, view: string): Promise<string> {
+    const path = `${playerDir(campaignId, view)}/notes.md`;
+    return (await this.storage.exists('data', path)) ? this.storage.readText('data', path) : '';
+  }
+
+  async storePlayerNotes(campaignId: string, view: string, text: string): Promise<void> {
+    await this.storage.writeText(`${playerDir(campaignId, view)}/notes.md`, text);
+  }
+
+  /** What the player changed on their sheet; nothing while they changed nothing. */
+  async loadPlayerSheet(campaignId: string, view: string): Promise<PlayerSheetOverlay> {
+    const path = `${playerDir(campaignId, view)}/sheet.json`;
+    return (await this.storage.exists('data', path))
+      ? this.parseFile('data', path, (text) => playerSheetSchema.parse(migrate('player-sheet', JSON.parse(text))))
+      : emptyPlayerSheet();
+  }
+
+  async storePlayerSheet(campaignId: string, view: string, overlay: PlayerSheetOverlay): Promise<void> {
+    await this.writeJson(`${playerDir(campaignId, view)}/sheet.json`, playerSheetSchema.parse(overlay));
+  }
+
+  /** The player's sheet edits waiting for the DM, oldest first; none while the file is missing. */
+  async loadPlayerPending(campaignId: string, view: string): Promise<PendingSheetEdit[]> {
+    const path = `${playerDir(campaignId, view)}/pending.json`;
+    return (await this.storage.exists('data', path))
+      ? this.parseFile(
+          'data',
+          path,
+          (text) => playerPendingSchema.parse(migrate('player-pending', JSON.parse(text))).edits,
+        )
+      : [];
+  }
+
+  async storePlayerPending(campaignId: string, view: string, edits: readonly PendingSheetEdit[]): Promise<void> {
+    const doc: PlayerPending = { schema: 'player-pending', version: PLAYER_PENDING_SCHEMA_VERSION, edits: [...edits] };
+    await this.writeJson(`${playerDir(campaignId, view)}/pending.json`, playerPendingSchema.parse(doc));
   }
 
   // --- encounters ---

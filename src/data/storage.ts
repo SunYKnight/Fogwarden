@@ -15,7 +15,7 @@ export interface StorageRoots {
  * `content` is read-only shipped content; `data` is the user's data root.
  */
 export interface Storage {
-  readonly kind: 'tauri' | 'browser' | 'lan';
+  readonly kind: 'tauri' | 'browser' | 'lan' | 'remote-dm';
   roots(): Promise<StorageRoots>;
   setDataRoot(absolutePath: string): Promise<StorageRoots>;
   readText(area: StorageArea, path: string): Promise<string>;

@@ -3,23 +3,29 @@ import type { CreatureIconKey } from '@/core/creatureTypeIcon';
 import type { HandoutKind } from '@/core/handouts';
 import {
   PARTY_VIEW,
+  sheetEditSchema,
   type AreaMarker,
   type AssetRef,
   type BattleMap,
   type CarriedLight,
+  type CharacterSheet,
+  type ChatLine,
   type Combatant,
   type DeathSaves,
   type MapPoint,
   type OpeningState,
   type Settings,
+  type SheetEdit,
+  type SheetEditMode,
   type SpeedKind,
   type Weather,
 } from '@/core/model';
+import type { SheetSpellInfo } from '@/core/rules/characterSheet';
 import type { RollMode } from '@/core/rules/dice';
 import type { CameraState } from '@/render/CameraRig';
 import { RELAY_VIEW_PATTERN } from './relayApi';
 
-export const SYNC_PROTOCOL_VERSION = 2;
+export const SYNC_PROTOCOL_VERSION = 3;
 
 /** Combatant fields players may see; hidden combatants are never sent. */
 export type PlayerCombatant = Pick<
@@ -53,6 +59,16 @@ export interface PlayerEncounter {
    * distance shown while dragging.
    */
   ownMoves?: Settings['diagonalRule'];
+  /** Only in a player character's view while the campaign lets players send pictures. */
+  uploads?: true;
+  /** Only in a player character's view while the campaign has chat. */
+  chat?: true;
+  /** Only in a player character's view while the campaign lets players share rolls. */
+  sharedRolls?: true;
+  /** Only in a player character's view while the campaign keeps player notes. */
+  notes?: true;
+  /** Only in a player character's view while the campaign lets players edit their sheet: at once or on approval. */
+  sheetEdits?: Exclude<SheetEditMode, 'off'>;
 }
 
 /** A player character's own numbers, sent only to that character's view. */
@@ -69,6 +85,33 @@ export interface PlayerSheet {
   deathSaves: DeathSaves | null;
   /** Spell slots by level from the stat block; levels without slots are left out. */
   slots: { level: number; max: number; used: number }[];
+  /** Hit dice spent of the character's level in hit dice; absent while its level is unknown. */
+  hitDice?: { used: number; max: number };
+  /**
+   * The full sheet, while the campaign shows players their sheets. Its text is large, so `content` comes along
+   * only when `revision` changed since the view last got it and in every resend; in between the player keeps
+   * the content of that revision.
+   */
+  details?: { revision: number; content?: CharacterDetails };
+}
+
+/** A character's full sheet and the library details of its spells by library spell id. */
+export interface CharacterDetails {
+  sheet: CharacterSheet;
+  spells: Record<string, SheetSpellInfo>;
+}
+
+/** A chat line as a view sees it. */
+export interface PlayerChatLine {
+  id: string;
+  at: string;
+  /** Who wrote it: a character's name or "DM". */
+  by: string;
+  /** `roll`: a roll shared with everyone. */
+  kind: ChatLine['kind'];
+  text: string;
+  /** A whisper between this view and the DM. */
+  whisper: boolean;
 }
 
 /** Picture, video or text the DM shows; text travels inline, pictures and videos as assets. */
@@ -134,8 +177,11 @@ export type SyncPayload =
    * character's id, null for the party.
    */
   | { type: 'view'; name: string; combatantId?: string | null }
-  /** Player rolls for their character; the DM rolls, logs and answers with `rolled`. */
-  | { type: 'roll'; dice: string; mode: RollMode; label: string }
+  /**
+   * Player rolls for their character; the DM rolls, logs and answers with `rolled`. With `share` (while the
+   * campaign allows it) the result also reaches every character view through the chat.
+   */
+  | { type: 'roll'; dice: string; mode: RollMode; label: string; share?: boolean }
   /** Player points at a spot of the map. */
   | { type: 'point'; at: MapPoint }
   /** Player asks to move their own token; the DM applies it with the movement rules. */
@@ -152,10 +198,28 @@ export type SyncPayload =
   | { type: 'sfx'; asset: AssetRef; volume: number }
   | { type: 'scene'; scene: PlayerScene | null }
   /** Fullscreen interlude video; null ends it. */
-  | { type: 'interlude'; interlude: PlayerInterlude | null };
+  | { type: 'interlude'; interlude: PlayerInterlude | null }
+  /**
+   * Chat lines this view may see: with `reset` all of them, else the ones written since the last chat message.
+   * The party view never gets any.
+   */
+  | { type: 'chatLines'; lines: PlayerChatLine[]; reset: boolean }
+  /** The character's private notes as the DM stored them. */
+  | { type: 'notes'; text: string }
+  /**
+   * Short news for this view from the DM app, e.g. that a sheet edit waits for the DM. `settles`: the sheet edit
+   * it answers for good (accepted, declined, refused or withdrawn), so the sheet stops showing it as waiting.
+   */
+  | { type: 'notice'; text: string; settles?: SheetEdit }
+  /** Player writes to everyone or only to the DM. */
+  | { type: 'chat'; text: string; to: 'all' | 'dm' }
+  /** The character's private notes, whole; the DM stores them. */
+  | { type: 'note'; text: string }
+  /** Player changes a play value of their own character's sheet; the DM checks and applies or queues it. */
+  | { type: 'sheetEdit'; combatantId: string; edit: SheetEdit };
 
 /** What players send besides `hello`; the DM gets each one with the view of the link it came over. */
-export type PlayerRequest = Extract<SyncPayload, { type: 'roll' | 'point' | 'move' }>;
+export type PlayerRequest = Extract<SyncPayload, { type: 'roll' | 'point' | 'move' | 'chat' | 'note' | 'sheetEdit' }>;
 
 export interface SyncMessage {
   protocol: typeof SYNC_PROTOCOL_VERSION;
@@ -171,6 +235,8 @@ const pointSchema = z.strictObject({ x: coordinate, y: coordinate, elevationFt: 
 /** Dice text as typed; the DM parses it with `parseDice`. */
 export const PLAYER_DICE_PATTERN = /^[0-9dD+\- ]{1,40}$/;
 export const PLAYER_LABEL_MAX = 40;
+export const PLAYER_CHAT_MAX = 500;
+export const PLAYER_NOTE_MAX = 20_000;
 
 /**
  * Every message a player may send. Any protocol number passes, so a relay deployed once keeps working when the
@@ -186,24 +252,40 @@ export const playerMessageSchema = z.strictObject({
       dice: z.string().regex(PLAYER_DICE_PATTERN),
       mode: z.enum(['normal', 'advantage', 'disadvantage']),
       label: z.string().max(PLAYER_LABEL_MAX),
+      share: z.boolean().optional(),
     }),
     z.strictObject({ type: z.literal('point'), at: pointSchema }),
     z.strictObject({ type: z.literal('move'), combatantId: z.string().regex(RELAY_VIEW_PATTERN), to: pointSchema }),
+    z.strictObject({
+      type: z.literal('chat'),
+      text: z.string().min(1).max(PLAYER_CHAT_MAX),
+      to: z.enum(['all', 'dm']),
+    }),
+    z.strictObject({ type: z.literal('note'), text: z.string().max(PLAYER_NOTE_MAX) }),
+    z.strictObject({
+      type: z.literal('sheetEdit'),
+      combatantId: z.string().regex(RELAY_VIEW_PATTERN),
+      edit: sheetEditSchema,
+    }),
   ]),
 });
 
-// Party screens have no sheet to roll for and no token of their own.
+// Party screens have no sheet, notes or chat and no token of their own.
 const CHARACTER_ONLY: Record<z.infer<typeof playerMessageSchema>['payload']['type'], boolean> = {
   hello: false,
   roll: true,
   point: false,
   move: true,
+  chat: true,
+  note: true,
+  sheetEdit: true,
 };
 
 /**
  * A player's message as the LAN server and the relay forward it to the DM: rebuilt from the validated fields
- * only, so the DM never sees smuggled data. Rolls and moves need a character's view, and a move only names the
- * view's own token. Null for anything else; `rebuild_player_message` in `src-tauri/src/lan.rs` mirrors it.
+ * only, so the DM never sees smuggled data. Rolls, moves, chat, notes and sheet edits need a character's view,
+ * and moves and sheet edits only name the view's own character; the DM checks everything else of an edit. Null
+ * for anything else; `rebuild_player_message` in `src-tauri/src/lan.rs` mirrors it.
  */
 export function rebuildPlayerMessage(text: string, view: string): string | null {
   let parsed: unknown;
@@ -219,7 +301,7 @@ export function rebuildPlayerMessage(text: string, view: string): string | null 
   const allowed =
     payload !== undefined &&
     !(CHARACTER_ONLY[payload.type] && view === PARTY_VIEW) &&
-    (payload.type !== 'move' || payload.combatantId === view);
+    ((payload.type !== 'move' && payload.type !== 'sheetEdit') || payload.combatantId === view);
   return allowed ? JSON.stringify({ protocol: message!.protocol, from: 'player', payload }) : null;
 }
 

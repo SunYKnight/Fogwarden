@@ -38,6 +38,8 @@
     "allow-lan-set-links",
     "allow-lan-stop",
     "allow-lan-status",
+    "allow-lan-player-upload",
+    "allow-lan-delete-player-upload",
     "allow-frontend-file",
     "allow-deploy-write-files",
     "allow-deploy-host-key",

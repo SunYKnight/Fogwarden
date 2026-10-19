@@ -13,14 +13,14 @@ import '@/ui/app.css';
 // `?token=` (LAN) or `?t=` (relay link) means a browser player. The LAN
 // server or the relay serves this page itself; in development Vite serves
 // it and `?ws=ws://127.0.0.1:<port>/ws` names the server. Assets then come
-// from that server instead of local storage.
-function lanTransport(params: URLSearchParams, token: string): WebSocketTransport {
+// from that server instead of local storage, and uploads go there.
+function lanConnection(params: URLSearchParams, token: string): { transport: WebSocketTransport; serverUrl: string } {
   const sameOrigin = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
   const socketUrl = new URL(params.get('ws') ?? sameOrigin);
   const serverUrl = `${socketUrl.protocol === 'wss:' ? 'https:' : 'http:'}//${socketUrl.host}`;
   useAppStore.setState({ repository: new Repository(new LanStorage(serverUrl, token)) });
   socketUrl.searchParams.set('token', token);
-  return new WebSocketTransport(socketUrl.href);
+  return { transport: new WebSocketTransport(socketUrl.href), serverUrl };
 }
 
 const root = document.getElementById('root');
@@ -30,7 +30,9 @@ if (!root) {
 const params = new URLSearchParams(location.search);
 const token = params.get('token') ?? params.get(RELAY_LINK_PARAM);
 const identify = params.get('identify');
-const lan = token === null ? null : lanTransport(params, token);
+const connection = token === null ? null : lanConnection(params, token);
+const lan = connection?.transport ?? null;
+const uploadTo = connection && token !== null ? { serverUrl: connection.serverUrl, token } : null;
 // The player window on the DM's computer shares its GPU, so it follows the
 // DM's graphics settings; browser players render with the defaults.
 if (lan === null && identify === null) {
@@ -41,7 +43,7 @@ if (lan === null && identify === null) {
 createRoot(root).render(
   <StrictMode>
     {identify === null ? (
-      <PlayerApp transport={lan ?? createLocalTransport('player')} lan={lan} />
+      <PlayerApp transport={lan ?? createLocalTransport('player')} lan={lan} uploadTo={uploadTo} />
     ) : (
       <IdentifyScreen number={identify} name={params.get('name') ?? ''} />
     )}

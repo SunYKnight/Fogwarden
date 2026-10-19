@@ -1,8 +1,17 @@
 import { create } from 'zustand';
-import { PARTY_VIEW, type Encounter, type PartyMember, type PlayerLinks } from '@/core/model';
+import {
+  noPlayerFeatures,
+  PARTY_VIEW,
+  type Campaign,
+  type Encounter,
+  type PartyMember,
+  type PlayerFeatures,
+  type PlayerLinks,
+} from '@/core/model';
 import { useAppStore, type Route } from '@/state/appStore';
 import { useEncounterStore } from '@/state/encounterStore';
 import { useLibraryStore } from '@/state/libraryStore';
+import { ensurePlayerData } from './playerData';
 
 /** What a player screen can show: the party or one player character. */
 export interface PlayerView {
@@ -39,7 +48,7 @@ export async function linkToken(secret: string, view: string, rotation: number):
     .slice(0, TOKEN_HEX_CHARS);
 }
 
-interface ViewLinksState {
+export interface ViewLinksState {
   /**
    * Party and the player characters of the open encounter; kept while no encounter is open, so leaving the Play
    * page does not withdraw the characters' links.
@@ -52,13 +61,38 @@ interface ViewLinksState {
   linked: PlayerView[];
   /** Link token by view id of `linked`; empty until derived. */
   tokens: Record<string, string>;
+  /** Campaign of the linked characters: the open encounter's, else the last one's; null before any. */
+  campaignId: string | null;
+  /** That campaign's player features; all off without a campaign. */
+  features: PlayerFeatures;
 }
 
-export const useViewLinksStore = create<ViewLinksState>(() => ({ views: [PARTY], linked: [PARTY], tokens: {} }));
+export const useViewLinksStore = create<ViewLinksState>(() => ({
+  views: [PARTY],
+  linked: [PARTY],
+  tokens: {},
+  campaignId: null,
+  features: noPlayerFeatures(),
+}));
 
 /** Token → view, the form the LAN server and the relay check links against. */
 export function linkTable({ linked, tokens }: Pick<ViewLinksState, 'linked' | 'tokens'>): Record<string, string> {
   return Object.fromEntries(linked.filter((v) => tokens[v.id] !== undefined).map((v) => [tokens[v.id]!, v.id]));
+}
+
+/** Views whose players may upload pictures: the linked characters while their campaign allows it. */
+export function uploadViews({ linked, features }: Pick<ViewLinksState, 'linked' | 'features'>): string[] {
+  return features.uploads ? linked.filter((v) => v.id !== PARTY_VIEW).map((v) => v.id) : [];
+}
+
+/**
+ * Takes the switches of a saved campaign over while its characters are the linked ones: the campaign page saves
+ * straight to the repository without reloading the links.
+ */
+export function campaignSaved(campaign: Campaign): void {
+  if (useViewLinksStore.getState().campaignId === campaign.id) {
+    useViewLinksStore.setState({ features: campaign.playerFeatures });
+  }
 }
 
 /** Replaces the link of `view`: its old token stops working on the LAN server and the relay. */
@@ -76,8 +110,8 @@ export async function rotateLink(view: string): Promise<void> {
 }
 
 /**
- * Keeps `useViewLinksStore` in step with the open encounter, its campaign's party and `settings.playerLinks`, and
- * creates the link secret on first use.
+ * Keeps `useViewLinksStore` in step with the open encounter, its campaign's party and player features and
+ * `settings.playerLinks`, and creates the link secret on first use.
  */
 export function startViewLinks(): () => void {
   let derived = '';
@@ -97,7 +131,18 @@ export function startViewLinks(): () => void {
       .listCampaigns()
       .then(({ campaigns }) => {
         if (mine === partyLoads) {
-          party = { campaignId, members: campaigns.find((c) => c.id === campaignId)?.party ?? [] };
+          const loaded = campaigns.find((c) => c.id === campaignId);
+          const features = loaded?.playerFeatures ?? noPlayerFeatures();
+          party = { campaignId, members: loaded?.party ?? [] };
+          // Edits waiting since the last run show before their players are
+          // back, and session state is at hand when the party joins.
+          for (const member of party.members) {
+            void ensurePlayerData(campaignId, member.id);
+          }
+          // A new object would push the links and republish every view.
+          if (JSON.stringify(features) !== JSON.stringify(useViewLinksStore.getState().features)) {
+            useViewLinksStore.setState({ features });
+          }
           update();
         }
       })
@@ -112,6 +157,10 @@ export function startViewLinks(): () => void {
     // Another campaign's players must not keep a way in.
     const sameCampaign = !encounter || encounter.campaignId === campaign;
     campaign = encounter?.campaignId ?? campaign;
+    // Another campaign's switches stay off until its own are read.
+    if (campaign !== current.campaignId) {
+      useViewLinksStore.setState({ campaignId: campaign, features: noPlayerFeatures() });
+    }
     const askKey = `${campaign}|${encounter?.id ?? ''}`;
     if (campaign !== null && (askKey !== partyAsked.key || route !== partyAsked.route)) {
       partyAsked = { key: askKey, route };

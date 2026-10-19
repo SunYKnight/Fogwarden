@@ -7,10 +7,9 @@ import { useAppStore } from '@/state/appStore';
 import { useHandoutStore } from '@/sync/handoutStore';
 import type { PlayerHandout } from '@/sync/protocol';
 import { useViewLinksStore } from '@/sync/views';
-import { SelectField } from '../components/fields';
 import { Button, Icon, type IconName } from '../kit';
+import { AudienceField, EVERYONE } from './AudienceField';
 
-const EVERYONE = '';
 const KIND_ICON: Record<HandoutKind, IconName> = { image: 'image', video: 'film', text: 'fileText' };
 const ACCEPT = '.png,.jpg,.jpeg,.webp,.gif,.avif,.mp4,.webm,.md,.txt';
 
@@ -101,13 +100,7 @@ export function ShowPanel({ campaignId }: { campaignId: string }) {
           ))}
         </div>
       )}
-      <SelectField
-        label="Show to"
-        value={audience}
-        options={[EVERYONE, ...views.map((v) => v.id)]}
-        format={(id) => (id === EVERYONE ? 'Everyone' : (views.find((v) => v.id === id)?.name ?? id))}
-        onChange={setAudience}
-      />
+      <AudienceField label="Show to" value={audience} views={views} onChange={setAudience} />
       <div className="row wrap">
         <Button
           icon="present"
